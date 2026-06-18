@@ -140,6 +140,20 @@ export default function DocsClient({ apiSpec }) {
         }
     }, [searchParams, apiSpec]);
 
+    // Sync ?slug param → activeCategory on mount/URL change
+    useEffect(() => {
+        if (!apiSpec) return;
+        const slug = searchParams.get('slug');
+        if (slug) {
+            if (Object.keys(apiSpec).includes(slug)) {
+                setActiveCategory(slug);
+            } else {
+                // Invalid slug — clean URL
+                router.replace(window.location.pathname, { scroll: false });
+            }
+        }
+    }, [searchParams, apiSpec, router]);
+
     const handleConfirmShare = () => {
         if (!sharedEndpoint) return;
         
@@ -309,7 +323,9 @@ export default function DocsClient({ apiSpec }) {
                 const contentType = res.headers.get("content-type") || "";
                 let responseData = "";
 
-                if (contentType.includes("application/json")) {
+                if (contentType.startsWith("image/")) {
+                    responseData = `[Image Response] Content-Type: ${contentType}, Size: ${(await res.clone().blob()).size} bytes`;
+                } else if (contentType.includes("application/json")) {
                     let json = await res.json();
                     
                     // Polling Logic
@@ -475,7 +491,11 @@ export default function DocsClient({ apiSpec }) {
                         type="text" 
                         placeholder="Cari endpoint atau keyword..." 
                         value={searchQuery} 
-                        onChange={(e) => { setSearchQuery(e.target.value); setActiveCategory('all'); }} 
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setActiveCategory('all');
+                            router.replace(window.location.pathname, { scroll: false });
+                        }}
                         className="w-full bg-input border border-default rounded-2xl py-3 pl-11 pr-4 text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all shadow-inner"
                     />
                     {searchQuery && (
@@ -498,8 +518,11 @@ export default function DocsClient({ apiSpec }) {
                 {/* Category Pills */}
                 {!searchQuery && (
                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                        <button 
-                            onClick={() => setActiveCategory('all')}
+                        <button
+                            onClick={() => {
+                                setActiveCategory('all');
+                                router.replace(window.location.pathname, { scroll: false });
+                            }}
                             className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${activeCategory === 'all' ? 'bg-accent text-white shadow-lg shadow-accent/25' : 'bg-card border border-default text-secondary hover:border-accent/40'}`}
                         >
                             <i className="fas fa-border-all text-[10px]"></i>
@@ -509,9 +532,12 @@ export default function DocsClient({ apiSpec }) {
                             </span>
                         </button>
                         {categories.map(cat => (
-                            <button 
-                                key={cat} 
-                                onClick={() => setActiveCategory(cat)}
+                            <button
+                                key={cat}
+                                onClick={() => {
+                                    setActiveCategory(cat);
+                                    router.replace(`?slug=${cat}`, { scroll: false });
+                                }}
                                 className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${activeCategory === cat ? 'bg-accent text-white shadow-lg shadow-accent/25' : 'bg-card border border-default text-secondary hover:border-accent/40'}`}
                             >
                                 <i className={`fas ${getCategoryIcon(cat)} text-[10px]`}></i>

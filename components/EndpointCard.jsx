@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
+import Image from 'next/image';
 import MethodBadge from './MethodBadge';
 import CopyButton from './CopyButton';
 import InfoModal from './InfoModal';
@@ -23,14 +24,73 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
         }
     }, [isHighlighted]);
 
+    const autoFill = useCallback(() => {
+        if (!hasAutoFill) return;
+        try {
+            const jsonMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
+            if (jsonMatch) {
+                const bodyStr = jsonMatch[1];
+                let parsedBody = {};
+
+                try {
+                    parsedBody = JSON.parse(bodyStr);
+                } catch (e) {
+                    try {
+                        parsedBody = new Function(`return ${bodyStr}`)();
+                    } catch (evalErr) {}
+                }
+
+                const processedValues = {};
+                Object.keys(parsedBody).forEach(key => {
+                    const val = parsedBody[key];
+                    if (typeof val === 'object' && val !== null) {
+                        processedValues[key] = JSON.stringify(val);
+                    } else {
+                        processedValues[key] = val;
+                    }
+                });
+
+                setFormValues(prev => ({ ...prev, ...processedValues }));
+            }
+            
+            const urlMatch = endpoint.example.match(/fetch\(['"`](.*?)['"`]/);
+            if (urlMatch) {
+                const urlParts = urlMatch[1].split('?');
+                if (urlParts.length > 1) {
+                    const params = new URLSearchParams(urlParts[1]);
+                    for (const [key, val] of params) {
+                        setFormValues(prev => ({ ...prev, [key]: val }));
+                    }
+                }
+                
+                const bodyMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
+                if (!bodyMatch) {
+                    try {
+                        const rawBody = endpoint.example.split('body: ')[1]?.split(',\n')[0];
+                        if (rawBody) {
+                            const parsedRaw = JSON.parse(rawBody);
+                            setFormValues(prev => ({ ...prev, ...parsedRaw }));
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (error) {
+            console.warn("Auto-fill failed: EndpointCard");
+        }
+    }, [endpoint.example, hasAutoFill]);
+
     useEffect(() => {
         if (isOpen && hasAutoFill) {
             autoFill();
         }
-    }, [isOpen]);
+    }, [isOpen, autoFill, hasAutoFill]);
 
     const handleTryItOut = async (e) => {
         e.preventDefault();
+        // Revoke previous blob URL to prevent memory leak
+        if (finalData?.isImage && finalData?.data) {
+            URL.revokeObjectURL(finalData.data);
+        }
         setFinalData(null);
         setActiveTab('response');
         setIsLoading(true);
@@ -82,6 +142,19 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
             const res = await fetch(finalUrl, fetchOptions);
             const contentType = res.headers.get("content-type") || "";
 
+            if (contentType.startsWith("image/")) {
+                const blob = await res.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                setIsLoading(false);
+                setFinalData({
+                    ok: res.ok,
+                    status: res.status,
+                    data: imageUrl,
+                    isImage: true
+                });
+                return;
+            }
+
             if (contentType.includes("application/json")) {
                 const json = await res.json();
                 setIsLoading(false);
@@ -125,51 +198,6 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
             setFinalData({ ok: false, status: 'Error', data: error.message, isStream: false });
         }
     };
-
-    const autoFill = () => {
-        if (!hasAutoFill) return;
-        try {
-            const jsonMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
-            if (jsonMatch) {
-                const bodyStr = jsonMatch[1];
-                let parsedBody = {};
-
-                try {
-                    parsedBody = JSON.parse(bodyStr);
-                } catch (e) {
-                    try {
-                        parsedBody = new Function(`return ${bodyStr}`)();
-                    } catch (evalErr) {}
-                }
-
-                const processedValues = {};
-                Object.keys(parsedBody).forEach(key => {
-                    const val = parsedBody[key];
-                    if (typeof val === 'object' && val !== null) {
-                        processedValues[key] = JSON.stringify(val);
-                    } else {
-                        processedValues[key] = val;
-                    }
-                });
-
-                setFormValues(prev => ({ ...prev, ...processedValues }));
-            }
-            
-            const urlMatch = endpoint.example.match(/fetch\(['"`](.*?)['"`]/);
-            if (urlMatch) {
-                const urlParts = urlMatch[1].split('?');
-                if (urlParts.length > 1) {
-                    const params = new URLSearchParams(urlParts[1]);
-                    const newValues = {};
-                    params.forEach((val, key) => { 
-                        newValues[key] = val; 
-                    });
-                    setFormValues(prev => ({ ...prev, ...newValues }));
-                }
-            }
-        } catch (e) {}
-    };
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormValues(prev => ({ ...prev, [name]: value }));
@@ -492,16 +520,23 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                             <div className="relative">
                                                 <div className={`flex justify-between items-center mb-2 px-1`}>
                                                     <span className={`text-xs font-bold px-2 py-1 rounded ${finalData.ok ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-                                                        {finalData.status} {finalData.ok ? 'OK' : 'Error'} 
+                                                        {finalData.status} {finalData.ok ? 'OK' : 'Error'}
+                                                        {finalData.isImage && <span className="ml-2 text-[10px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded">IMAGE</span>}
                                                         {finalData.isStream && <span className="ml-2 text-[10px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded animate-pulse">STREAMING</span>}
                                                     </span>
-                                                    <CopyButton textToCopy={finalData.data} />
+                                                    {!finalData.isImage && <CopyButton textToCopy={finalData.data} />}
                                                 </div>
+                                                {finalData.isImage ? (
+                                                    <div className="flex justify-center p-4 bg-input/50 rounded-xl border border-default">
+                                                        <Image src={finalData.data} alt="Response Image" className="max-w-full max-h-[400px] rounded-lg object-contain" width={400} height={400} unoptimized />
+                                                    </div>
+                                                ) : (
                                                 <pre className="bg-code p-4 rounded-xl overflow-x-auto max-h-[400px] text-xs border border-default custom-scrollbar shadow-inner">
                                                     <code className={`language-${finalData.isStream ? 'text' : (finalData.ok ? 'json' : 'text')} font-mono`}>
                                                         {finalData.data}
                                                     </code>
                                                 </pre>
+                                                )}
                                             </div>
                                         )}
                                     </div>

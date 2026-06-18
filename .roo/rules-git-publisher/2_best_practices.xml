@@ -1,0 +1,75 @@
+<best_practices>
+  <general_principles>
+    <principle priority="high">
+      <name>Conventional Commits</name>
+      <description>Gunakan format: <type>(<scope>): <description></description>
+      <rationale>Memudahkan changelog otomatis, versioning semantik, dan kolaborasi</rationale>
+      <example>
+        <scenario>Menambah fitur baru</scenario>
+        <good>feat(auth): add JWT refresh token endpoint</good>
+        <bad>update auth</bad>
+      </example>
+      <example>
+        <scenario>Memperbaiki bug</scenario>
+        <good>fix(api): handle null response on user fetch</good>
+        <bad>fixed bug</bad>
+      </example>
+    </principle>
+
+    <principle priority="high">
+      <name>Satu Commit Satu Tujuan</name>
+      <description>Setiap commit adalah unit logis yang mandiri</description>
+      <rationale>Memudahkan review, revert, dan bisection</rationale>
+    </principle>
+
+    <principle priority="medium">
+      <name>Rebase Sebelum Push</name>
+      <description>Prefer git pull --rebase daripada git pull biasa</description>
+      <rationale>History lebih bersih, tanpa merge commit yang tidak perlu</rationale>
+    </principle>
+
+    <principle priority="medium">
+      <name>Jangan Commit File .env atau Secret</name>
+      <description>Pastikan .gitignore sudah benar sebelum commit</description>
+      <rationale>Keamanan kredensial dan konfigurasi lokal</rationale>
+    </principle>
+  </general_principles>
+
+  <commit_types>
+    <type name="feat">Fitur baru untuk pengguna</type>
+    <type name="fix">Perbaikan bug</type>
+    <type name="chore">Tugas maintenance (deps, build config)</type>
+    <type name="docs">Perubahan dokumentasi</type>
+    <type name="refactor">Refaktor kode tanpa mengubah behavior</type>
+    <type name="perf">Optimasi performa</type>
+    <type name="test">Menambah/memperbaiki test</type>
+    <type name="style">Formatting, whitespace, missing semicolons</type>
+  </commit_types>
+
+  <common_pitfalls>
+    <pitfall>
+      <description>Pesan commit terlalu panjang/ambigu</description>
+      <correct_approach>
+        Baris 1: maksimal 72 karakter.
+        Baris 3+: detail tambahan jika perlu.
+      </correct_approach>
+    </pitfall>
+    <pitfall>
+      <description>Commit langsung ke main tanpa branch</description>
+      <correct_approach>Gunakan branch feat/fix/chore, lalu merge via PR</correct_approach>
+    </pitfall>
+  </common_pitfalls>
+
+  <quality_checklist>
+    <category name="sebelum_commit">
+      <item>git status → cek file yang berubah</item>
+      <item>git diff → review perubahan</item>
+      <item>Pastikan tidak ada file .env atau credential tercantum</item>
+    </category>
+    <category name="sebelum_push">
+      <item>git pull --rebase untuk sinkron</item>
+      <item>Konflik sudah resolved</item>
+      <item>Branch sudah di-push sebelumnya? (git push -u origin HEAD jika belum)</item>
+    </category>
+  </quality_checklist>
+</best_practices>

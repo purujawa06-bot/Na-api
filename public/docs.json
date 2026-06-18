@@ -526,6 +526,24 @@
       "params": []
     },
     {
+      "title": "Komiku Image Proxy",
+      "summary": "Proxy gambar komiku behind Cloudflare.",
+      "description": "Mengambil gambar dari CDN Komiku via server-side (cloudscraper) biar client gak kena CF block.",
+      "method": "GET",
+      "path": "/api/anime/komiku/image-proxy",
+      "responseType": "json",
+      "example": "async function getImage() {\\r   const res = await fetch('/api/anime/komiku/image-proxy?url=https://img.komiku.org/upload5/solo-leveling-ragnarok/68/2026-01-08/1_a1bc02.webp');\\r   const blob = await res.blob();\\r   console.log('Image fetched, size:', blob.size);\\r }",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL gambar asli dari komiku.",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "Komiku Populer",
       "summary": "Daftar Komik Populer.",
       "description": "Mengambil daftar komik paling populer/hot dari Komiku. Mendukung paginasi melalui parameter page.",
@@ -1000,11 +1018,11 @@
     {
       "title": "Instagram Downloader",
       "summary": "Download Instagram Media (Reels/Slide/Photo).",
-      "description": "Mengunduh konten Instagram (Video, Reels, atau Carousel Slide) secara cepat menggunakan API Siputzx.",
+      "description": "Mengunduh konten Instagram (Video, Reels, atau Carousel Slide) menggunakan VDFRDownloader.",
       "method": "POST",
       "path": "/api/downloader/instagram",
       "responseType": "json",
-      "example": "async function downloadIg() {\r   const res = await fetch('/api/downloader/instagram', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ \"url\": \"https://www.instagram.com/reel/DOxOvd9jz6f/\" })\r   });\r   const data = await res.json();\r   console.log(data);\r }",
+      "example": "async function downloadIg() {\r   const res = await fetch('/api/downloader/instagram', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ \"url\": \"https://www.instagram.com/reel/DV5hrHUEg4U/\" })\r   });\r   const data = await res.json();\r   console.log(data);\r }",
       "params": [
         {
           "name": "url",

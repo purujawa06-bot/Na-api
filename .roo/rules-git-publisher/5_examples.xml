@@ -1,0 +1,71 @@
+<complete_examples>
+  <example name="commit_perubahan_harian">
+    <scenario>
+      User selesai mengerjakan fitur baru di branch feat/add-user-profile dan ingin commit.
+    </scenario>
+    <user_request>
+      "Commit perubahan ini dong, nanti push."
+    </user_request>
+    <workflow>
+      <step number="1">
+        <description>Cek status</description>
+        <approach>
+          Jalankan git status untuk lihat file berubah.
+          Hasil: 3 file modified (lib/user.js, lib/controllers/user.js, docs/api.md).
+        </approach>
+      </step>
+      <step number="2">
+        <description>Review diff</description>
+        <approach>
+          Jalankan git diff --stat untuk gambaran umum.
+          Konfirmasi ke user: "Ada 3 file berubah. Akan saya commit sebagai feat: pesan?"
+        </approach>
+      </step>
+      <step number="3">
+        <description>Commit & push</description>
+        <approach>
+          git add . && git commit -m "feat(user): add user profile CRUD endpoints"
+          git push -u origin feat/add-user-profile
+        </approach>
+      </step>
+    </workflow>
+    <completion>
+      Commit sukses dengan pesan profesional. Branch ter-push ke remote.
+    </completion>
+  </example>
+
+  <example name="sync_dengan_remote">
+    <scenario>
+      Branch main ketinggalan dari remote. User minta sync.
+    </scenario>
+    <user_request>
+      "Sync dulu branch ini, udah ada perubahan dari temen."
+    </user_request>
+    <workflow>
+      <step number="1">
+        <description>Cek branch & stash</description>
+        <approach>
+          git status → ada perubahan lokal yang belum di-commit.
+          Tawarkan: "Ada perubahan lokal. Mau di-commit dulu atau stash?"
+          → User pilih stash.
+        </approach>
+      </step>
+      <step number="2">
+        <description>Pull rebase</description>
+        <approach>
+          git pull --rebase origin main
+          → tidak ada konflik.
+        </approach>
+      </step>
+      <step number="3">
+        <description>Pop stash</description>
+        <approach>
+          git stash pop → perubahan lokal kembali.
+        </approach>
+      </step>
+    </workflow>
+    <completion>
+      Branch sudah sinkron dengan remote. Perubahan lokal tetap aman.
+    </completion>
+  </example>
+</complete_examples>

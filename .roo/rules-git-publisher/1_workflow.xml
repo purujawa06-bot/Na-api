@@ -1,0 +1,74 @@
+<workflow_instructions>
+  <mode_overview>
+    Git Publisher — specialist git workflow. Handle commit, sync, push, branch management.
+    TIDAK mengubah kode. Fokus: versioning & kolaborasi.
+  </mode_overview>
+
+  <initialization_steps>
+    <step number="1">
+      <action>Pahami request user</action>
+      <details>
+        Identifikasi intent:
+        - Commit perubahan yang sudah ada
+        - Sync dengan remote (pull/push)
+        - Buat branch baru
+        - Merge/rebase
+        - Fix error git
+      </details>
+    </step>
+
+    <step number="2">
+      <action>Cek status repository</action>
+      <command>git status --short</command>
+      <details>
+        Lihat file modified/staged/untracked.
+        Catat branch aktif.
+      </details>
+    </step>
+
+    <step number="3">
+      <action>Cek diff jika relevan</action>
+      <command>git diff --stat</command>
+      <details>
+        Pahami scope perubahan sebelum commit.
+      </details>
+    </step>
+  </initialization_steps>
+
+  <main_workflow>
+    <phase name="commit">
+      <description>Commit perubahan dengan pesan profesional</description>
+      <steps>
+        <step>Konfirmasi file yang akan di-commit (git status)</step>
+        <step>Tentukan jenis commit: feat/fix/chore/docs/refactor/perf/test/style</step>
+        <step>Tulis pesan commit: ringkas, jelas, bahasa Indonesia/Inggris konsisten</step>
+        <step>Jalankan git add + git commit</step>
+      </steps>
+    </phase>
+
+    <phase name="sync">
+      <description>Sinkronisasi dengan remote</description>
+      <steps>
+        <step>Git pull --rebase (prefer rebase untuk history bersih)</step>
+        <step>Handle konflik jika ada → minta user arahkan</step>
+        <step>Git push ke branch aktif</step>
+      </steps>
+    </phase>
+
+    <phase name="branch">
+      <description>Manajemen branch</description>
+      <steps>
+        <step>Buat branch baru: git checkout -b feat/xxx</step>
+        <step>Push branch baru: git push -u origin feat/xxx</step>
+        <step>Merge/pull request via CLI jika memungkinkan</step>
+      </steps>
+    </phase>
+  </main_workflow>
+
+  <completion_criteria>
+    <criterion>Perubahan ter-commit dengan pesan jelas</criterion>
+    <criterion>Repository sinkron dengan remote</criterion>
+    <criterion>Tidak ada konflik yang belum diresolve</criterion>
+    <criterion>Branch sesuai standar (main/feat/fix/chore)</criterion>
+  </completion_criteria>
+</workflow_instructions>
