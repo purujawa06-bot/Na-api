@@ -5,9 +5,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
     try {
-        const { searchParams } = new URL(req.url);
+        const { searchParams, origin } = new URL(req.url);
         const query = Object.fromEntries(searchParams);
-        const mockReq = { query };
+        const mockReq = { query, origin };
         const result = await billboardController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
