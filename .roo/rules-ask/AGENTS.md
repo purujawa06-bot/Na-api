@@ -4,9 +4,9 @@ This file provides guidance to agents when working with code in this repository.
 
 # Project Documentation Rules (Non-Obvious Only)
 
-- **Source of Truth**: The codebase is the documentation. Do not look for a `docs/` folder for API specs; refer to `lib/controllers/`.
-- **Output**: The generated documentation is stored in `public/docs.json` after a build.
-- **Organization**: `lib/` contains the "how", `lib/controllers/` contains the "what" (API spec).
-- **No docs/ folder**: Documentation exists only as JSDoc in controllers + generated JSON. No dedicated `docs/` directory.
-- **Non-API HTML**: `admin.html` and `fastupdate.html` in `public/` are non-API features, not endpoints.
-- **Controller Categories**: 8 categories — `ai/`, `anime/`, `downloader/`, `main/`, `meme/`, `search/`, `tools/`, `play/`.
+- **Source of Truth**: No `docs/` folder. API spec lives as JSDoc in `lib/controllers/`. Output → `public/docs.json` via `scripts/generate-docs.js`.
+- **Controller Categories**: 9 actual endpoint categories in code — `ai/`, `anime/`, `chart/`, `downloader/`, `main/`, `meme/`, `search/`, `tools/`, `play/`.
+- **Non-API HTML**: `public/admin.html` and `public/fastupdate.html` are standalone tools, not API endpoints. Accessible via rewrites: `/admin` → `/admin.html`, `/fastupdate` → `/fastupdate.html`.
+- **Two-tier `lib/`**: `lib/controllers/` = JSDoc metadata + orchestration. `lib/` root = pure logic (scrapers, DB, utils). Some functions in `lib/` root have NO controller wrapper (e.g., `lib/brat.js`, `lib/tiktok.js`).
+- **JSDoc Param Format**: Must use `{type} [query|body.paramName] - description` with bracket notation for optional params. Docs scanner regex is strict — wrong format = param not indexed.
+- **ping.js is NOT standard**: `lib/controllers/main/ping.js` returns `{ status, message, timestamp, author }`, not the standard `{ success, author, result }` envelope. Don't use as template.
