@@ -1,0 +1,71 @@
+<best_practices>
+  <general_principles>
+    <principle priority="high">
+      <name>Dual-Layer Separation</name>
+      <description>Pisahkan route handler (app/api/) dari business logic (lib/controllers/)</description>
+      <rationale>Route handler urus parsing req/res; controller urus logic murni. JSDoc hanya di controller.</rationale>
+    </principle>
+    <principle priority="high">
+      <name>Response Envelope</name>
+      <description>Gunakan format `{ success: boolean, author: 'PuruBoy', result: any }` untuk semua endpoint</description>
+      <rationale>Konsistensi response memudahkan frontend dan consumer API.</rationale>
+      <exceptions>
+        <exception>`lib/controllers/main/ping.js` — return `{ status, message, timestamp, author }`</exception>
+        <exception>SSE/streaming endpoint — format bebas sesuai kebutuhan stream</exception>
+      </exceptions>
+    </principle>
+    <principle priority="high">
+      <name>Thin Route Handler</name>
+      <description>Route handler di `app/api/` hanya untuk parsing input dan format output — jangan taruh logic bisnis di sini</description>
+    </principle>
+    <principle priority="medium">
+      <name>Auto-Generated Docs</name>
+      <description>Semua metadata endpoint (title, summary, params) diambil dari JSDoc controller — jangan edit docs.json manual</description>
+    </principle>
+    <principle priority="medium">
+      <name>Cloudflare Shield</name>
+      <description>Untuk scraping situs yang dilindungi Cloudflare, gunakan `cloudscraper` bukan axios</description>
+    </principle>
+  </general_principles>
+
+  <code_conventions>
+    <convention category="naming">
+      <rule>Controller files: lowercase, camelCase untuk multi-word — `removeBgV2.js`, `soundcloudSearch.js`</rule>
+      <rule>Route handler directories: lowercase with hyphens — `app/api/tools/removebg-v2/`</rule>
+    </convention>
+    <convention category="jsdoc">
+      <template>
+/**
+ * @title Nama Endpoint
+ * @summary Satu baris deskripsi pendek
+ * @description Deskripsi detail beberapa kalimat.
+ * @method GET|POST|PUT|DELETE
+ * @path /api/category/endpoint
+ * @response json
+ * @param {type} [query|body.paramName] - Deskripsi parameter
+ * @example
+ * // Contoh penggunaan
+ * async function example() {
+ *   const res = await fetch('/api/category/endpoint');
+ *   const data = await res.json();
+ * }
+ */
+      </template>
+    </convention>
+  </code_conventions>
+
+  <common_pitfalls>
+    <pitfall>
+      <description>Error: Response format tidak konsisten — ada endpoint yang return `{ data }` bukan `{ success, author, result }`</description>
+      <correct_approach>Selalu wrap response ke format standar. Kecuali endpoint yang sengaja punya format sendiri (ping.js).</correct_approach>
+    </pitfall>
+    <pitfall>
+      <description>Error: Lupa update JSDoc setelah ubah parameter endpoint → docs.json out of sync</description>
+      <correct_approach>Update JSDoc di controller setiap kali ada perubahan parameter, method, atau path.</correct_approach>
+    </pitfall>
+    <pitfall>
+      <description>Error: npm run build gagal karena docs generator error</description>
+      <correct_approach>Jalankan `node scripts/generate-docs.js` dulu untuk verifikasi docs sebelum full build.</correct_approach>
+    </pitfall>
+  </common_pitfalls>
+</best_practices>

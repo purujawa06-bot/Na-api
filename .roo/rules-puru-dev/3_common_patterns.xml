@@ -1,0 +1,105 @@
+<common_patterns>
+  <pattern name="basic_controller">
+    <description>Controller sederhana — query params, panggil service, return standar</description>
+    <example>
+      <code>
+/**
+ * @title Contoh Endpoint
+ * @summary Contoh implementasi controller
+ * @description Endpoint contoh yang menunjukkan pola standar.
+ * @method GET
+ * @path /api/contoh/endpoint
+ * @response json
+ * @param {string} [query.nama] - Nama parameter
+ */
+const contohController = async (req) => {
+  const { nama } = req.query;
+  return {
+    success: true,
+    author: 'PuruBoy',
+    result: { nama: nama || 'default' }
+  };
+};
+module.exports = contohController;
+      </code>
+    </example>
+  </pattern>
+
+  <pattern name="basic_route_handler">
+    <description>Route handler Next.js — query params pattern</description>
+    <example>
+      <code>
+import { NextResponse } from 'next/server';
+import contohController from '@/lib/controllers/contoh/endpoint';
+
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const mockReq = { query: Object.fromEntries(searchParams) };
+    const result = await contohController(mockReq);
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, author: 'PuruBoy', result: error.message },
+      { status: 400 }
+    );
+  }
+}
+      </code>
+    </example>
+  </pattern>
+
+  <pattern name="post_route_handler">
+    <description>Route handler dengan POST body</description>
+    <example>
+      <code>
+import { NextResponse } from 'next/server';
+import controller from '@/lib/controllers/category/endpoint';
+
+export async function POST(req) {
+  try {
+    const body = await req.json();
+    const { url } = body;
+    if (!url) {
+      return NextResponse.json(
+        { success: false, author: 'PuruBoy', result: "Parameter 'url' wajib diisi" },
+        { status: 400 }
+      );
+    }
+    const origin = new URL(req.url).origin;
+    const result = await controller({ body: { url }, origin });
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, author: 'PuruBoy', result: error.message },
+      { status: 500 }
+    );
+  }
+}
+      </code>
+    </example>
+  </pattern>
+
+  <pattern name="external_api_controller">
+    <description>Controller yang memanggil external API menggunakan axios/cloudscraper</description>
+    <example>
+      <code>
+const axios = require('axios');
+const cloudscraper = require('cloudscraper');
+
+const externalController = async (req) => {
+  const { query } = req;
+  // Untuk target dengan Cloudflare:
+  const html = await cloudscraper.get('https://protected-site.com/data');
+  // Untuk target tanpa proteksi:
+  const { data } = await axios.get('https://api.example.com/data', {
+    params: query,
+    timeout: 10000
+  });
+  return { success: true, author: 'PuruBoy', result: data };
+};
+module.exports = externalController;
+      </code>
+    </example>
+  </pattern>
+</common_patterns>

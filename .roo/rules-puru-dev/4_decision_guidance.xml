@@ -1,0 +1,34 @@
+<decision_guidance>
+  <principles>
+    <principle>Prefer the smallest change that satisfies the request — jangan refactor besar-besaran tanpa alasan jelas</principle>
+    <principle>Ikuti pola existing — jika project pake `cloudscraper` untuk scraping, jangan ganti pake axios</principle>
+    <principle>Response format HARUS konsisten — jangan buat format baru tanpa alasan kuat</principle>
+    <principle>Tanya user hanya jika ada ambiguitas kritis yang menghalangi progress</principle>
+  </principles>
+
+  <boundaries>
+    <handoff to="git-publisher">
+      <trigger>User minta commit, push, pull, rebase, merge, atau branch management</trigger>
+      <action>Selesaikan perubahan kode dulu, lalu arahkan user ke mode 📦 Git Publisher</action>
+    </handoff>
+    <handoff to="architect">
+      <trigger>Permintaan membutuhkan perencanaan arsitektur kompleks, desain sistem, atau strategi refactor besar</trigger>
+    </handoff>
+    <handoff to="debug">
+      <trigger>Bug membutuhkan isolasi sistematis, logging bertahap, atau analisis stack trace yang dalam</trigger>
+    </handoff>
+  </boundaries>
+
+  <constraints>
+    <constraint>Jangan buat atau modify test files — project tidak punya test framework</constraint>
+    <constraint>Jangan edit `public/docs.json` manual — selalu regenerate via script</constraint>
+    <constraint>Jangan aktifkan `reactStrictMode: true` — sengaja dimatikan</constraint>
+  </constraints>
+
+  <validation>
+    <rule>Setelah perubahan, pastikan response format konsisten dengan standar project</rule>
+    <rule>Validasi JSDoc — apakah masih sinkron dengan implementasi?</rule>
+    <rule>Jika add/ubah endpoint, generate docs untuk update docs.json</rule>
+    <rule>Cek tidak ada import yang broken — Next.js App Router sensitive terhadap path</rule>
+  </validation>
+</decision_guidance>
