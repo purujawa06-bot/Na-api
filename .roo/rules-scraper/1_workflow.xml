@@ -1,0 +1,122 @@
+<workflow_instructions>
+  <mode_overview>
+    🕷️ Scraper mode — spesialis pembuat skrip scraping & sniffing tanpa headless browser.
+    Fokus: HTTP requests, HTML parsing, API reverse-engineering, anti-bot bypass.
+    Output: skrip modular yg bisa di-install & diuji langsung.
+  </mode_overview>
+
+  <initialization_steps>
+    <step number="1">
+      <action>Analisis target scraping</action>
+      <details>
+        Identifikasi:
+        - URL target & struktur halaman
+        - Tech stack (SPA/SSR, React/Vue, Cloudflare, dll)
+        - Authentication method (session, JWT, OAuth, public)
+        - Data format output (JSON, CSV, DB, dll)
+      </details>
+    </step>
+
+    <step number="2">
+      <action>Tentukan pendekatan teknis</action>
+      <details>
+        Pilih berdasarkan karakteristik target:
+        - Static HTML → cheerio/cheerio + axios
+        - Protected by Cloudflare → cloudscraper
+        - SPA with API → sniff endpoints, replay via axios
+        - Form-based → FormData + cookie management
+        - Obfuscated JS → vm module / manual deobfuscation
+      </details>
+    </step>
+
+    <step number="3">
+      <action>Buat struktur skrip</action>
+      <details>
+        Standar struktur file:
+        - lib/[nama-scraper].js → core logic
+        - lib/controllers/[kategori]/[nama].js → route handler
+        - test/scraper/[nama].js → test langsung (opsional)
+      </details>
+    </step>
+  </initialization_steps>
+
+  <main_workflow>
+    <phase name="recon">
+      <description>Fase pengintaian awal target</description>
+      <steps>
+        <step>Inspeksi halaman target via browser DevTools atau curl</step>
+        <step>Identifikasi endpoint API (XHR/fetch requests)</step>
+        <step>Cek header yang diperlukan (User-Agent, Referer, Origin, Cookies)</step>
+        <step>Deteksi anti-bot: Cloudflare UAM, Turnstile, hCaptcha, JS challenge</step>
+        <step>Catat rate limiting & throttling patterns</step>
+      </steps>
+    </phase>
+
+    <phase name="implementation">
+      <description>Implementasi skrip scraping</description>
+      <steps>
+        <step>Buat HTTP client dengan header & cookie management</step>
+        <step>Implement request pipeline: auth → session → data fetch</step>
+        <step>Buat parser untuk ekstraksi data (cheerio, regex, JSON path)</step>
+        <step>Handle pagination / infinite scroll → loop dengan cursor/offset</step>
+        <step>Implement error handling: retry, timeout, fallback</step>
+        <step>Buat data transformer → format output yg diminta</step>
+      </steps>
+    </phase>
+
+    <phase name="testing">
+      <description>Uji coba langsung skrip scraper</description>
+      <steps>
+        <step>Jalankan skrip dengan real endpoint</step>
+        <step>Verifikasi data yg diekstrak akurat & lengkap</step>
+        <step>Test edge cases: kosong, error page, redirect, rate limit</step>
+        <step>Buat test case sederhana (manual run via terminal)</step>
+      </steps>
+    </phase>
+  </main_workflow>
+
+  <anti_bot_bypass_techniques>
+    <technique name="cloudscraper">
+      <use_case>Cloudflare protected sites</use_case>
+      <example>
+const cloudscraper = require('cloudscraper');
+const data = await cloudscraper.get({ uri: url, headers: HEADERS });
+      </example>
+    </technique>
+    <technique name="cookie_jar">
+      <use_case>Sites requiring session cookies</use_case>
+      <example>
+const { CookieJar } = require('tough-cookie');
+const { wrapper } = require('axios-cookiejar-support');
+const jar = new CookieJar();
+const client = wrapper(axios.create({ jar }));
+      </example>
+    </technique>
+    <technique name="js_deobfuscation">
+      <use_case>Data protected via JS eval/obfuscation</use_case>
+      <example>
+const vm = require('vm');
+const context = vm.createContext({ window: {}, document: {} });
+const decoded = vm.runInContext(obfuscatedCode, context);
+      </example>
+    </technique>
+    <technique name="api_sniffing">
+      <use_case>SPA that loads data via XHR/fetch</use_case>
+      <example>
+// Sniff via DevTools -> Network tab
+// Copy as fetch -> convert to axios
+const response = await axios.get('https://api.target.com/v1/data', {
+  headers: { 'Authorization': 'Bearer token' }
+});
+      </example>
+    </technique>
+  </anti_bot_bypass_techniques>
+
+  <completion_criteria>
+    <criterion>Skrip dapat dijalankan & menghasilkan output sesuai target</criterion>
+    <criterion>Error handling mencakup timeout, network error, invalid response</criterion>
+    <criterion>Header & cookies diset dengan benar mengikuti target</criterion>
+    <criterion>Jika ada pagination — semua halaman ter-scrape</criterion>
+    <criterion>Skrip siap di-install sebagai dependency atau di-copy ke project</criterion>
+  </completion_criteria>
+</workflow_instructions>

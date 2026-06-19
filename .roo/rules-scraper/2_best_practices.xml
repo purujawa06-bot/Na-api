@@ -1,0 +1,129 @@
+<best_practices>
+  <general_principles>
+    <principle priority="high">
+      <name>Minimal dependency</name>
+      <description>Hanya gunakan library yg benar-benar diperlukan</description>
+      <rationale>Skrip scraping harus portabel & gampang di-install di lingkungan berbeda</rationale>
+      <example>
+        <good>axios + cheerio + cloudscraper (3 deps)</good>
+        <bad>puppeteer + playwright + cheerio + axios + got + request (overkill)</bad>
+      </example>
+    </principle>
+
+    <principle priority="high">
+      <name>Modular architecture</name>
+      <description>Pisahkan HTTP client, parser, dan transformer</description>
+      <rationale>Memudahkan debugging, testing, dan reuse komponen</rationale>
+      <example>
+<code>
+// ✅ BAIK
+async function fetchData(url, headers) { /* HTTP logic */ }
+async function parseHtml(html) { /* parsing logic */ }
+function transformData(data) { /* transformation */ }
+
+// ❌ JELEK: Satu function raksasa yg campur aduk
+async function scrapeAll(url) {
+  // request... parsing... transform... semua di sini
+}
+</code>
+      </example>
+    </principle>
+
+    <principle priority="medium">
+      <name>Stealth & anti-detection</name>
+      <description>Mimikri browser real untuk hindari blocking</description>
+      <rationale>Banyak site block request yg kelihatan bot</rationale>
+      <example>
+        <good>Rotate User-Agent, set Referer, gunakan header lengkap, delay antar request</good>
+        <bad>Default axios headers tanpa User-Agent, request tanpa delay, concurrency tinggi</bad>
+      </example>
+    </principle>
+
+    <principle priority="medium">
+      <name>Error resilience</name>
+      <description>Skrip harus survive dari error network, timeout, rate limit</description>
+      <rationale>Scraping real-world selalu ada error — harus handle gracefully</rationale>
+      <example>
+<code>
+// ✅ BAIK
+async function scrapeWithRetry(url, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await axios.get(url);
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1)); // exponential backoff
+    }
+  }
+}
+
+// ❌ JELEK: tanpa retry, langsung throw
+const data = await axios.get(url); // Kalau error -> crash
+</code>
+      </example>
+    </principle>
+  </general_principles>
+
+  <code_conventions>
+    <convention category="naming">
+      <rule>Gunakan camelCase untuk function & variable</rule>
+      <rule>Nama function harus deskriptif: fetchDetail, parseEpisodeList, extractDownloadUrl</rule>
+      <rule>Constanta gunakan UPPER_SNAKE: BASE_URL, USER_AGENT, HEADERS</rule>
+    </convention>
+
+    <convention category="structure">
+      <rule>1 file = 1 concern (scraper logic)</rule>
+      <rule>Helper/pure functions dipisah ke file terpisah jika reusable</rule>
+    </convention>
+
+    <convention category="headers">
+      <rule>Selalu set User-Agent yg valid & realistis</rule>
+      <rule>Sertakan Referer yang sesuai</rule>
+      <rule>Gunakan Accept-Language sesuai target audience</rule>
+    </convention>
+  </code_conventions>
+
+  <common_pitfalls>
+    <pitfall>
+      <description>Hardcode cookie/token yg expires</description>
+      <why_problematic>Token & cookies punya masa berlaku — skrip akan broken setelah expired</why_problematic>
+      <correct_approach>Implement login/session refresh flow, atau ambil cookie dinamis via init request</correct_approach>
+    </pitfall>
+
+    <pitfall>
+      <description>Overlooking rate limiting</description>
+      <why_problematic>Request terlalu cepat → kena block/ban IP</why_problematic>
+      <correct_approach>Implement delay antar request, gunakan queue system untuk concurrency</correct_approach>
+    </pitfall>
+
+    <pitfall>
+      <description>Assume HTML structure statis</description>
+      <why_problematic>Website bisa update layout — scraper broken tiba-tiba</why_problematic>
+      <correct_approach>Gunakan selector yg resilient (data-attributes, ID), dokumentasi asumsi struktur HTML</correct_approach>
+    </pitfall>
+
+    <pitfall>
+      <description>Gak handle redirect/3xx responses</description>
+      <why_problematic>Beberapa site redirect bot ke halaman captcha/block</why_problematic>
+      <correct_approach>Set maxRedirects, inspect final URL, handle redirect manually jika perlu</correct_approach>
+    </pitfall>
+  </common_pitfalls>
+
+  <quality_checklist>
+    <category name="before_development">
+      <item>Inspeksi target via DevTools / curl — pahami struktur</item>
+      <item>Cek robots.txt & Terms of Service (ethical scraping)</item>
+      <item>Identifikasi rate limiting & anti-bot protection</item>
+    </category>
+    <category name="during_development">
+      <item>Gunakan helper modular — jangan satu function raksasa</item>
+      <item>Sertakan error handling untuk setiap request</item>
+      <item>Logging untuk debugging (console.log strategis)</item>
+    </category>
+    <category name="before_completion">
+      <item>Test dengan real endpoint — verifikasi output</item>
+      <item>Test edge cases (404, redirect, empty result)</item>
+      <item>Pastikan bisa di-install & di-run di environment berbeda</item>
+    </category>
+  </quality_checklist>
+</best_practices>
