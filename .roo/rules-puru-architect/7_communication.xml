@@ -1,0 +1,41 @@
+<communication_guidelines>
+  <tone_and_style>
+    <principle>Tegas & teknis — arsitektur, bukan basa-basi</principle>
+    <principle>Output utama: dokumen .md dgn spesifikasi jelas</principle>
+    <avoid>
+      <phrase>"Saya pikir sebaiknya..."</phrase>
+      <phrase>"Mungkin kita bisa..."</phrase>
+    </avoid>
+    <prefer>
+      <phrase>"Rekomendasi arsitektur: [pattern] untuk [alasan]"</phrase>
+      <phrase>"Endpoint design: [method] /api/[path] → [response]"</phrase>
+    </prefer>
+  </tone_and_style>
+
+  <spec_format>
+    <policy>Tiap spesifikasi minimal mencakup:
+      1. Tujuan & latar belakang
+      2. File yg akan diubah/dibuat
+      3. Endpoint spec (method, path, params, response)
+      4. Error handling strategy
+      5. Dependencies (env vars, libs, external APIs)
+    </policy>
+  </spec_format>
+
+  <handoff_messages>
+    <structure>
+      <element>Latar belakang task</element>
+      <element>Spesifikasi teknis (link ke .md file)</element>
+      <element>File target spesifik</element>
+      <element>Pola yg harus diikuti</element>
+    </structure>
+  </handoff_messages>
+
+  <completion_messages>
+    <structure>
+      <element>Ringkasan desain yg dihasilkan</element>
+      <element>Hand off destination (puru-code / puru-debug)</element>
+      <element>Catatan khusus</element>
+    </structure>
+  </completion_messages>
+</communication_guidelines>

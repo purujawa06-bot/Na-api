@@ -1,0 +1,102 @@
+<best_practices>
+  <general_principles>
+    <principle priority="high">
+      <name>Unik Format Error</name>
+      <description>
+        Project ini punya 2 format error:
+        - Umum: { success: false, message: "..." }
+        - Ping (satu-satunya): { status: 'error', message: "..." }
+      </description>
+      <rationale>
+        Jangan asumsi konsistensi format. Selalu cek route handler individual.
+      </rationale>
+    </principle>
+
+    <principle priority="high">
+      <name>Three-Layer Isolation</name>
+      <description>
+        Selalu isolasi layer mana yg bermasalah sebelum menyimpulkan root cause.
+        Route handler ≠ controller ≠ lib.
+      </description>
+      <rationale>
+        Scraper error sering keliatan seperti controller error, padahal lib yg salah.
+        Build gagal bisa karena JSDoc missing atau scraper runtime error.
+      </rationale>
+    </principle>
+
+    <principle priority="high">
+      <name>Cloudscraper Silent Failures</name>
+      <description>
+        cloudscraper bisa return 403 tanpa throw error.
+        Selalu cek response.statusCode setelah request.
+      </description>
+      <rationale>
+        Scraper terlihat sukses (no exception), tapi data kosong atau error page ter-parsing.
+      </rationale>
+    </principle>
+  </general_principles>
+
+  <diagnostic_techniques>
+    <technique>
+      <name>Response Body Inspection</name>
+      <usage>Baca response endpoint langsung via browser/curl</usage>
+      <guidance>Periksa: status code, response format, error message, missing fields</guidance>
+    </technique>
+
+    <technique>
+      <name>Stack Trace Analysis</name>
+      <usage>Error dari Next.js / Node.js</usage>
+      <guidance>Lihat file:line pertama di codebase sendiri (bukan node_modules)</guidance>
+    </technique>
+
+    <technique>
+      <name>Build Output Inspection</name>
+      <usage>npm run build gagal</usage>
+      <guidance>Lihat apakah scripts/generate-docs.js yg gagal → cek JSDoc tags</guidance>
+    </technique>
+
+    <technique>
+      <name>Env Var Verification</name>
+      <usage>Koneksi DB / auth gagal</usage>
+      <guidance>Lihat .env.example untuk required vars. Cek PURUBOY_PG_URL dan PURUBOY_ADMIN_KEY</guidance>
+    </technique>
+  </diagnostic_techniques>
+
+  <common_failure_modes>
+    <failure>
+      <name>Scraper 403 Silent</name>
+      <symptom>Endpoint return data kosong atau error page HTML</symptom>
+      <diagnosis>Cek response.statusCode di kode scraper → kemungkinan 403 tanpa throw</diagnosis>
+    </failure>
+
+    <failure>
+      <name>Error Format Mismatch</name>
+      <symptom>Client expect { success: false } tapi dapat { status: 'error' }</symptom>
+      <diagnosis>Kemungkinan ping.js atau route handler lain yg beda format</diagnosis>
+    </failure>
+
+    <failure>
+      <name>Missing force-dynamic</name>
+      <symptom>Endpoint return data stale/cached</symptom>
+      <diagnosis>Cek export const dynamic = 'force-dynamic' di route handler</diagnosis>
+    </failure>
+
+    <failure>
+      <name>Invalid JSON → 500</name>
+      <symptom>POST endpoint return 500 tanpa error jelas</symptom>
+      <diagnosis>Cek apakah req.json() tanpa try-catch</diagnosis>
+    </failure>
+
+    <failure>
+      <name>Docs Build Gagal</name>
+      <symptom>npm run build gagal di generate-docs</symptom>
+      <diagnosis>Cek JSDoc tags: @title, @method, @path — mungkin missing</diagnosis>
+    </failure>
+
+    <failure>
+      <name>DB Connection Silent Fail</name>
+      <symptom>Endpoint DB-related error tanpa koneksi issue</symptom>
+      <diagnosis>Cek PURUBOY_PG_URL env var — mungkin typo (bukan DATABASE_URL)</diagnosis>
+    </failure>
+  </common_failure_modes>
+</best_practices>

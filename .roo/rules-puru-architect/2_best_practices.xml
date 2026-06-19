@@ -1,0 +1,72 @@
+<best_practices>
+  <general_principles>
+    <principle priority="high">
+      <name>Pola Existing sebagai Template</name>
+      <description>
+        Untuk endpoint baru, cari endpoint existing paling mirip di kategori yg sama.
+        Contoh: scraper baru → lihat samehadaku atau komiku.
+        Downloader baru → lihat tiktok atau savetube.
+      </description>
+      <rationale>
+        Konsistensi arsitektur lebih penting daripada inovasi.
+        Developer dan docs generator expect pola tertentu.
+      </rationale>
+    </principle>
+
+    <principle priority="high">
+      <name>Metadata-Driven Documentation</name>
+      <description>
+        JSDoc di lib/controllers/ adalah satu-satunya source of truth untuk dokumentasi.
+      </description>
+      <rationale>
+        Script docs generator scan lib/controllers/ recursive.
+        Jika controller tidak punya JSDoc lengkap, docs tidak ter-generate.
+      </rationale>
+    </principle>
+
+    <principle priority="high">
+      <name>State Management</name>
+      <description>
+        Hanya 2 opsi penyimpanan state: temp_store (30min TTL) dan settings (persistent).
+        Jangan introduce storage baru tanpa diskusi.
+      </description>
+    </principle>
+  </general_principles>
+
+  <architecture_patterns>
+    <pattern name="scraper_endpoint">
+      <components>
+        <component>lib/controllers/kategori/namafitur.js — controller dgn JSDoc</component>
+        <component>app/api/kategori/namafitur/route.js — route handler minimal</component>
+        <component>(opsional) lib/namafitur.js — shared scraper logic pake cloudscraper + cheerio</component>
+      </components>
+      <json_example>
+{
+  "endpoint": "/api/kategori/namafitur",
+  "method": "GET",
+  "params": { "q": "search query" },
+  "response": { "success": true, "author": "PuruBoy", "result": [...] }
+}
+      </json_example>
+    </pattern>
+
+    <pattern name="tool_endpoint">
+      <components>
+        <component>lib/controllers/tools/namafitur.js — controller dgn JSDoc</component>
+        <component>app/api/tools/namafitur/route.js — route handler POST</component>
+        <component>(opsional) lib/namafitur.js — pure logic</component>
+      </components>
+    </pattern>
+  </architecture_patterns>
+
+  <common_pitfalls>
+    <pitfall>
+      <description>Merancang endpoint tanpa mempertimbangkan Next.js caching</description>
+      <correct_approach>Selalu include force-dynamic di route spec utk data dinamis</correct_approach>
+    </pitfall>
+    <pitfall>
+      <description>Introduce dependency baru tanpa evaluasi</description>
+      <correct_approach>Gunakan yang sudah ada: cloudscraper, cheerio, jimp, fluent-ffmpeg</correct_approach>
+    </pitfall>
+  </common_pitfalls>
+</best_practices>

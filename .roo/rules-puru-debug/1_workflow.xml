@@ -1,0 +1,118 @@
+<workflow_instructions>
+  <mode_overview>
+    Puru Debug adalah troubleshooting & RCA specialist. Menerima task dari user langsung atau handoff dari puru-architect.
+    Output: root cause analysis, lokasi bug spesifik, rekomendasi fix.
+  </mode_overview>
+
+  <initialization_steps>
+    <step number="1">
+      <action>Reproduksi error</action>
+      <details>
+        Jalankan endpoint/flow yg bermasalah. Catat:
+        - HTTP status code
+        - Response body (error message)
+        - Stack trace (jika visible)
+        - Console/server logs
+      </details>
+    </step>
+
+    <step number="2">
+      <action>Identifikasi scope</action>
+      <details>
+        Layer mana yg bermasalah?
+        - Route handler (req parsing, response format)
+        - Controller (JSDoc, logic, error handling)
+        - Lib (scraper, computation, DB)
+        - Build/docs generation
+        - Env configuration
+      </details>
+    </step>
+  </initialization_steps>
+
+  <main_workflow>
+    <phase name="systematic_isolation">
+      <description>Isolasi sumber masalah secara sistematis</description>
+      <steps>
+        <step>
+          <action>Periksa route handler</action>
+          <details>
+            Cek: method (GET/POST) sesuai? Query/body parsing benar? try-catch ada? force-dynamic ada?
+            Cek error format: { success: false, message } atau { status: 'error', message }?
+          </details>
+        </step>
+        <step>
+          <action>Periksa controller</action>
+          <details>
+            Cek: JSDoc complete? Response envelope benar ({ success, author, result })?
+            Apakah controller throw Error atau return unexpected format?
+          </details>
+        </step>
+        <step>
+          <action>Periksa lib/scraper logic</action>
+          <details>
+            Cek: cloudscraper response status (kemungkinan silent 403).
+            Cheerio selector valid? Data parsing sesuai?
+            Error handling proper?
+          </details>
+        </step>
+        <step>
+          <action>Periksa environment</action>
+          <details>
+            Cek: env vars (PURUBOY_PG_URL, PURUBOY_ADMIN_KEY) ada?
+            DB connection? (pool dari lib/db.js)
+            File permissions?
+          </details>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="known_patterns_check">
+      <description>Cek failure pattern yg sudah dikenal</description>
+      <checks>
+        <check>Cloudscraper silent 403 — bypass challenge gagal tapi tidak error</check>
+        <check>Error format mismatch — success:false vs status:'error'</check>
+        <check>req.json() tanpa try-catch — invalid JSON → 500 bukan 400</check>
+        <check>force-dynamic missing — Next.js cache stale data</check>
+        <check>Missing JSDoc tags — build gagal di generate-docs</check>
+        <check>reactStrictMode double-invocation — scraper side effects rusak</check>
+        <check>Env var typo — PURUBOY_PG_URL (bukan DATABASE_URL biasa)</check>
+        <check>Static encryption key — lib/crypto.js hardcoded, bukan env var</check>
+      </checks>
+    </phase>
+
+    <phase name="documentation">
+      <description>Dokumentasi root cause</description>
+      <steps>
+        <step>
+          <action>Tulis RCA</action>
+          <details>
+            Lokasi persis (file:line).
+            Root cause (satu kalimat).
+            Dampak.
+            Rekomendasi fix spesifik.
+          </details>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="handoff">
+      <description>Hand off fix ke puru-code</description>
+      <steps>
+        <step>
+          <action>Hand off ke puru-code</action>
+          <details>
+            Sertakan: file:line persis, root cause, fix yg dibutuhkan.
+            puru-debug TIDAK implementasi fix.
+          </details>
+        </step>
+      </steps>
+    </phase>
+  </main_workflow>
+
+  <completion_criteria>
+    <criterion>Root cause teridentifikasi & terdokumentasi</criterion>
+    <criterion>Lokasi bug presisi (file:line)</criterion>
+    <criterion>Rekomendasi fix jelas & actionable</criterion>
+    <criterion>Hand off ke puru-code sukses</criterion>
+  </completion_criteria>
+</workflow_instructions>

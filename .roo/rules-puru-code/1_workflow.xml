@@ -1,0 +1,118 @@
+<workflow_instructions>
+  <mode_overview>
+    Puru Code adalah implementation specialist. Menerima task dari puru-architect (implementasi) dan puru-debug (fix).
+    Output: kode yang berfungsi, mengikuti Three-Layer Pattern, dengan JSDoc lengkap.
+  </mode_overview>
+
+  <initialization_steps>
+    <step number="1">
+      <action>Pahami permintaan</action>
+      <details>
+        Identifikasi:
+        - Tipe task: implementasi baru vs fix bug
+        - Layer yang terpengaruh: route, controller, atau lib
+        - File target spesifik
+      </details>
+    </step>
+
+    <step number="2">
+      <action>Review kode terkait</action>
+      <details>
+        Baca file yang relevan — route handler, controller, lib yang ada.
+        Pastikan paham pola existing sebelum modifikasi.
+      </details>
+    </step>
+  </initialization_steps>
+
+  <main_workflow>
+    <phase name="implementation_baru">
+      <description>Membuat endpoint atau fitur baru dari awal</description>
+      <steps>
+        <step>
+          <action>Buat/buka controller di lib/controllers/</action>
+          <details>
+            Ikuti kategori yang ada (anime/, downloader/, tools/, main/, search/, dll).
+            Tambah JSDoc lengkap: @title, @summary, @description, @method, @path, @param, @example.
+            Implementasi logika — panggil lib/* helper jika perlu.
+            Format response: { success: true, author: 'PuruBoy', result: ... }.
+          </details>
+        </step>
+        <step>
+          <action>Buat/buka route handler di app/api/</action>
+          <details>
+            Minimal handler — extract query/body, call controller.
+            POST: extract body + origin dari req.json().
+            GET: extract query via Object.fromEntries(searchParams).
+            Passing mockReq = { query/body } ke controller.
+            Export force-dynamic jika return data dinamis.
+            Catch error → return { success: false, message }.
+          </details>
+        </step>
+        <step>
+          <action>Validasi</action>
+          <details>
+            Cek response envelope, JSDoc completeness, error handling.
+            Test via browser atau curl.
+          </details>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="fix_bug">
+      <description>Memperbaiki bug berdasarkan analisis puru-debug</description>
+      <steps>
+        <step>
+          <action>Baca root cause dari puru-debug</action>
+          <details>
+            Puru-debug sudah identifikasi sumber masalah. Langsung ke lokasi.
+          </details>
+        </step>
+        <step>
+          <action>Terapkan fix</action>
+          <details>
+            Perubahan minimal dan presisi. Jangan refactor yang tidak perlu.
+          </details>
+        </step>
+        <step>
+          <action>Verifikasi</action>
+          <details>
+            Pastikan bug hilang. Pastikan tidak regresi.
+          </details>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="refactor">
+      <description>Refaktor kode existing</description>
+      <steps>
+        <step>
+          <action>Pahami kode yang ada</action>
+          <details>
+            Baca seluruh file yang terlibat. Identifikasi duplikasi, pola usang.
+          </details>
+        </step>
+        <step>
+          <action>Eksekusi refaktor</action>
+          <details>
+            Perubahan bertahap. Satu perubahan → commit/verifikasi, lalu lanjut.
+          </details>
+        </step>
+        <step>
+          <action>Validasi</action>
+          <details>
+            Cek endpoint masih berfungsi. Cek docs masih generate.
+          </details>
+        </step>
+      </steps>
+    </phase>
+  </main_workflow>
+
+  <completion_criteria>
+    <criterion>Kode berfungsi (tested via browser/curl)</criterion>
+    <criterion>Response envelope sesuai standar ({ success, author: 'PuruBoy', result })</criterion>
+    <criterion>JSDoc lengkap (jenis endpoint baru)</criterion>
+    <criterion>Error handling proper</criterion>
+    <criterion>force-dynamic ada jika perlu</criterion>
+    <criterion>Build sukses (npm run build)</criterion>
+  </completion_criteria>
+</workflow_instructions>

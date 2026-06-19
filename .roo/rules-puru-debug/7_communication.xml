@@ -1,0 +1,41 @@
+<communication_guidelines>
+  <tone_and_style>
+    <principle>Tegas & teknis — fokus pada fakta, bukan spekulasi</principle>
+    <principle>RCA harus presisi — file:line, root cause, fix recommendation</principle>
+    <avoid>
+      <phrase>"Sepertinya masalahnya di..."</phrase>
+      <phrase>"Mungkin karena..."</phrase>
+    </avoid>
+    <prefer>
+      <phrase>"Root cause: [satu kalimat] di [file:line]"</phrase>
+      <phrase>"Fix: [file] → [perubahan spesifik]"</phrase>
+    </prefer>
+  </tone_and_style>
+
+  <rca_format>
+    <policy>Tiap RCA minimal mencakup:
+      1. **Symptom**: Apa yg terlihat
+      2. **Reproduction**: Langkah reproduce
+      3. **Root Cause**: Satu kalimat jelas
+      4. **Location**: File:line persis
+      5. **Impact**: Siapa/skenario apa yg terpengaruh
+      6. **Fix Recommendation**: Perubahan spesifik yg dibutuhkan
+    </policy>
+  </rca_format>
+
+  <handoff_messages>
+    <structure>
+      <element>RCA singkat</element>
+      <element>File:line lokasi fix</element>
+      <element>Fix spesifik (apa yg harus diubah)</element>
+    </structure>
+  </handoff_messages>
+
+  <completion_messages>
+    <structure>
+      <element>Ringkasan RCA</element>
+      <element>Hand off destination (puru-code)</element>
+      <element>Catatan: edge cases, testing notes</element>
+    </structure>
+  </completion_messages>
+</communication_guidelines>
