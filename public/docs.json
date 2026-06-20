@@ -237,6 +237,45 @@
       ]
     },
     {
+      "title": "Puru AI (OpenAI-Compatible)",
+      "summary": "Chat dengan model Puru via endpoint OpenAI-compatible.",
+      "description": "Melakukan percakapan dengan model AI **Puru** menggunakan API yang kompatibel dengan OpenAI (`/v1/chat/completions`). Mendukung **non-streaming** (response langsung) maupun **streaming** via SSE. Parameter mengikuti format OpenAI: `messages` sebagai array of objects `{role, content}`.",
+      "method": "POST",
+      "path": "/api/ai/puru",
+      "responseType": "json",
+      "example": "// === NON-STREAMING ===\n async function chatPuru() {\n   const res = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n       \"messages\": [{ \"role\": \"user\", \"content\": \"Halo, siapa kamu?\" }],\n       \"temperature\": 0.9\n     })\n   });\n   const data = await res.json();\n   console.log(data);\n   // Output:\n   // {\n   //   \"success\": true,\n   //   \"author\": \"PuruBoy\",\n   //   \"result\": \"Halo! Aku Puru, asisten AI buatan PuruBoy.\"\n   // }\n }\n \n // === STREAMING SSE ===\n async function chatPuruStream() {\n   const response = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n       \"messages\": \"Ceritakan dongeng singkat\",\n       \"stream\": true\n     })\n   });\n \n   const reader = response.body.getReader();\n   const decoder = new TextDecoder();\n \n   while (true) {\n     const { done, value } = await reader.read();\n     if (done) break;\n     const text = decoder.decode(value);\n     // Format: data: {\"type\":\"content\",\"content\":\"...\"}\n     console.log(text);\n   }\n }\n \n // === MULTI-TURN CONVERSATION ===\n async function chatMultiTurn() {\n   const res = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n       \"messages\": [\n         { \"role\": \"system\", \"content\": \"Kamu adalah asisten yang ramah\" },\n         { \"role\": \"user\", \"content\": \"Apa ibukota Indonesia?\" },\n         { \"role\": \"assistant\", \"content\": \"Ibukota Indonesia adalah Nusantara.\" },\n         { \"role\": \"user\", \"content\": \"Siapa presiden pertamanya?\" }\n       ]\n     })\n   });\n   const data = await res.json();\n   console.log(data);\n }\n \n // === SHORT STRING PROMPT ===\n async function chatSimple() {\n   const res = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \"messages\": \"1+1 berapa?\" })\n   });\n   const data = await res.json();\n   console.log(data.result);\n }",
+      "params": [
+        {
+          "name": "messages",
+          "in": "body",
+          "type": "string|Array",
+          "description": "Pesan untuk AI. Bisa string langsung atau array `[{role, content}]` seperti format OpenAI.",
+          "required": true
+        },
+        {
+          "name": "stream",
+          "in": "body",
+          "type": "boolean",
+          "description": "`true` untuk streaming SSE (Server-Sent Events), `false` (default) untuk response langsung.",
+          "required": false
+        },
+        {
+          "name": "max_tokens",
+          "in": "body",
+          "type": "number",
+          "description": "Maksimal token response (default: 2048).",
+          "required": false
+        },
+        {
+          "name": "temperature",
+          "in": "body",
+          "type": "number",
+          "description": "Kreativitas sampling (default: 0.7, range 0-2).",
+          "required": false
+        }
+      ]
+    },
+    {
       "title": "Quillbot AI Chat",
       "summary": "Chat via Quillbot AI (Stream).",
       "description": "Berinteraksi dengan model AI Quillbot yang mendukung streaming response. Berguna untuk menjawab pertanyaan, melakukan parafrase, atau riset teks. Endpoint ini menggunakan Server-Sent Events (SSE).",
@@ -994,6 +1033,18 @@
           "required": true
         }
       ]
+    }
+  ],
+  "chart": [
+    {
+      "title": "Billboard Indonesia Chart",
+      "summary": "Mendapatkan chart musik Indonesia terbaru dari Billboard",
+      "description": "Mengambil data 30 lagu terpopuler di Indonesia dari Billboard Indonesia Songs chart (Hot Week)",
+      "method": "GET",
+      "path": "/api/chart/billboard",
+      "responseType": "json",
+      "example": "// Request\n GET /api/chart/billboard\n // Response\n {\n   \"success\": true,\n   \"author\": \"PuruBoy\",\n   \"result\": [\n     {\n       \"rank\": 1,\n       \"title\": \"Example Song\",\n       \"artist\": \"Example Artist\",\n       \"lastWeek\": \"1\",\n       \"peakPos\": \"1\",\n       \"weeksOnChart\": \"10\",\n       \"image\": \"https://...\"\n     }\n   ]\n }",
+      "params": []
     }
   ],
   "downloader": [
