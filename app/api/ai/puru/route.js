@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { chatCompletion } from '../../../../lib/puru';
-import puruController from '../../../../lib/controllers/ai/puru';
+
+const UPSTREAM_URL = 'https://hollow-isa-nue-api-a32469fb.koyeb.app/v1/chat/completions';
+const API_KEY = 'sk-00fa7c868847b760-fbkl9l-e4416500';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -9,41 +10,32 @@ export const dynamic = 'force-dynamic';
 export async function POST(req) {
     try {
         const body = await req.json();
-        const mockReq = { body };
-        const controllerResult = await puruController(mockReq);
+        const isStream = body.stream === true;
 
-        // If controller signals streaming, handle it here
-        if (controllerResult && controllerResult.stream) {
-            const { messages, max_tokens, temperature } = controllerResult;
+        // Default model jika client tidak kirim
+        if (!body.model) {
+            body.model = 'puru';
+        }
 
-            const encoder = new TextEncoder();
-            const customStream = new TransformStream();
-            const writer = customStream.writable.getWriter();
+        // Forward only essential headers + inject Authorization
+        const headers = {
+            'Authorization': `Bearer ${API_KEY}`,
+            'Content-Type': 'application/json',
+        };
+        // Forward client Accept if present (for SSE)
+        const accept = req.headers.get('accept');
+        if (accept) headers['Accept'] = accept;
 
-            const send = (data) => {
-                return writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-            };
+        const upstreamRes = await fetch(UPSTREAM_URL, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+        });
 
-            (async () => {
-                try {
-                    const generator = await chatCompletion(messages, {
-                        stream: true,
-                        max_tokens: max_tokens || 2048,
-                        temperature: temperature || 0.7,
-                    });
-
-                    for await (const chunk of generator) {
-                        await send(chunk);
-                    }
-                    await send({ type: 'finish' });
-                } catch (err) {
-                    await send({ type: 'error', content: err.message });
-                } finally {
-                    try { await writer.close(); } catch (e) { /* ignore */ }
-                }
-            })();
-
-            return new Response(customStream.readable, {
+        // Streaming: pipe SSE langsung
+        if (isStream) {
+            return new Response(upstreamRes.body, {
+                status: upstreamRes.status,
                 headers: {
                     'Content-Type': 'text/event-stream',
                     'Cache-Control': 'no-cache',
@@ -52,13 +44,19 @@ export async function POST(req) {
             });
         }
 
-        // Non-streaming: return standard envelope
-        return NextResponse.json(controllerResult);
+        // Non-streaming: upstream appends `data: [DONE]` after JSON (no newline)
+        let text = await upstreamRes.text();
+        // Strip trailing SSE artifacts
+        text = text.replace(/data:\s*\[DONE\]\s*$/, '');
+        const data = JSON.parse(text);
+        return NextResponse.json(data, { status: upstreamRes.status });
 
     } catch (error) {
         return NextResponse.json({
-            success: false,
-            message: error.message,
+            error: {
+                message: error.message,
+                type: 'proxy_error',
+            }
         }, { status: 500 });
     }
 }
