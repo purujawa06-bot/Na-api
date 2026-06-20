@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react';
 import Image from 'next/image';
 import MethodBadge from './MethodBadge';
 import CopyButton from './CopyButton';
@@ -17,6 +17,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
     const formRef = useRef(null);
     const fullUrl = `${baseUrl}${endpoint.path}`;
     const hasAutoFill = !!endpoint.example;
+    const hasGuide = !!endpoint.guide;
+    const isGuideEndpoint = hasGuide && endpoint.params.length === 0 && !endpoint.example;
 
     useEffect(() => {
         if (isHighlighted) {
@@ -362,6 +364,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                     <div className="overflow-hidden">
                         <div className="border-t border-default">
+                            {isGuideEndpoint ? null : (
                             <div className="flex border-b border-default bg-black/10">
                                 {['params', 'example', 'response'].map(tab => (
                                     <button 
@@ -376,8 +379,24 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                     </button>
                                 ))}
                             </div>
+                            )}
 
                             <div className="p-5 bg-black/20">
+                                {isGuideEndpoint ? (
+                                    <div className="animate-fade-in">
+                                        <div className="prose prose-invert max-w-none">
+                                            <div className="relative group">
+                                                <pre className="bg-code p-4 rounded-xl overflow-x-auto text-xs border border-default custom-scrollbar shadow-inner whitespace-pre-wrap">
+                                                    <code className="language-markdown font-mono">{endpoint.guide}</code>
+                                                </pre>
+                                                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <CopyButton textToCopy={endpoint.guide} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                <>
                                 {activeTab === 'params' && (
                                     <div className="animate-fade-in">
                                         <form ref={formRef} onSubmit={handleTryItOut}>
@@ -505,7 +524,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                         {!finalData && !isLoading && (
                                             <div className="flex flex-col items-center justify-center h-full py-8 text-muted space-y-2">
                                                 <i className="fas fa-terminal text-2xl mb-2 opacity-50"></i>
-                                                <p className="text-xs">Tekan &quot;Test Endpoint&quot; untuk melihat hasil.</p>
+                                                <p className="text-xs">Tekan "Test Endpoint" untuk melihat hasil.</p>
                                             </div>
                                         )}
                                         
@@ -540,6 +559,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                             </div>
                                         )}
                                     </div>
+                                )}
+                                </>
                                 )}
                             </div>
                         </div>

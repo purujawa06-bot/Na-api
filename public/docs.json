@@ -237,43 +237,14 @@
       ]
     },
     {
-      "title": "Puru AI (OpenAI-Compatible)",
-      "summary": "Chat dengan model Puru via endpoint OpenAI-compatible.",
-      "description": "Melakukan percakapan dengan model AI **Puru** menggunakan API yang kompatibel dengan OpenAI (`/v1/chat/completions`). Mendukung **non-streaming** (response langsung) maupun **streaming** via SSE. Parameter mengikuti format OpenAI: `messages` sebagai array of objects `{role, content}`.",
+      "title": "Puru AI (OpenAI-Compatible Proxy)",
+      "summary": "Transparent proxy ke Hollo ISA OpenAI-compatible API.",
+      "description": "Transparent proxy ke **Hollo ISA** (`/v1/chat/completions`). Semua header, body, dan parameter OpenAI-compatible (model, messages, stream, max_tokens, temperature, dll.) diteruskan langsung tanpa modifikasi. Response adalah raw OpenAI-compatible JSON (non-streaming) atau SSE (streaming). Tidak memerlukan API key dari client — proxy inject key internal.",
       "method": "POST",
       "path": "/api/ai/puru",
       "responseType": "json",
-      "example": "// === NON-STREAMING ===\n async function chatPuru() {\n   const res = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n       \"messages\": [{ \"role\": \"user\", \"content\": \"Halo, siapa kamu?\" }],\n       \"temperature\": 0.9\n     })\n   });\n   const data = await res.json();\n   console.log(data);\n   // Output:\n   // {\n   //   \"success\": true,\n   //   \"author\": \"PuruBoy\",\n   //   \"result\": \"Halo! Aku Puru, asisten AI buatan PuruBoy.\"\n   // }\n }\n \n // === STREAMING SSE ===\n async function chatPuruStream() {\n   const response = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n       \"messages\": \"Ceritakan dongeng singkat\",\n       \"stream\": true\n     })\n   });\n \n   const reader = response.body.getReader();\n   const decoder = new TextDecoder();\n \n   while (true) {\n     const { done, value } = await reader.read();\n     if (done) break;\n     const text = decoder.decode(value);\n     // Format: data: {\"type\":\"content\",\"content\":\"...\"}\n     console.log(text);\n   }\n }\n \n // === MULTI-TURN CONVERSATION ===\n async function chatMultiTurn() {\n   const res = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n       \"messages\": [\n         { \"role\": \"system\", \"content\": \"Kamu adalah asisten yang ramah\" },\n         { \"role\": \"user\", \"content\": \"Apa ibukota Indonesia?\" },\n         { \"role\": \"assistant\", \"content\": \"Ibukota Indonesia adalah Nusantara.\" },\n         { \"role\": \"user\", \"content\": \"Siapa presiden pertamanya?\" }\n       ]\n     })\n   });\n   const data = await res.json();\n   console.log(data);\n }\n \n // === SHORT STRING PROMPT ===\n async function chatSimple() {\n   const res = await fetch('/api/ai/puru', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \"messages\": \"1+1 berapa?\" })\n   });\n   const data = await res.json();\n   console.log(data.result);\n }",
-      "params": [
-        {
-          "name": "messages",
-          "in": "body",
-          "type": "string|Array",
-          "description": "Pesan untuk AI. Bisa string langsung atau array `[{role, content}]` seperti format OpenAI.",
-          "required": true
-        },
-        {
-          "name": "stream",
-          "in": "body",
-          "type": "boolean",
-          "description": "`true` untuk streaming SSE (Server-Sent Events), `false` (default) untuk response langsung.",
-          "required": false
-        },
-        {
-          "name": "max_tokens",
-          "in": "body",
-          "type": "number",
-          "description": "Maksimal token response (default: 2048).",
-          "required": false
-        },
-        {
-          "name": "temperature",
-          "in": "body",
-          "type": "number",
-          "description": "Kreativitas sampling (default: 0.7, range 0-2).",
-          "required": false
-        }
-      ]
+      "params": [],
+      "guide": "Endpoint ini khusus untuk agent coding / platform yang mendukung OpenAI-compatible.\n Cocok untuk Roo Code, Continue.dev, atau platform lain dengan konfigurasi kustom OpenAI endpoint.\n\n ─────────────────────────────────────────────\n  KONFIGURASI PADA ROO CODE / PLATFORM AGENT\n ─────────────────────────────────────────────\n\n  Provider: OpenAI Compatible\n  Base URL: https://na-api.vercel.app/api/ai/puru/v1\n  Model ID: isi bebas (contoh: \"gpt-4o\", \"claude-3\", dll.)\n  API Key: isi bebas (contoh: \"sk-xxxxxxxx\")\n\n  Catatan:\n  • Model ID & API Key bisa diisi ngasal karena proxy sudah otomatis\n    meng-inject model ID dan API Key yang benar.\n  • Semua request akan tetap diproses oleh model Hollo ISA bawaan.\n\n ─────────────────────────────────────────────\n  CONTOH CURL\n ─────────────────────────────────────────────\n\n  === NON-STREAMING ===\n\n  curl -X POST \"https://na-api.vercel.app/api/ai/puru\" \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\n      \"model\": \"gpt-4o\",\n      \"messages\": [\n        { \"role\": \"user\", \"content\": \"Halo, apa kabar?\" }\n      ]\n    }'\n\n  === STREAMING ===\n\n  curl -X POST \"https://na-api.vercel.app/api/ai/puru\" \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\n      \"model\": \"claude-3\",\n      \"messages\": [\n        { \"role\": \"user\", \"content\": \"Ceritakan tentang dirimu\" }\n      ],\n      \"stream\": true\n    }'\n\n ─────────────────────────────────────────────\n  CONTOH INTEGRASI Roo Code (roocode.json)\n ─────────────────────────────────────────────\n\n  {\n    \"apiProvider\": \"openai\",\n    \"openAiBaseUrl\": \"https://na-api.vercel.app/api/ai/puru/v1\",\n    \"openAiModel\": \"gpt-4o\",\n    \"openAiApiKey\": \"sk-xxxxxxxx\"\n  }"
     },
     {
       "title": "Quillbot AI Chat",
