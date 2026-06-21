@@ -524,7 +524,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                         {!finalData && !isLoading && (
                                             <div className="flex flex-col items-center justify-center h-full py-8 text-muted space-y-2">
                                                 <i className="fas fa-terminal text-2xl mb-2 opacity-50"></i>
-                                                <p className="text-xs">Tekan "Test Endpoint" untuk melihat hasil.</p>
+                                                <p className="text-xs">Tekan &ldquo;Test Endpoint&rdquo; untuk melihat hasil.</p>
                                             </div>
                                         )}
                                         
