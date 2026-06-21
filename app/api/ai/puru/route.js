@@ -42,10 +42,12 @@ export async function POST(req) {
             });
         }
 
-        // Non-streaming: upstream appends `data: [DONE]` after JSON (no newline)
+        // Non-streaming: upstream returns SSE-wrapped JSON even when stream=false
         let text = await upstreamRes.text();
-        // Strip trailing SSE artifacts
-        text = text.replace(/data:\s*\[DONE\]\s*$/, '');
+        // Strip SSE prefix + trailing [DONE] marker
+        // Format: "data: {...}\n\ndata: [DONE]" or "data: {...}"
+        text = text.replace(/^data:\s*/, '');
+        text = text.replace(/\n\ndata:\s*\[DONE\]\s*$/, '').replace(/data:\s*\[DONE\]\s*$/, '');
         const data = JSON.parse(text);
         return NextResponse.json(data, { status: upstreamRes.status });
 
