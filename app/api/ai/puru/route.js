@@ -42,14 +42,13 @@ export async function POST(req) {
             });
         }
 
-        // Non-streaming: upstream returns SSE-wrapped JSON even when stream=false
-        let text = await upstreamRes.text();
-        // Strip SSE prefix + trailing [DONE] marker
-        // Format: "data: {...}\n\ndata: [DONE]" or "data: {...}"
-        text = text.replace(/^data:\s*/, '');
-        text = text.replace(/\n\ndata:\s*\[DONE\]\s*$/, '').replace(/data:\s*\[DONE\]\s*$/, '');
-        const data = JSON.parse(text);
-        return NextResponse.json(data, { status: upstreamRes.status });
+        // Non-streaming: forward response body as-is (raw) from upstream
+        return new Response(upstreamRes.body, {
+            status: upstreamRes.status,
+            headers: {
+                'Content-Type': upstreamRes.headers.get('content-type') || 'application/json',
+            },
+        });
 
     } catch (error) {
         return NextResponse.json({
