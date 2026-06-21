@@ -12,10 +12,8 @@ export async function POST(req) {
         const body = await req.json();
         const isStream = body.stream === true;
 
-        // Default model jika client tidak kirim
-        if (!body.model) {
-            body.model = 'puru';
-        }
+        // Paksa model selalu 'puru' - untuk dokumentasi & konsistensi
+        body.model = 'puru';
 
         // Forward only essential headers + inject Authorization
         const headers = {
