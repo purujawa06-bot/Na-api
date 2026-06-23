@@ -1,11 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-const API_BASE = 'https://hollow-isa-nue-api-a32469fb.koyeb.app/v1';
-const API_KEY = 'sk-00fa7c868847b760-fbkl9l-e4416500';
-const MODEL = 'puru';
 const MAX_HISTORY = 20;
 
 const formatTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -15,7 +11,6 @@ export default function PuruAI() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
     const [isExiting, setIsExiting] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
@@ -44,8 +39,8 @@ export default function PuruAI() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // Preserved conversation history for context (last 20 exchanges)
-    const getContextMessages = () => {
+    // Get context (last 20 exchanges)
+    const getContext = () => {
         return messages.slice(-MAX_HISTORY).map(m => ({
             role: m.role,
             content: m.content
@@ -61,51 +56,74 @@ export default function PuruAI() {
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setLoading(true);
-        setError('');
 
         const assistantMsg = { role: 'assistant', content: '', time: formatTime(), id: Date.now() + 1 };
         setMessages(prev => [...prev, assistantMsg]);
 
         try {
-            const context = [...getContextMessages(), { role: 'user', content: text }];
+            const context = [...getContext(), { role: 'user', content: text }];
 
-            const res = await fetch(`${API_BASE}/chat/completions`, {
+            const res = await fetch('/api/ai/puruai', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${API_KEY}`,
-                },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: [
-                        { role: 'system', content: 'Kamu adalah PuruAI, asisten AI yang ramah, cerdas, dan membantu. Jawab dengan bahasa Indonesia yang natural dan santai. Kamu adalah teman ngobrol yang asyik.' },
-                        ...context.slice(-MAX_HISTORY)
-                    ],
-                    stream: false,
-                    max_tokens: 2048,
-                    temperature: 0.7,
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: context }),
             });
 
             if (!res.ok) {
-                const errText = await res.text().catch(() => '');
-                throw new Error(`API Error ${res.status}: ${errText.substring(0, 200)}`);
+                const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(err.error || `HTTP ${res.status}`);
             }
 
-            const data = await res.json();
-            const reply = data?.choices?.[0]?.message?.content || '(tidak ada respons)';
+            // Read streaming response
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullContent = '';
 
-            setMessages(prev => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                    last.content = reply;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        if (data === '[DONE]') continue;
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed.error) throw new Error(parsed.error);
+                            if (parsed.content) {
+                                fullContent += parsed.content;
+                                setMessages(prev => {
+                                    const updated = [...prev];
+                                    const last = updated[updated.length - 1];
+                                    if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                                        last.content = fullContent;
+                                    }
+                                    return updated;
+                                });
+                            }
+                        } catch {}
+                    }
                 }
-                return updated;
-            });
+            }
+
+            // Final update
+            if (fullContent) {
+                setMessages(prev => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                        last.content = fullContent;
+                    }
+                    return updated;
+                });
+            }
 
         } catch (err) {
-            setError(err.message);
             setMessages(prev => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -149,12 +167,12 @@ export default function PuruAI() {
                         </div>
                         <div>
                             <h1 className="text-base font-bold text-[#f2f3f5]">PuruAI</h1>
-                            <p className="text-[10px] text-[#949ba4] -mt-0.5">{loading ? 'Typing...' : 'Online'}</p>
+                            <p className="text-[10px] text-[#949ba4] -mt-0.5">{loading ? 'Mengetik...' : 'Online'}</p>
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-4 text-[#b5bac1]">
-                    <button onClick={clearChat} title="Clear chat" className="hover:text-[#dbdee1] transition-colors">
+                    <button onClick={clearChat} title="Hapus percakapan" className="hover:text-[#dbdee1] transition-colors">
                         <i className="fas fa-trash-alt"></i>
                     </button>
                 </div>
@@ -191,7 +209,7 @@ export default function PuruAI() {
                         {messages.map((msg, i) => {
                             const isUser = msg.role === 'user';
                             const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
-                            const isLoading = isLastAssistant && loading && !msg.content;
+                            const isStreaming = isLastAssistant && loading && !msg.content;
                             
                             return (
                                 <div key={msg.id || i} className={`flex ${isUser ? 'justify-end' : 'justify-start'} items-end gap-2`}>
@@ -211,7 +229,7 @@ export default function PuruAI() {
                                                 ? 'bg-[#5865f2] rounded-2xl rounded-tr-sm text-white'
                                                 : 'bg-[#2b2d31] rounded-2xl rounded-tl-sm text-[#dbdee1]'
                                         }`}>
-                                            {isLoading ? (
+                                            {isStreaming ? (
                                                 <span className="flex gap-1.5 py-1">
                                                     <span className="w-2 h-2 bg-[#949ba4] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
                                                     <span className="w-2 h-2 bg-[#949ba4] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
@@ -240,17 +258,6 @@ export default function PuruAI() {
                     </div>
                 )}
             </div>
-
-            {/* Error Banner */}
-            {error && (
-                <div className="bg-red-500/10 border-t border-red-500/20 px-4 py-2 flex items-center gap-2 text-red-400 text-xs">
-                    <i className="fas fa-exclamation-triangle"></i>
-                    <span className="flex-1">{error}</span>
-                    <button onClick={() => setError('')} className="hover:text-white">
-                        <i className="fas fa-times"></i>
-                    </button>
-                </div>
-            )}
 
             {/* Input Area */}
             <div className="bg-[#313338] px-4 pb-5 pt-2 shrink-0 z-30">
