@@ -52,12 +52,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                     }
                 });
 
-                // Auto-fill default choice values
-            endpoint.params.forEach(p => {
-                if (p.choices && p.choices.length > 0 && !processedValues[p.name]) {
-                    processedValues[p.name] = p.choices[0].value;
-                }
-            });
+
 
             setFormValues(prev => ({ ...prev, ...processedValues }));
             }
@@ -447,7 +442,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                 {param.choices ? (
                                                                     <div className="flex gap-3 p-1 bg-input rounded-xl border border-default">
                                                                         {param.choices.map(choice => {
-                                                                            const isSelected = (formValues[param.name] || choice.value) === choice.value;
+                                                                            const isSelected = formValues[param.name] !== undefined && formValues[param.name] === choice.value;
                                                                             return (
                                                                                 <button
                                                                                     key={choice.value}
