@@ -52,7 +52,14 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                     }
                 });
 
-                setFormValues(prev => ({ ...prev, ...processedValues }));
+                // Auto-fill default choice values
+            endpoint.params.forEach(p => {
+                if (p.choices && p.choices.length > 0 && !processedValues[p.name]) {
+                    processedValues[p.name] = p.choices[0].value;
+                }
+            });
+
+            setFormValues(prev => ({ ...prev, ...processedValues }));
             }
             
             const urlMatch = endpoint.example.match(/fetch\(['"`](.*?)['"`]/);
@@ -435,6 +442,29 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                             )}
 
                                                             <div className="relative">
+                                                                {param.choices ? (
+                                                                    <div className="flex gap-3 p-1 bg-input rounded-xl border border-default">
+                                                                        {param.choices.map(choice => {
+                                                                            const isSelected = (formValues[param.name] || choice.value) === choice.value;
+                                                                            return (
+                                                                                <button
+                                                                                    key={choice.value}
+                                                                                    type="button"
+                                                                                    name={param.name}
+                                                                                    onClick={() => handleInputChange({ target: { name: param.name, value: choice.value } })}
+                                                                                    className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                                                                                        isSelected
+                                                                                            ? 'bg-accent text-white shadow-lg shadow-accent/20'
+                                                                                            : 'text-muted hover:text-white hover:bg-white/5'
+                                                                                    }`}
+                                                                                >
+                                                                                    {choice.label}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                ) : (
+                                                                <>
                                                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted group-focus-within:text-accent transition-colors">
                                                                     <i className={`fas ${param.in === 'query' ? 'fa-search' : (param.in === 'body' || param.in === 'formData') ? (param.type === 'file' ? 'fa-upload' : 'fa-code') : 'fa-link'} text-xs`}></i>
                                                                 </div>
@@ -450,6 +480,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                     required={param.required}
                                                                     accept={param.type === 'file' ? 'image/*' : undefined}
                                                                 />
+                                                                </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     ))}

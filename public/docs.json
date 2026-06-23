@@ -152,8 +152,22 @@
           "name": "model",
           "in": "body",
           "type": "string",
-          "description": "Model yang digunakan. Default: \"turbo\". (opsional)",
-          "required": false
+          "description": "Model yang digunakan. (opsional)",
+          "required": false,
+          "choices": [
+            {
+              "value": "turbo",
+              "label": "Turbo (Cepat)"
+            },
+            {
+              "value": "standard",
+              "label": "Standard (Detail)"
+            },
+            {
+              "value": "hd",
+              "label": "HD (High Quality)"
+            }
+          ]
         }
       ]
     },
