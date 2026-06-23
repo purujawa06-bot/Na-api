@@ -112,7 +112,9 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
         let path = endpoint.path;
 
         endpoint.params.forEach(param => {
-            const value = formData.get(param.name);
+            const value = formValues[param.name] !== undefined && formValues[param.name] !== ''
+                ? formValues[param.name]
+                : formData.get(param.name);
             if (value) {
                 if (param.in === 'query') queryParams.append(param.name, value);
                 else if (param.in === 'formData') {
