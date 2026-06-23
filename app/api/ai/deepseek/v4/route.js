@@ -42,11 +42,45 @@ export async function POST(req) {
                 const ds = new DeepSeekV4.DeepSeekV4();
                 const stream = await ds.chat(message, { model, history });
 
-                const flushReasoning = async () => {
-                    if (reasoningBuffer.trim().length > 0) {
-                        fullReasoning += reasoningBuffer;
-                        await send(`🤔 ${reasoningBuffer.trim()}\n`);
-                        reasoningBuffer = '';
+                const flushReasoning = async (force) => {
+                    const text = reasoningBuffer.trim();
+                    if (text.length === 0) return;
+
+                    if (force || text.length >= 80) {
+                        // Cari break point alami: titik, tanya, seru, newline, koma, titik dua
+                        const breakChars = ['.', '!', '?', '\n'];
+                        let splitAt = -1;
+
+                        // Cari break dari kanan, max 80 chars
+                        const searchEnd = Math.min(text.length - 1, 80);
+                        for (let i = searchEnd; i >= 0; i--) {
+                            if (breakChars.includes(text[i])) {
+                                splitAt = i + 1;
+                                break;
+                            }
+                        }
+
+                        // Fallback: cari spasi terakhir
+                        if (splitAt <= 0) {
+                            for (let i = searchEnd; i >= 0; i--) {
+                                if (text[i] === ' ') {
+                                    splitAt = i;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Fallback last: paksa potong di 60 kalo kata kepanjangan
+                        if (splitAt <= 0) {
+                            splitAt = Math.min(text.length, 60);
+                        }
+
+                        const flushText = text.slice(0, splitAt).trim();
+                        if (flushText.length > 0) {
+                            fullReasoning += flushText + ' ';
+                            await send(`🤔 ${flushText}\n`);
+                        }
+                        reasoningBuffer = text.slice(splitAt);
                     }
                 };
 
@@ -63,7 +97,7 @@ export async function POST(req) {
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6).trim();
                         if (data === '[DONE]') {
-                            await flushReasoning();
+                            await flushReasoning(true);
                             break;
                         }
                         try {
@@ -71,12 +105,12 @@ export async function POST(req) {
                             const delta = parsed.choices?.[0]?.delta || {};
                             if (delta.reasoning) {
                                 reasoningBuffer += delta.reasoning;
-                                if (reasoningBuffer.length >= 60) {
-                                    await flushReasoning();
+                                if (reasoningBuffer.length >= 50) {
+                                    await flushReasoning(false);
                                 }
                             }
                             if (delta.content) {
-                                await flushReasoning();
+                                await flushReasoning(true);
                                 fullContent += delta.content;
                                 await send(delta.content);
                             }
@@ -84,7 +118,7 @@ export async function POST(req) {
                     }
                 }
 
-                await flushReasoning();
+                await flushReasoning(true);
 
                 if (!fullContent && !fullReasoning) {
                     await send(`[false] Gagal mendapatkan respons dari DeepSeek AI.`);
