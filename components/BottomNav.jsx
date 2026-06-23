@@ -51,10 +51,6 @@ const BottomNav = () => {
                             );
                         })}
                     </div>
-                    
-                    <div className="mt-4 pb-8 text-center">
-                        <p className="text-[10px] text-muted font-medium uppercase tracking-widest">PuruBoy API &copy; {new Date().getFullYear()}</p>
-                    </div>
                 </div>
             </div>
 
