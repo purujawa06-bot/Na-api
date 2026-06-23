@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { chatDeepSeekV4 } from '../../../../../lib/deepseek-v4';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +11,6 @@ export async function POST(req) {
             return NextResponse.json({ error: "Parameter 'message' wajib diisi." }, { status: 400 });
         }
 
-        // Validasi model
         const validModels = [
             'deepseek/deepseek-v4-flash',
             'deepseek/deepseek-r1',
@@ -38,45 +36,55 @@ export async function POST(req) {
 
                 let fullContent = '';
                 let fullReasoning = '';
+                let reasoningBuffer = '';
 
                 const DeepSeekV4 = require('../../../../../lib/deepseek-v4');
                 const ds = new DeepSeekV4.DeepSeekV4();
                 const stream = await ds.chat(message, { model, history });
 
-                // Parse SSE stream
-                const buffer = [];
-                let currentEvent = '';
+                const flushReasoning = async () => {
+                    if (reasoningBuffer.trim().length > 0) {
+                        fullReasoning += reasoningBuffer;
+                        await send(`🤔 ${reasoningBuffer.trim()}\n`);
+                        reasoningBuffer = '';
+                    }
+                };
 
+                // Collect raw chunks
+                const chunks = [];
                 for await (const rawChunk of stream) {
-                    const text = typeof rawChunk === 'object' && rawChunk[Symbol.asyncIterator]
-                        ? await (async () => { let r = ''; for await (const c of rawChunk) r += c.toString(); return r; })()
-                        : rawChunk.toString();
-                    
-                    const lines = text.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('event: ')) {
-                            currentEvent = line.slice(7).trim();
-                            continue;
+                    chunks.push(rawChunk.toString());
+                }
+
+                const fullText = chunks.join('');
+                const lines = fullText.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        if (data === '[DONE]') {
+                            await flushReasoning();
+                            break;
                         }
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
-                            if (data === '[DONE]') break;
-                            try {
-                                const parsed = JSON.parse(data);
-                                const delta = parsed.choices?.[0]?.delta || {};
-                                if (delta.reasoning) {
-                                    fullReasoning += delta.reasoning;
-                                    await send(`🤔 ${delta.reasoning}`);
+                        try {
+                            const parsed = JSON.parse(data);
+                            const delta = parsed.choices?.[0]?.delta || {};
+                            if (delta.reasoning) {
+                                reasoningBuffer += delta.reasoning;
+                                if (reasoningBuffer.length >= 60) {
+                                    await flushReasoning();
                                 }
-                                if (delta.content) {
-                                    fullContent += delta.content;
-                                    await send(delta.content);
-                                }
-                            } catch (e) {}
-                            currentEvent = '';
-                        }
+                            }
+                            if (delta.content) {
+                                await flushReasoning();
+                                fullContent += delta.content;
+                                await send(delta.content);
+                            }
+                        } catch (e) {}
                     }
                 }
+
+                await flushReasoning();
 
                 if (!fullContent && !fullReasoning) {
                     await send(`[false] Gagal mendapatkan respons dari DeepSeek AI.`);
