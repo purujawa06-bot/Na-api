@@ -33,45 +33,40 @@
       ]
     },
     {
-      "title": "DeepSearch Chat",
-      "summary": "DeepSeek R1 / Deep Thinking Chat.",
-      "description": "Berinteraksi dengan model DeepSearch (DeepSeek R1/V3) yang mendukung kemampuan \"Reasoning\" atau berpikir mendalam sebelum menjawab. Endpoint ini menggunakan Server-Sent Events (SSE) untuk streaming output proses berpikir (reasoning) dan jawaban akhir.",
+      "title": "DeepSeek V4 - Free AI Chat",
+      "summary": "Chat AI gratis via deep-seek.ai (proxy OpenRouter).",
+      "description": "Mengirim pesan ke DeepSeek AI secara gratis melalui deep-seek.ai. Mendukung model DeepSeek V4 Flash, R1, dan V3. Semua streaming menggunakan SSE (Server-Sent Events) dengan reasoning visible.",
       "method": "POST",
-      "path": "/api/ai/deepsearch",
+      "path": "/api/ai/deepseek/v4",
       "responseType": "json",
-      "example": "async function askDeepSearch() {\n   const response = await fetch('/api/ai/deepsearch', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \n       \"prompt\": \"Jelaskan tentang Black Hole secara sederhana\",\n       \"modelType\": \"reasoner\"\n     })\n   });\n \n   const reader = response.body.getReader();\n   const decoder = new TextDecoder();\n   \n   while (true) {\n     const { done, value } = await reader.read();\n     if (done) break;\n     const text = decoder.decode(value);\n     // Format SSE: data: {\"type\": \"reasoning\"|\"text\", \"content\": \"...\"}\n     console.log(text);\n   }\n }",
       "params": [
         {
-          "name": "prompt",
+          "name": "message",
           "in": "body",
           "type": "string",
-          "description": "Pertanyaan atau instruksi.",
+          "description": "Pesan untuk AI (wajib).",
           "required": true
         },
         {
-          "name": "modelType",
+          "name": "model",
           "in": "body",
           "type": "string",
-          "description": "Tipe model: 'reasoner' (Deep Thinking) atau 'chat' (Fast). Default: 'reasoner'.",
-          "required": false
-        }
-      ]
-    },
-    {
-      "title": "DeepSeek R1",
-      "summary": "DeepSeek R1 via ChatGot.",
-      "description": "Berinteraksi dengan model DeepSeek R1 yang memiliki kemampuan reasoning (berpikir). Endpoint ini menggunakan Server-Sent Events (SSE) untuk streaming output proses berpikir (reasoning) dan jawaban akhir.",
-      "method": "POST",
-      "path": "/api/ai/deepseek",
-      "responseType": "json",
-      "example": "async function askDeepSeek() {\n   const response = await fetch('/api/ai/deepseek', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \n       \"prompt\": \"Jelaskan kenapa langit berwarna biru?\"\n     })\n   });\n \n   const reader = response.body.getReader();\n   const decoder = new TextDecoder();\n   \n   while (true) {\n     const { done, value } = await reader.read();\n     if (done) break;\n     const text = decoder.decode(value);\n     // Output berupa SSE event: data: {...}\n     console.log(text);\n   }\n }",
-      "params": [
-        {
-          "name": "prompt",
-          "in": "body",
-          "type": "string",
-          "description": "Pertanyaan atau instruksi.",
-          "required": true
+          "description": "Model yang digunakan. (opsional)",
+          "required": false,
+          "choices": [
+            {
+              "value": "deepseek/deepseek-v4-flash",
+              "label": "DeepSeek V4 Flash (Cepat & Efisien)"
+            },
+            {
+              "value": "deepseek/deepseek-r1",
+              "label": "DeepSeek R1 (Reasoning Mendalam)"
+            },
+            {
+              "value": "deepseek/deepseek-v3.2",
+              "label": "DeepSeek V3 (Balanced)"
+            }
+          ]
         }
       ]
     },
