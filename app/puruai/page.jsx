@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const MAX_HISTORY = 20;
-const TOKEN_LIMIT = 50000;
+const TOKEN_LIMIT = 20000;
 const SYNC_INTERVAL = 2000;
 
 // Estimasi token: ~4 chars per token
@@ -464,7 +464,7 @@ export default function PuruAI() {
 
                                         {isUser && (
                                             <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg border border-white/10 flex-shrink-0">
-                                                <Image src="/favicon.jpg" alt="Kamu" width={32} height={32} className="w-full h-full object-cover" />
+                                                <Image src="/usericon.jpg" alt="Kamu" width={32} height={32} className="w-full h-full object-cover" />
                                             </div>
                                         )}
                                     </div>
