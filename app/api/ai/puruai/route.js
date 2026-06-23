@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const API_BASE = 'https://hollow-isa-nue-api-a32469fb.koyeb.app/v1';
-const API_KEY = proces…_KEY || 'sk-00f…6500';
+const API_KEY = process.env.PURUAI_API_KEY || 'sk-00fa7c868847b760-fbkl9l-e4416500';
 const MODEL = 'puru';
 
 export async function POST(req) {
