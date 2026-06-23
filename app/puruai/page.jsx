@@ -1,6 +1,9 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const MAX_HISTORY = 20;
 
@@ -24,6 +27,7 @@ export default function PuruAI() {
                 if (Array.isArray(parsed)) setMessages(parsed.slice(-MAX_HISTORY));
             }
         } catch {}
+        // Focus on mount only, not after responses
         setTimeout(() => inputRef.current?.focus(), 300);
     }, []);
 
@@ -60,6 +64,9 @@ export default function PuruAI() {
         const assistantMsg = { role: 'assistant', content: '', time: formatTime(), id: Date.now() + 1 };
         setMessages(prev => [...prev, assistantMsg]);
 
+        // Sembunyikan keyboard setelah kirim
+        if (document.activeElement?.blur) document.activeElement.blur();
+
         try {
             const context = [...getContext(), { role: 'user', content: text }];
 
@@ -74,7 +81,6 @@ export default function PuruAI() {
                 throw new Error(err.error || `HTTP ${res.status}`);
             }
 
-            // Read streaming response
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -111,7 +117,6 @@ export default function PuruAI() {
                 }
             }
 
-            // Final update
             if (fullContent) {
                 setMessages(prev => {
                     const updated = [...prev];
@@ -134,7 +139,7 @@ export default function PuruAI() {
             });
         } finally {
             setLoading(false);
-            setTimeout(() => inputRef.current?.focus(), 100);
+            // Jangan auto-focus — biar keyboard gak muncul sendiri
         }
     };
 
@@ -153,6 +158,70 @@ export default function PuruAI() {
     const transitionClass = isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right';
     const fullScreenStyle = "fixed inset-0 z-[100] bg-[#313338] flex flex-col h-dvh supports-[height:100dvh]:h-[100dvh]";
 
+    // Inline code component
+    const Code = ({ children, inline }) => {
+        if (inline) {
+            return <code className="bg-[#1e1f22] text-[#dcddde] px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>;
+        }
+        return (
+            <div className="relative group my-3">
+                <div className="bg-[#1e1f22] rounded-lg overflow-x-auto">
+                    <div className="flex items-center justify-between px-4 py-1.5 bg-[#2b2d31] border-b border-[#1e1f22]">
+                        <span className="text-[10px] text-[#949ba4] font-mono uppercase tracking-wider">code</span>
+                        <button onClick={() => navigator.clipboard.writeText(children)} className="text-[#949ba4] hover:text-white text-xs transition-colors">
+                            <i className="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <pre className="px-4 py-3 text-sm text-[#dcddde] overflow-x-auto">{children}</pre>
+                </div>
+            </div>
+        );
+    };
+
+    const renderContent = (content) => {
+        if (content.startsWith('⚠️')) {
+            return <span className="text-red-400">{content}</span>;
+        }
+        return (
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    code: Code,
+                    p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc ml-5 mb-2 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal ml-5 mb-2 space-y-1">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    h1: ({ children }) => <h1 className="text-xl font-bold mb-2 mt-3">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-lg font-bold mb-2 mt-3">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-base font-bold mb-1 mt-2">{children}</h3>,
+                    blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-[#5865f2] pl-3 italic text-[#b5bac1] my-2">
+                            {children}
+                        </blockquote>
+                    ),
+                    strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+                    a: ({ href, children }) => (
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#5865f2] hover:underline">
+                            {children}
+                        </a>
+                    ),
+                    table: ({ children }) => (
+                        <div className="overflow-x-auto my-3">
+                            <table className="min-w-full border-collapse border border-[#1e1f22] text-sm">
+                                {children}
+                            </table>
+                        </div>
+                    ),
+                    th: ({ children }) => <th className="border border-[#1e1f22] bg-[#2b2d31] px-3 py-2 text-left font-bold">{children}</th>,
+                    td: ({ children }) => <td className="border border-[#1e1f22] px-3 py-2">{children}</td>,
+                    hr: () => <hr className="border-[#1e1f22] my-4" />,
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        );
+    };
+
     return (
         <div className={`${fullScreenStyle} ${transitionClass}`}>
             {/* Header */}
@@ -162,8 +231,9 @@ export default function PuruAI() {
                         <i className="fas fa-arrow-left text-lg"></i>
                     </button>
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-lg">
-                            <i className="fas fa-robot text-white text-sm"></i>
+                        {/* Favicon avatar */}
+                        <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg border border-white/10 flex-shrink-0">
+                            <Image src="/favicon.jpg" alt="PuruAI" width={32} height={32} className="w-full h-full object-cover" />
                         </div>
                         <div>
                             <h1 className="text-base font-bold text-[#f2f3f5]">PuruAI</h1>
@@ -182,8 +252,8 @@ export default function PuruAI() {
             <div className="flex-1 bg-[#313338] relative overflow-hidden">
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-[#949ba4] p-8 text-center">
-                        <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center mb-6 shadow-2xl shadow-purple-900/40">
-                            <i className="fas fa-robot text-4xl text-white"></i>
+                        <div className="w-20 h-20 rounded-[2rem] bg-[#2b2d31] flex items-center justify-center mb-6 shadow-2xl overflow-hidden border border-white/10">
+                            <Image src="/favicon.jpg" alt="PuruAI" width={80} height={80} className="w-full h-full object-cover" />
                         </div>
                         <h2 className="text-2xl font-bold text-[#f2f3f5] mb-3">PuruAI</h2>
                         <p className="text-sm text-[#b5bac1] mb-8 max-w-xs">
@@ -195,7 +265,6 @@ export default function PuruAI() {
                                     key={i}
                                     onClick={() => {
                                         setInput(q);
-                                        inputRef.current?.focus();
                                     }}
                                     className="bg-[#2b2d31] hover:bg-[#383a40] text-[#b5bac1] text-xs p-3 rounded-xl border border-[#1e1f22] transition-all text-left leading-relaxed"
                                 >
@@ -214,8 +283,8 @@ export default function PuruAI() {
                             return (
                                 <div key={msg.id || i} className={`flex ${isUser ? 'justify-end' : 'justify-start'} items-end gap-2`}>
                                     {!isUser && (
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-900/30">
-                                            <i className="fas fa-robot text-white text-xs"></i>
+                                        <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg border border-white/10 flex-shrink-0">
+                                            <Image src="/favicon.jpg" alt="PuruAI" width={32} height={32} className="w-full h-full object-cover" />
                                         </div>
                                     )}
                                     
@@ -224,7 +293,7 @@ export default function PuruAI() {
                                             <div className="text-[11px] text-[#949ba4] text-right mb-1 font-medium">Kamu</div>
                                         )}
                                         
-                                        <div className={`px-4 py-3 text-[15px] leading-relaxed break-words whitespace-pre-wrap ${
+                                        <div className={`px-4 py-3 text-[15px] leading-relaxed break-words ${
                                             isUser
                                                 ? 'bg-[#5865f2] rounded-2xl rounded-tr-sm text-white'
                                                 : 'bg-[#2b2d31] rounded-2xl rounded-tl-sm text-[#dbdee1]'
@@ -236,7 +305,7 @@ export default function PuruAI() {
                                                     <span className="w-2 h-2 bg-[#949ba4] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                                                 </span>
                                             ) : (
-                                                msg.content
+                                                renderContent(msg.content)
                                             )}
                                         </div>
                                         
@@ -247,8 +316,8 @@ export default function PuruAI() {
                                     </div>
                                     
                                     {isUser && (
-                                        <div className="w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#5865f2]/30">
-                                            <i className="fas fa-user text-white text-xs"></i>
+                                        <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg border border-white/10 flex-shrink-0">
+                                            <Image src="/favicon.jpg" alt="Kamu" width={32} height={32} className="w-full h-full object-cover" />
                                         </div>
                                     )}
                                 </div>
@@ -271,6 +340,7 @@ export default function PuruAI() {
                         className="w-full bg-transparent border-none text-[#dbdee1] placeholder-[#949ba4] text-[15px] focus:ring-0 px-0 py-0 outline-none"
                         maxLength={2000}
                         disabled={loading}
+                        autoFocus={false}
                     />
                     <button
                         type="submit"
