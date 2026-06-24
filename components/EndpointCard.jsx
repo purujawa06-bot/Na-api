@@ -13,6 +13,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
     const [isInfoOpen, setIsInfoOpen] = useState(false);
     const [codeFormat, setCodeFormat] = useState('js'); // State untuk tab Example (js/curl)
     const [formValues, setFormValues] = useState({});
+    const [autoFillActive, setAutoFillActive] = useState(false);
     
     const formRef = useRef(null);
     const fullUrl = `${baseUrl}${endpoint.path}`;
@@ -28,6 +29,16 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
 
     const autoFill = useCallback(() => {
         if (!hasAutoFill) return;
+        
+        if (autoFillActive) {
+            // Second click: clear form, go back to gray
+            setFormValues({});
+            setAutoFillActive(false);
+            return;
+        }
+        
+        // First click: fill form
+        setAutoFillActive(true);
         try {
             const jsonMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
             if (jsonMatch) {
@@ -51,8 +62,6 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                         processedValues[key] = val;
                     }
                 });
-
-
 
             setFormValues(prev => ({ ...prev, ...processedValues }));
             }
@@ -81,13 +90,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
         } catch (error) {
             console.warn("Auto-fill failed: EndpointCard");
         }
-    }, [endpoint.example, hasAutoFill]);
-
-    useEffect(() => {
-        if (isOpen && hasAutoFill) {
-            autoFill();
-        }
-    }, [isOpen, autoFill, hasAutoFill]);
+    }, [endpoint.example, hasAutoFill, autoFillActive]);
 
     const handleTryItOut = async (e) => {
         e.preventDefault();
@@ -409,9 +412,13 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                     <button 
                                                         type="button" 
                                                         onClick={autoFill}
-                                                        className="text-xs bg-accent/10 text-accent hover:bg-accent/20 px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-2"
+                                                        className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
+                                                            autoFillActive 
+                                                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' 
+                                                                : 'bg-gray-600/30 text-gray-400 hover:bg-gray-600/50 hover:text-gray-200'
+                                                        }`}
                                                     >
-                                                        <i className="fas fa-magic"></i> Auto Fill
+                                                        <i className="fas fa-magic"></i> {autoFillActive ? '' : 'Auto Fill'}
                                                     </button>
                                                 </div>
                                             )}
