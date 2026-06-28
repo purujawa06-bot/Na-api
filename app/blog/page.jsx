@@ -3,8 +3,16 @@ import blogService from '../../lib/blogService';
 import BlogClient from '../../components/BlogClient';
 
 export const metadata = {
-    title: 'Blog & Update Sistem | PuruBoy API',
-    description: 'Informasi terbaru mengenai update sistem, tutorial penggunaan, dan changelog PuruBoy API.',
+    title: 'Blog & Tutorial | PuruBoy API',
+    description: 'Blog resmi PuruBoy API. Dapatkan tutorial penggunaan API, informasi update fitur terbaru, changelog sistem, dan tips & trik untuk developer Indonesia.',
+    keywords: ['Blog PuruBoy API', 'Tutorial API Indonesia', 'Update API', 'Changelog', 'Tips Developer', 'PuruBoy Tutorial'],
+    openGraph: {
+        title: 'Blog & Tutorial PuruBoy API',
+        description: 'Tutorial, update fitur, dan tips seputar PuruBoy API untuk developer Indonesia.',
+        url: 'https://puruboy-api.vercel.app/blog',
+        siteName: 'PuruBoy API',
+        type: 'blog',
+    },
 };
 
 export const revalidate = 60;

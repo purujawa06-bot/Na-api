@@ -4,8 +4,15 @@ import DocsClient from '../../components/DocsClient';
 
 export const metadata = {
     title: 'Dokumentasi Lengkap | PuruBoy API',
-    description: 'Jelajahi endpoint PuruBoy API. Dokumentasi interaktif untuk fitur AI, Downloader, Anime, dan Tools lainnya.',
-    keywords: ['Dokumentasi API', 'API Docs', 'PuruBoy Endpoints', 'Cara menggunakan PuruBoy API']
+    description: 'Jelajahi dan coba langsung seluruh endpoint REST API PuruBoy. Dokumentasi interaktif untuk fitur AI (DeepSeek, Gemini, Flux), Downloader (TikTok, YouTube, IG), Anime Streaming, Search, dan Tools lengkap dengan Try It Out!',
+    keywords: ['Dokumentasi API PuruBoy', 'API Docs Indonesia', 'REST API Documentation', 'PuruBoy Endpoints', 'Cara Pakai PuruBoy API', 'API AI Documentation', 'Try API Online'],
+    openGraph: {
+        title: 'Dokumentasi API - PuruBoy API',
+        description: 'Dokumentasi interaktif lengkap endpoint REST API PuruBoy. Coba langsung dari browser!',
+        url: 'https://puruboy-api.vercel.app/docs',
+        siteName: 'PuruBoy API',
+        type: 'website',
+    },
 };
 
 export const revalidate = 3600;

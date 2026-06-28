@@ -6,8 +6,16 @@ import { getDocsSpec } from '../lib/docsService';
 export const revalidate = 3600;
 
 export const metadata = {
-    title: 'PuruBoy API - Home',
-    description: 'Beranda PuruBoy API. Temukan berbagai REST API gratis untuk kebutuhan proyek aplikasi Anda.',
+    title: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
+    description: 'Beranda PuruBoy API. Platform REST API gratis dengan fitur AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools Developer. Cepat, stabil, dan gratis!',
+    keywords: ['PuruBoy API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'PuruBoy'],
+    openGraph: {
+        title: 'PuruBoy API - REST API Gratis Indonesia',
+        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
+        url: 'https://puruboy-api.vercel.app',
+        siteName: 'PuruBoy API',
+        type: 'website',
+    },
 };
 
 const Hero = () => (
