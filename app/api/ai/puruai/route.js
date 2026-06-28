@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 const client = new OpenAI({
     baseURL: 'https://betatestervueui2-b.hf.space/v1',
-    apiKey: process.env.PURUAI_API_KEY || '[FILTERED]',
+    apiKey: process.env.PURUAI_API_KEY || 'sk-00fa7c868847b760-fbkl9l-e4416500',
 });
 
 export async function POST(req) {
