@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const API_BASE = 'https://betatestervueui2-b.hf.space/v1';
-const API_KEY = process.env.PURUAI_API_KEY || 'sk-00fa7c868847b760-fbkl9l-e4416500';
-const MODEL = 'puru';
+const client = new OpenAI({
+    baseURL: 'https://betatestervueui2-b.hf.space/v1',
+    apiKey: process.env.PURUAI_API_KEY || '[FILTERED]',
+});
 
 export async function POST(req) {
     try {
@@ -16,74 +18,28 @@ export async function POST(req) {
             return NextResponse.json({ error: "Parameter 'messages' wajib diisi (array)." }, { status: 400 });
         }
 
-        const response = await fetch(`${API_BASE}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: MODEL,
-                messages: [
-                    { role: 'system', content: 'Kamu adalah PuruAI, asisten AI yang ramah, cerdas, dan membantu. Jawab dengan bahasa Indonesia yang natural dan santai. Kamu adalah teman ngobrol yang asyik.' },
-                    ...messages
-                ],
-                stream: true,
-                max_tokens: 2048,
-                temperature: 0.7,
-            }),
+        const stream = await client.chat.completions.create({
+            model: 'puru',
+            messages: [
+                { role: 'system', content: 'Kamu adalah PuruAI, asisten AI yang ramah, cerdas, dan membantu. Jawab dengan bahasa Indonesia yang natural dan santai. Kamu adalah teman ngobrol yang asyik.' },
+                ...messages
+            ],
+            stream: true,
+            max_tokens: 2048,
+            temperature: 0.7,
+            thinking: false,
         });
 
-        if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            return NextResponse.json({ error: `API Error ${response.status}: ${errText.substring(0, 200)}` }, { status: response.status });
-        }
-
-        // Streaming response back to client
         const encoder = new TextEncoder();
         const readableStream = new ReadableStream({
             async start(controller) {
                 try {
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = '';
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-
-                        buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop() || '';
-
-                        for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                const data = line.slice(6).trim();
-                                if (data === '[DONE]') continue;
-                                try {
-                                    const parsed = JSON.parse(data);
-                                    const content = parsed?.choices?.[0]?.delta?.content || '';
-                                    if (content) {
-                                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
-                                    }
-                                } catch {}
-                            }
+                    for await (const chunk of stream) {
+                        const content = chunk?.choices?.[0]?.delta?.content || '';
+                        if (content) {
+                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
                         }
                     }
-
-                    if (buffer.startsWith('data: ')) {
-                        const data = buffer.slice(6).trim();
-                        if (data !== '[DONE]') {
-                            try {
-                                const parsed = JSON.parse(data);
-                                const content = parsed?.choices?.[0]?.delta?.content || '';
-                                if (content) {
-                                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
-                                }
-                            } catch {}
-                        }
-                    }
-
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     controller.close();
                 } catch (err) {
