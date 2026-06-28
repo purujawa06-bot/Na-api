@@ -54,6 +54,10 @@ next-env.d.ts
 .roo/
 .roomodes
 
+# Sensitive local config files
+.git-credentials
+TOKEN.md
+
 # Hidden system / IDE folders
 .vscode/
 .antigravitycli/

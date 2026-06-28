@@ -11,7 +11,7 @@ export const metadata = {
         description: 'Tutorial, update fitur, dan tips seputar PuruBoy API untuk developer Indonesia.',
         url: 'https://puruboy-api.vercel.app/blog',
         siteName: 'PuruBoy API',
-        type: 'blog',
+        type: 'website',
     },
 };
 
