@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const API_BASE = 'https://betatestervueui2-b.hf.space/v1';
-const API_KEY = process.env.PURUAI_API_KEY || 'sk-00fa7c868847b760-fbkl9l-e4416500';
-const MODEL = 'puru';
+const client = new OpenAI({
+    baseURL: 'https://betatestervueui2-b.hf.space/v1',
+    apiKey: process.env.PURUAI_API_KEY || '[FILTERED]',
+});
 
 export async function POST(req) {
     try {
@@ -16,31 +18,19 @@ export async function POST(req) {
             return NextResponse.json({ error: "Parameter 'messages' wajib diisi (array)." }, { status: 400 });
         }
 
-        const response = await fetch(`${API_BASE}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: MODEL,
-                messages: [
-                    { role: 'system', content: 'Kamu adalah asisten yang membantu. Buat ringkasan yang padat dan informatif dari percakapan berikut.' },
-                    ...messages
-                ],
-                stream: false,
-                max_tokens: 1024,
-                temperature: 0.5,
-            }),
+        const completion = await client.chat.completions.create({
+            model: 'puru',
+            messages: [
+                { role: 'system', content: 'Kamu adalah asisten yang membantu. Buat ringkasan yang padat dan informatif dari percakapan berikut.' },
+                ...messages
+            ],
+            stream: false,
+            max_tokens: 1024,
+            temperature: 0.5,
+            thinking: false,
         });
 
-        if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            return NextResponse.json({ error: errText.substring(0, 200) }, { status: response.status });
-        }
-
-        const data = await response.json();
-        const summary = data?.choices?.[0]?.message?.content || '';
+        const summary = completion?.choices?.[0]?.message?.content || '';
 
         return NextResponse.json({ success: true, summary });
 
