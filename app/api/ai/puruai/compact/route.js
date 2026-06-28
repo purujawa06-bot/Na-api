@@ -21,12 +21,20 @@ export async function POST(req) {
         const completion = await client.chat.completions.create({
             model: 'puru',
             messages: [
-                { role: 'system', content: 'Kamu adalah asisten yang membantu. Buat ringkasan yang padat dan informatif dari percakapan berikut.' },
+                { role: 'system', content: `Kamu adalah ahli kompresi percakapan AI. 
+Buat RINGKASAN KOMPRE yang akan dikirim ke AI lain sebagai konteks.
+Aturan:
+- Simpan SEMUA nama, angka, fakta, keputusan, preferensi user
+- Simpan SEMUA pertanyaan user dan jawaban kunci AI
+- Simpan konteks teknis, URL, kode, nama file
+- Format bullet point padat
+- Jangan buang detail penting apapun
+- Tulis dalam bahasa Indonesia` },
                 ...messages
             ],
             stream: false,
             max_tokens: 1024,
-            temperature: 0.5,
+            temperature: 0.3,
             thinking: false,
         });
 
