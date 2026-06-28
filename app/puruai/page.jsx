@@ -6,7 +6,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const MAX_HISTORY = 20;
-const TOKEN_LIMIT = 20000;
+const TOKEN_LIMIT = 10000;
+const COMPACT_TRIGGER = 10000;
 const SYNC_INTERVAL = 2000;
 const SAVE_DEBOUNCE = 800;
 
@@ -240,42 +241,83 @@ export default function PuruAI() {
         messages.reduce((sum, m) => sum + estimateTokens(m.content), 0),
         [messages]
     );
-    const isOverLimit = totalTokens > TOKEN_LIMIT;
+    const isOverLimit = totalTokens > COMPACT_TRIGGER;
     const tokenPercent = Math.min(100, Math.round((totalTokens / TOKEN_LIMIT) * 100));
-    const showTokenBar = totalTokens > 10000;
+    const showTokenBar = totalTokens > 5000;
 
-    // 📦 Memoized context
+    // 📦 Memoized context — kirim max 20 pesan terakhir
     const getContext = useCallback(() => {
         return messages.slice(-MAX_HISTORY).map(m => ({
-            role: m.role,
-            content: m.content
+            role: m.role === 'system' ? 'user' : m.role,
+            content: m.isSummary ? `[Konteks Sebelumnya]: ${m.content}` : m.content
         }));
     }, [messages]);
 
-    // 🧹 Auto-compact
+    // 🧹 Auto-compact dengan context preservation
     const autoCompact = useCallback(async () => {
         if (compacting || messages.length < 4) return;
         setCompacting(true);
         setCompactNotif('🧹 Mengompres percakapan...');
 
         try {
+            // Ambil semua pesan kecuali 4 terakhir untuk diringkas
+            const toSummarize = messages.filter(m => !m.isSummary);
+            const recentMessages = toSummarize.slice(-4);
+            const oldMessages = toSummarize.slice(0, -4);
+            
+            if (oldMessages.length === 0) {
+                setCompacting(false);
+                return;
+            }
+
+            const conversationText = oldMessages
+                .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
+                .join('\n');
+
             const res = await fetch('/api/ai/puruai/compact', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    messages: [{ role: 'user', content: `Ringkas percakapan berikut dalam bahasa Indonesia, tangkap topik utama dan poin penting:\n\n${messages.slice(0, -4).map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')}` }]
+                    messages: [{
+                        role: 'user',
+                        content: `Buat ringkasan kompresi percakapan ini. Fokus pada:
+1. Topik utama yang dibahas
+2. Pertanyaan user dan jawaban AI yang diberikan  
+3. Preferensi atau konteks penting user
+4. Kesimpulan atau hasil akhir
+
+Jangan buang detail penting. Format dengan bullet point.
+
+Percakapan:
+${conversationText}`
+                    }]
                 }),
             });
+            
             if (!res.ok) throw new Error('Compact gagal');
             const data = await res.json();
             const summary = data?.summary || 'Ringkasan tidak tersedia.';
-            const last4 = messages.slice(-4);
+            const prevSummary = messages.find(m => m.isSummary);
+            
+            // Gabung ringkasan lama + baru
+            const fullSummary = prevSummary
+                ? `${prevSummary.content}\n\n---\n\n${summary}`
+                : summary;
+
             const compacted = [
-                { role: 'system', content: `📋 **Ringkasan percakapan sebelumnya:**\n${summary}`, time: formatTime(), id: Date.now() - 1, isSummary: true },
-                ...last4
+                { 
+                    role: 'system', 
+                    content: `📋 **Ringkasan percakapan:**\n\n${fullSummary}`,
+                    time: formatTime(), 
+                    id: Date.now() - 1, 
+                    isSummary: true 
+                },
+                ...recentMessages
             ];
+            
             setMessages(compacted);
-            setCompactNotif(`✅ Percakapan di-ringkas! ${messages.length - 4} pesan lama dikompres.`);
+            const saved = oldMessages.length;
+            setCompactNotif(`✅ Terkompres! ${saved} pesan lama diringkas.`);
             setTimeout(() => setCompactNotif(null), 4000);
         } catch (err) {
             setCompactNotif(`⚠️ Gagal kompres: ${err.message}`);
@@ -285,13 +327,14 @@ export default function PuruAI() {
         }
     }, [messages, compacting]);
 
-    // Auto-compact trigger
+    // Auto-compact trigger — aktif di 10k token
     useEffect(() => {
-        if (isOverLimit && !loading && !compacting && messages.length >= 6) {
+        if (totalTokens >= COMPACT_TRIGGER && !loading && !compacting && messages.length >= 6) {
             autoCompact();
         }
     }, [totalTokens, loading]);
 
+    // ⚡️ Client-side streaming buffer — smooth rendering dari token API
     const sendMessage = useCallback(async (text) => {
         const userMsg = { role: 'user', content: text, time: formatTime(), id: Date.now() };
         setMessages(prev => [...prev, userMsg]);
@@ -312,17 +355,62 @@ export default function PuruAI() {
                 throw new Error(err.error || `HTTP ${res.status}`);
             }
 
+            // 🔄 Double streaming: server SSE → client smooth buffer
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
             let fullContent = '';
+            let displayContent = '';
+            let tokenQueue = [];
+            let isStreaming = true;
 
+            // Smooth render loop — render per token dari queue
+            const renderLoop = () => {
+                if (!isStreaming && tokenQueue.length === 0) {
+                    // Final flush — pastikan full content tampil
+                    setMessages(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                            last.content = fullContent;
+                        }
+                        return updated;
+                    });
+                    return;
+                }
+
+                if (tokenQueue.length > 0) {
+                    // Ambil 1-3 token sekaligus buat feel lebih natural
+                    const batchSize = Math.min(tokenQueue.length, 3);
+                    const batch = tokenQueue.splice(0, batchSize).join('');
+                    displayContent += batch;
+
+                    setMessages(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                            last.content = displayContent;
+                        }
+                        return updated;
+                    });
+                }
+
+                // Adaptive speed: lebih cepat kalau queue banyak, lebih smooth kalau dikit
+                const delay = tokenQueue.length > 10 ? 10 : tokenQueue.length > 3 ? 20 : 35;
+                setTimeout(renderLoop, delay);
+            };
+
+            // Start render loop
+            renderLoop();
+
+            // Baca stream dari API
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
+
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6).trim();
@@ -332,29 +420,18 @@ export default function PuruAI() {
                             if (parsed.error) throw new Error(parsed.error);
                             if (parsed.content) {
                                 fullContent += parsed.content;
-                                setMessages(prev => {
-                                    const updated = [...prev];
-                                    const last = updated[updated.length - 1];
-                                    if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                                        last.content = fullContent;
-                                    }
-                                    return updated;
-                                });
+                                // Pecah per karakter untuk smooth rendering
+                                const chars = parsed.content.split('');
+                                tokenQueue.push(...chars);
                             }
                         } catch {}
                     }
                 }
             }
-            if (fullContent) {
-                setMessages(prev => {
-                    const updated = [...prev];
-                    const last = updated[updated.length - 1];
-                    if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                        last.content = fullContent;
-                    }
-                    return updated;
-                });
-            }
+
+            // Tunggu sampai queue habis
+            isStreaming = false;
+
         } catch (err) {
             setMessages(prev => {
                 const updated = [...prev];
@@ -406,7 +483,7 @@ export default function PuruAI() {
                 </div>
                 <div className="flex items-center gap-4 text-[#b5bac1]">
                     <button
-                        onClick={totalTokens > 10000 ? autoCompact : undefined}
+                        onClick={totalTokens > 5000 ? autoCompact : undefined}
                         title={`${totalTokens.toLocaleString()} / ${TOKEN_LIMIT.toLocaleString()} token`}
                         className={`text-xs font-mono transition-colors ${isOverLimit ? 'text-red-400 animate-pulse' : tokenPercent > 80 ? 'text-yellow-400' : 'text-[#949ba4]'}`}
                     >
@@ -469,7 +546,7 @@ export default function PuruAI() {
                 <ChatInput onSend={sendMessage} loading={loading} compacting={compacting} />
                 <div className="flex items-center justify-between mt-1.5 px-1">
                     <p className="text-[10px] text-[#4f545c]">PuruAI dapat melakukan kesalahan. Selalu verifikasi informasi penting.</p>
-                    {totalTokens > 5000 && (
+                    {totalTokens > 3000 && (
                         <span className={`text-[9px] font-mono ${isOverLimit ? 'text-red-400' : 'text-[#4f545c]'}`}>
                             {totalTokens.toLocaleString()}/{TOKEN_LIMIT.toLocaleString()} token
                         </span>
