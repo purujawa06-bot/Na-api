@@ -6,6 +6,7 @@ import BottomNav from '../components/BottomNav';
 import NextNProgress from '../components/NextNProgress';
 import Footer from '../components/Footer';
 import FeaturedPopup from '../components/FeaturedPopup';
+import ErrorReportPopup from '../components/ErrorReportPopup';
 import JsonLd from '../components/JsonLd';
 
 export const viewport = {
@@ -90,6 +91,7 @@ export default function RootLayout({ children }) {
         
         <NextNProgress />
         <FeaturedPopup />
+        <ErrorReportPopup />
         <Navbar />
         
         <div className="background-animation"></div>

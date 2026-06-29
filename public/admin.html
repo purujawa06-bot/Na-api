@@ -102,6 +102,64 @@
 </head>
 <body class="antialiased min-h-screen pb-10">
 
+    <!-- Error Report Popup -->
+    <div id="error-report-popup" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4" style="display: none;">
+        <div class="native-card max-w-sm w-full p-6 relative border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.15)]" style="background: #121215; border: 1px solid #27272a; border-radius: 1rem;">
+            <button onclick="dismissErrorPopup()" class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-800 text-gray-400 hover:text-white" style="background: #1f1f23; border: none; cursor: pointer; border-radius: 50%;">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="flex justify-center mb-4">
+                <div class="w-16 h-16 rounded-2xl overflow-hidden shadow-lg border-2 border-red-500/20 ring-2 ring-red-500/10" style="border-radius: 1rem; overflow: hidden;">
+                    <img src="/favicon.jpg" alt="PuruBoy API" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+            </div>
+            <div class="flex justify-center -mt-2 mb-3">
+                <div class="text-red-400 text-[10px] font-bold px-3 py-1 rounded-full border border-red-500/20 uppercase tracking-wider flex items-center gap-1" style="background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2); border-radius: 9999px; font-size: 10px; font-weight: bold;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 12px;"></i> Perhatian
+                </div>
+            </div>
+            <h2 class="text-lg font-bold text-white text-center mb-3" style="color: white; font-weight: bold; text-align: center; margin-bottom: 0.75rem; font-size: 1.125rem;">Laporkan Error</h2>
+            <p class="text-sm text-gray-400 text-center leading-relaxed mb-6" style="color: #a1a1aa; text-align: center; font-size: 0.875rem; margin-bottom: 1.5rem; line-height: 1.625;">
+                Jika menemukan <span style="color: #f87171; font-weight: 600;">error</span> atau kendala saat menggunakan website ini, 
+                segera laporkan ke Telegram ya!
+            </p>
+            <div class="flex flex-col gap-3">
+                <a href="https://t.me/puruupuruu" target="_blank" rel="noopener noreferrer" class="w-full text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2" style="background: #24A1DE; color: white; font-weight: bold; padding: 0.75rem; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-decoration: none;">
+                    <i class="fab fa-telegram" style="font-size: 1.125rem;"></i>
+                    <span>Report ke @puruupuruu</span>
+                </a>
+                <button onclick="dismissErrorPopup()" class="w-full py-2.5 text-sm font-bold text-gray-400 rounded-xl" style="background: #1f1f23; color: #a1a1aa; font-weight: bold; padding: 0.625rem; border: none; border-radius: 0.75rem; cursor: pointer;">
+                    Nanti Saja
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Error Report Popup Logic
+        function showErrorPopup() {
+            const dismissed = localStorage.getItem('dismissed_error_report');
+            if (!dismissed) {
+                setTimeout(() => {
+                    const popup = document.getElementById('error-report-popup');
+                    if (popup) {
+                        popup.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                    }
+                }, 1500);
+            }
+        }
+
+        function dismissErrorPopup() {
+            const popup = document.getElementById('error-report-popup');
+            if (popup) popup.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            localStorage.setItem('dismissed_error_report', 'true');
+        }
+
+        document.addEventListener('DOMContentLoaded', showErrorPopup);
+    </script>
+
     <!-- Login Overlay -->
     <div id="login-container" class="fixed inset-0 z-[100] bg-[#0f0f13] flex items-center justify-center p-4">
         <div class="native-card w-full max-w-sm p-8 text-center">
