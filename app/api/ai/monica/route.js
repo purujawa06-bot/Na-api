@@ -6,9 +6,17 @@ export const maxDuration = 60;
 
 export async function POST(req) {
     try {
-        const body = await req.json();
+        const { prompt } = await req.json();
         
-        const result = await monicaController({ body });
+        if (!prompt) {
+            return NextResponse.json({
+                success: false,
+                author: 'PuruBoy',
+                message: "Parameter 'prompt' wajib diisi."
+            }, { status: 400 });
+        }
+
+        const result = await monicaController({ prompt });
         return NextResponse.json(result);
     } catch (error) {
         return NextResponse.json({ 
