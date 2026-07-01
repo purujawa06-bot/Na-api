@@ -132,9 +132,18 @@ export async function middleware(request) {
 
     // Ambil response body untuk context
     let responseBody = null;
+    let isHtmlResponse = false;
     try {
         const cloned = response.clone();
-        responseBody = await cloned.json().catch(() => null);
+        const contentType = cloned.headers.get('content-type') || '';
+        isHtmlResponse = contentType.includes('text/html');
+        
+        if (isHtmlResponse) {
+            // HTML response (default Next.js error page) → baca sebagai text
+            responseBody = await cloned.text().then(t => t.substring(0, 300));
+        } else {
+            responseBody = await cloned.json().catch(() => null);
+        }
     } catch (e) {
         // ignore
     }
@@ -153,6 +162,48 @@ export async function middleware(request) {
 
     // Log ke console
     console.error(`[Middleware] Non-200: ${pathname} | ${request.method} | ${response.status}`);
+
+    // 🎯 Jika response berupa HTML (default Next.js error page),
+    //    konversi ke JSON biar API selalu konsisten
+    if (isHtmlResponse) {
+        const statusTextMap = {
+            400: 'Bad Request',
+            401: 'Unauthorized',
+            403: 'Forbidden',
+            404: 'Not Found',
+            405: 'Method Not Allowed',
+            406: 'Not Acceptable',
+            408: 'Request Timeout',
+            409: 'Conflict',
+            410: 'Gone',
+            411: 'Length Required',
+            413: 'Payload Too Large',
+            415: 'Unsupported Media Type',
+            422: 'Unprocessable Entity',
+            429: 'Too Many Requests',
+            500: 'Internal Server Error',
+            502: 'Bad Gateway',
+            503: 'Service Unavailable',
+            504: 'Gateway Timeout',
+        };
+
+        const hint = response.status === 405
+            ? `This endpoint does not support ${request.method}. Check the documentation for supported methods.`
+            : null;
+
+        return new Response(JSON.stringify({
+            success: false,
+            error: statusTextMap[response.status] || `HTTP ${response.status}`,
+            ...(hint ? { hint } : {}),
+            status: response.status,
+        }), {
+            status: response.status,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+            },
+        });
+    }
 
     return response;
 }
