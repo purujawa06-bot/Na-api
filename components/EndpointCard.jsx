@@ -607,6 +607,13 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
             <InfoModal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)} title="Detail Endpoint">
                 <div className="space-y-6">
                     <div>
+                        <h3 className="text-base font-extrabold text-primary tracking-tight mb-1">{endpoint.title || endpoint.summary || endpoint.path}</h3>
+                        <div className="flex items-center gap-2">
+                            <MethodBadge method={endpoint.method} />
+                            <span className="text-xs font-mono text-accent/80">{endpoint.path}</span>
+                        </div>
+                    </div>
+                    <div>
                         <h4 className="text-xs font-bold text-muted uppercase tracking-wide mb-2">Summary</h4>
                         <p className="text-sm text-primary font-medium leading-relaxed">{endpoint.summary || 'Tidak ada ringkasan.'}</p>
                     </div>
