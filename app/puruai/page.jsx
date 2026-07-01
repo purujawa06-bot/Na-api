@@ -355,55 +355,15 @@ ${conversationText}`
                 throw new Error(err.error || `HTTP ${res.status}`);
             }
 
-            // 🔄 Double streaming: server SSE → client smooth buffer
+            // 🔄 Streaming: kata per kata langsung saat data datang
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
             let fullContent = '';
             let displayContent = '';
-            let tokenQueue = [];
-            let isStreaming = true;
+            let wordCursor = 0; // posisi kata untuk delay timing
 
-            // Smooth render loop — render per token dari queue
-            const renderLoop = () => {
-                if (!isStreaming && tokenQueue.length === 0) {
-                    // Final flush — pastikan full content tampil
-                    setMessages(prev => {
-                        const updated = [...prev];
-                        const last = updated[updated.length - 1];
-                        if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                            last.content = fullContent;
-                        }
-                        return updated;
-                    });
-                    return;
-                }
-
-                if (tokenQueue.length > 0) {
-                    // Ambil 1-3 token sekaligus buat feel lebih natural
-                    const batchSize = Math.min(tokenQueue.length, 3);
-                    const batch = tokenQueue.splice(0, batchSize).join('');
-                    displayContent += batch;
-
-                    setMessages(prev => {
-                        const updated = [...prev];
-                        const last = updated[updated.length - 1];
-                        if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                            last.content = displayContent;
-                        }
-                        return updated;
-                    });
-                }
-
-                // Adaptive speed: lebih cepat kalau queue banyak, lebih smooth kalau dikit
-                const delay = tokenQueue.length > 10 ? 10 : tokenQueue.length > 3 ? 20 : 35;
-                setTimeout(renderLoop, delay);
-            };
-
-            // Start render loop
-            renderLoop();
-
-            // Baca stream dari API
+            // Baca stream dari API — langsung schedule render per kata
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -420,17 +380,40 @@ ${conversationText}`
                             if (parsed.error) throw new Error(parsed.error);
                             if (parsed.content) {
                                 fullContent += parsed.content;
-                                // Pecah per karakter untuk smooth rendering
-                                const chars = parsed.content.split('');
-                                tokenQueue.push(...chars);
+                                // Pecah per kata & langsung schedule render tanpa nunggu queue
+                                const words = parsed.content.match(/\S+\s*/g) || [parsed.content];
+                                for (const word of words) {
+                                    const myPos = wordCursor++;
+                                    const delay = myPos * 200;
+                                    setTimeout(() => {
+                                        displayContent += word;
+                                        setMessages(prev => {
+                                            const updated = [...prev];
+                                            const last = updated[updated.length - 1];
+                                            if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                                                last.content = displayContent;
+                                            }
+                                            return updated;
+                                        });
+                                    }, delay);
+                                }
                             }
                         } catch {}
                     }
                 }
             }
 
-            // Tunggu sampai queue habis
-            isStreaming = false;
+            // Final flush — pastikan full content pas dengan yang terakhir
+            setTimeout(() => {
+                setMessages(prev => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                        last.content = fullContent;
+                    }
+                    return updated;
+                });
+            }, wordCursor * 200 + 100);
 
         } catch (err) {
             setMessages(prev => {
