@@ -334,14 +334,14 @@ ${conversationText}`
         }
     }, [totalTokens, loading]);
 
-    // ⚡️ Client-side streaming buffer — smooth rendering dari token API
+    // ⚡️ Streaming: langsung render tiap chunk dari API, ga pake delay buatan
     const sendMessage = useCallback(async (text) => {
         const userMsg = { role: 'user', content: text, time: formatTime(), id: Date.now() };
         setMessages(prev => [...prev, userMsg]);
         setLoading(true);
 
-        const assistantMsg = { role: 'assistant', content: '', time: formatTime(), id: Date.now() + 1 };
-        setMessages(prev => [...prev, assistantMsg]);
+        const assistantId = Date.now() + 1;
+        setMessages(prev => [...prev, { role: 'assistant', content: '', time: formatTime(), id: assistantId }]);
 
         try {
             const context = [...getContext(), { role: 'user', content: text }];
@@ -355,15 +355,11 @@ ${conversationText}`
                 throw new Error(err.error || `HTTP ${res.status}`);
             }
 
-            // 🔄 Streaming: kata per kata langsung saat data datang
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
             let fullContent = '';
-            let displayContent = '';
-            let wordCursor = 0; // posisi kata untuk delay timing
 
-            // Baca stream dari API — langsung schedule render per kata
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -380,46 +376,25 @@ ${conversationText}`
                             if (parsed.error) throw new Error(parsed.error);
                             if (parsed.content) {
                                 fullContent += parsed.content;
-                                // Pecah per kata & langsung schedule render tanpa nunggu queue
-                                const words = parsed.content.match(/\S+\s*/g) || [parsed.content];
-                                for (const word of words) {
-                                    const myPos = wordCursor++;
-                                    const delay = myPos * 200;
-                                    setTimeout(() => {
-                                        displayContent += word;
-                                        setMessages(prev => {
-                                            const updated = [...prev];
-                                            const last = updated[updated.length - 1];
-                                            if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                                                last.content = displayContent;
-                                            }
-                                            return updated;
-                                        });
-                                    }, delay);
-                                }
+                                // Render langsung — ga pake setTimeout, ga pake delay
+                                setMessages(prev => {
+                                    const updated = [...prev];
+                                    const last = updated[updated.length - 1];
+                                    if (last && last.role === 'assistant' && last.id === assistantId) {
+                                        last.content = fullContent;
+                                    }
+                                    return updated;
+                                });
                             }
                         } catch {}
                     }
                 }
             }
-
-            // Final flush — pastikan full content pas dengan yang terakhir
-            setTimeout(() => {
-                setMessages(prev => {
-                    const updated = [...prev];
-                    const last = updated[updated.length - 1];
-                    if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
-                        last.content = fullContent;
-                    }
-                    return updated;
-                });
-            }, wordCursor * 200 + 100);
-
         } catch (err) {
             setMessages(prev => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant' && last.id === assistantMsg.id) {
+                if (last && last.role === 'assistant' && last.id === assistantId) {
                     last.content = `⚠️ Gagal: ${err.message}`;
                 }
                 return updated;
