@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pingController from '../../../../lib/controllers/main/ping';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function GET(req) {
     try {
@@ -12,6 +13,9 @@ export async function GET(req) {
         const result = await pingController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/main/ping', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             status: 'error', 
             message: error.message 

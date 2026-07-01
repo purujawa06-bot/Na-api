@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { reportError } from '../../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -43,6 +44,9 @@ Aturan:
         return NextResponse.json({ success: true, summary });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/puruai/compact', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

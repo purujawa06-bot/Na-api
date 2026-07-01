@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import malSearchController from '../../../../../lib/controllers/anime/malSearch';
+import { reportError } from '../../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,9 @@ export async function GET(req) {
         const result = await malSearchController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/anime/mal/search', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

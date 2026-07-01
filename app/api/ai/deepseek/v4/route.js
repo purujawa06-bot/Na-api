@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 
@@ -47,7 +48,10 @@ export async function POST(req) {
                     const delta = parsed.choices?.[0]?.delta || {};
                     if (delta.reasoning) reasoning += delta.reasoning;
                     if (delta.content) content += delta.content;
-                } catch (e) {}
+                } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/ai/deepseek/v4', method: 'POST' }).catch(() => {});
+}
             }
         }
 
@@ -62,6 +66,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/deepseek/v4', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

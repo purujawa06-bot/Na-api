@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import settingsService from '../../../../lib/settingsService';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,9 @@ export async function GET(req) {
         const featured = await settingsService.getFeatured();
         return NextResponse.json(featured || {});
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/admin/featured', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to fetch featured endpoint' }, { status: 500 });
     }
 }
@@ -27,6 +31,9 @@ export async function POST(req) {
         const updated = await settingsService.setFeatured(body);
         return NextResponse.json(updated);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/admin/featured', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to update featured endpoint' }, { status: 500 });
     }
 }

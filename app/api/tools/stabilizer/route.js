@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import stabilizerController from '../../../../lib/controllers/tools/stabilizer';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function POST(req) {
     try {
@@ -12,6 +13,9 @@ export async function POST(req) {
         const result = await stabilizerController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/stabilizer', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             status: 'error', 
             message: error.message 

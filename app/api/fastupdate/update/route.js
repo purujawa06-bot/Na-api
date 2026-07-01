@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fse from 'fs-extra';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function POST(req) {
     try {
@@ -68,6 +69,9 @@ export async function POST(req) {
         return new NextResponse(`Perubahan berhasil diterapkan:\n- ${changes.join('\n- ')}\n\nServer akan me-restart...`, { status: 200 });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/fastupdate/update', method: 'POST' }).catch(() => {});
+
         console.error('Gagal menerapkan update:', error);
         return new NextResponse(`Gagal menerapkan update: ${error.message}`, { status: 500 });
     }

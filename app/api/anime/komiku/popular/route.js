@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import komikuPopularController from '../../../../../lib/controllers/anime/komikuPopular';
+import { reportError } from '../../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,9 @@ export async function GET(req) {
         const result = await komikuPopularController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/anime/komiku/popular', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

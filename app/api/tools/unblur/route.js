@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import unblur from '../../../../lib/unblur';
 import { uploadToTmp } from '../../../../lib/uploader';
 import tempService from '../../../../lib/tempService';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120; // Unblur processing can be slow
@@ -57,10 +58,16 @@ export async function POST(req) {
 
                 await send(`[true] ${origin}/api/temp/${dbId}`);
             } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/tools/unblur', method: 'POST' }).catch(() => {});
+
                 if (keepAliveInterval) clearInterval(keepAliveInterval);
                 await send(`[false] ${err.message}`);
             } finally {
-                try { await writer.close(); } catch (e) {}
+                try { await writer.close(); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/tools/unblur', method: 'UNKNOWN' }).catch(() => {});
+}
             }
         })();
 
@@ -73,6 +80,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/unblur', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

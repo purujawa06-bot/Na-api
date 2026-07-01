@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import blogService from '../../../lib/blogService';
+import { reportError } from '../../../lib/errorLogger';
 
 export async function GET(req) {
     try {
@@ -9,6 +10,9 @@ export async function GET(req) {
         const data = await blogService.getAll(page, limit);
         return NextResponse.json(data);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/blogs', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to fetch posts', details: error.message }, { status: 500 });
     }
 }
@@ -25,6 +29,9 @@ export async function POST(req) {
         const newPost = await blogService.create(body);
         return NextResponse.json(newPost, { status: 201 });
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/blogs', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to create post', details: error.message }, { status: 400 });
     }
 }

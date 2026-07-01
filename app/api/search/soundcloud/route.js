@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import soundcloudSearchController from '../../../../lib/controllers/search/soundcloud';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function GET(req) {
     try {
@@ -12,6 +13,9 @@ export async function GET(req) {
         const result = await soundcloudSearchController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/search/soundcloud', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

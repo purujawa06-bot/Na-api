@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import tsundereController from '../../../../lib/controllers/ai/tsundere';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,9 @@ export async function POST(req) {
         const result = await tsundereController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/tsundere', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

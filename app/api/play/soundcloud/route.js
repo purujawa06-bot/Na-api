@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import playSoundCloudController from '../../../../lib/controllers/play/soundcloud';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,9 @@ export async function GET(req) {
             result: result
         });
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/play/soundcloud', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

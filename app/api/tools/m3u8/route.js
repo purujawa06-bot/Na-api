@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import M3U8ToMP4Converter from '../../../../lib/m3u8';
 import tempService from '../../../../lib/tempService';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // Konversi video bisa sangat lama
@@ -81,10 +82,16 @@ export async function POST(req) {
                     await send(`[false] Timeout: Video terlalu panjang atau server sedang sibuk.`);
                 }
             } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/tools/m3u8', method: 'POST' }).catch(() => {});
+
                 if (keepAliveInterval) clearInterval(keepAliveInterval);
                 await send(`[false] ${err.message}`);
             } finally {
-                try { await writer.close(); } catch (e) {}
+                try { await writer.close(); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/tools/m3u8', method: 'UNKNOWN' }).catch(() => {});
+}
             }
         })();
 
@@ -97,6 +104,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/m3u8', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

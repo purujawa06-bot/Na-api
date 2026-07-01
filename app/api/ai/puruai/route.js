@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -43,6 +44,9 @@ export async function POST(req) {
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     controller.close();
                 } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/ai/puruai', method: 'POST' }).catch(() => {});
+
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`));
                     controller.close();
                 }
@@ -61,6 +65,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/puruai', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

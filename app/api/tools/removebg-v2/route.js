@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import removeBgV2Controller from '../../../../lib/controllers/tools/removebgV2';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const maxDuration = 60; // Proses mungkin memakan waktu
 
@@ -14,6 +15,9 @@ export async function POST(req) {
         const result = await removeBgV2Controller(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/removebg-v2', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             status: 'error', 
             message: error.message 

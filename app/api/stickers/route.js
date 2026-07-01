@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { glob } from 'glob';
 import path from 'path';
+import { reportError } from '../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ export async function GET() {
 
         return NextResponse.json(files);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/stickers', method: 'GET' }).catch(() => {});
+
         console.error("Error fetching stickers:", error);
         return NextResponse.json([]);
     }

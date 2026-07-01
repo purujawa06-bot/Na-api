@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { imggenColorize } from '../../../../lib/imggenColorize';
 import tempService from '../../../../lib/tempService';
+import { reportError } from '../../../../lib/errorLogger';
 
 const FACTS = [
     "AI mewarnai foto dengan menganalisis tekstur dan konteks objek.",
@@ -58,10 +59,16 @@ export async function POST(req) {
                     await send(`[false] ${result.error || 'Gagal mewarnai gambar.'}`);
                 }
             } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/tools/reviva', method: 'POST' }).catch(() => {});
+
                 if (keepAliveInterval) clearInterval(keepAliveInterval);
                 await send(`[false] ${err.message}`);
             } finally {
-                try { await writer.close(); } catch (e) {}
+                try { await writer.close(); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/tools/reviva', method: 'UNKNOWN' }).catch(() => {});
+}
             }
         })();
 
@@ -74,6 +81,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/reviva', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import chatService from '../../../lib/chatService';
 import CryptoJS from 'crypto-js';
+import { reportError } from '../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,9 @@ export async function GET(req) {
         const chats = await chatService.getChats(after);
         return NextResponse.json(chats);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/chat', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
@@ -73,6 +77,9 @@ export async function POST(req) {
         const newChat = await chatService.addChat(username, message, deviceId);
         return NextResponse.json(newChat, { status: 201 });
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/chat', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

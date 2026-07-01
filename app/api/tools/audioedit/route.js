@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import audioeditController from '../../../../lib/controllers/tools/audioedit';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function POST(req) {
     try {
@@ -11,6 +12,9 @@ export async function POST(req) {
         const result = await audioeditController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/audioedit', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             status: 'error', 
             message: error.message 

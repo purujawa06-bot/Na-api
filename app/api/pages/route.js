@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,10 @@ export async function GET(req) {
                 const metaMatch = content.match(/<!-- META (.*?) -->/);
                 let meta = {};
                 if (metaMatch) {
-                    try { meta = JSON.parse(metaMatch[1]); } catch(e){}
+                    try { meta = JSON.parse(metaMatch[1]); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/pages', method: 'GET' }).catch(() => {});
+}
                 }
                 
                 const slugMatch = file.name.match(/PuruPage\[(.*?)\]\.html/);
@@ -69,7 +73,10 @@ export async function GET(req) {
                     description: meta.desc || '',
                     date: meta.date || new Date(0).toISOString()
                 });
-            } catch (e) {}
+            } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/pages', method: 'UNKNOWN' }).catch(() => {});
+}
         }
         
         return NextResponse.json({ 
@@ -79,6 +86,9 @@ export async function GET(req) {
         });
 
     } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/pages', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: e.message, pages: [] }, { status: 500 });
     }
 }

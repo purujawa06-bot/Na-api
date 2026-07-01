@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { askGemini } from '../../../../lib/gemini';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -24,6 +25,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/gemini', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false,
             error: error.message 

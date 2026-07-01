@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import oploverzDetailController from '../../../../../lib/controllers/anime/oploverzDetail';
+import { reportError } from '../../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,9 @@ export async function GET(req) {
         const result = await oploverzDetailController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/anime/oploverz/detail', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

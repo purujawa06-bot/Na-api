@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import spotifyController from '../../../../lib/controllers/downloader/spotify';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const maxDuration = 60;
 
@@ -11,6 +12,9 @@ export async function POST(req) {
         const result = await spotifyController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/downloader/spotify', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

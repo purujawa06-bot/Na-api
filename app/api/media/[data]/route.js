@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { decrypt } from '../../../../lib/crypto';
 import axios from 'axios';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,9 @@ export async function GET(req, { params }) {
         return new NextResponse(response.data, { headers });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/media/:data', method: 'GET' }).catch(() => {});
+
         console.error("Proxy Media Error:", error.message);
         return new NextResponse('Media not found or backend unavailable.', { status: 404 });
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { chatStream } from '../../../../lib/notegpt';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -34,9 +35,15 @@ export async function POST(req) {
                 }
                 await send({ type: 'finish' });
             } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/ai/notegpt', method: 'POST' }).catch(() => {});
+
                 await send({ type: 'error', content: err.message });
             } finally {
-                try { await writer.close(); } catch (e) {}
+                try { await writer.close(); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/ai/notegpt', method: 'UNKNOWN' }).catch(() => {});
+}
             }
         })();
 
@@ -49,6 +56,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/notegpt', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { glob } from 'glob';
 import path from 'path';
 import fse from 'fs-extra';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function GET() {
     try {
@@ -24,6 +25,9 @@ export async function GET() {
         return new NextResponse(context, { headers });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/fastupdate/download', method: 'GET' }).catch(() => {});
+
         console.error('Gagal membuat file konteks:', error);
         return new NextResponse('Gagal mengumpulkan kode sumber.', { status: 500 });
     }

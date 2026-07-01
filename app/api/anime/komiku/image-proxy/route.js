@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import komikuImageProxyController from '../../../../../lib/controllers/anime/komikuImageProxy';
+import { reportError } from '../../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ export async function GET(req) {
             },
         });
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/anime/komiku/image-proxy', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

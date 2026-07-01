@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { chatStream } from '../../../../lib/quillbot';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,9 +31,15 @@ export async function POST(req) {
                 }
                 await send({ type: 'finish' });
             } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/ai/quillbot', method: 'POST' }).catch(() => {});
+
                 await send({ error: err.message });
             } finally {
-                try { await writer.close(); } catch (e) {}
+                try { await writer.close(); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/ai/quillbot', method: 'UNKNOWN' }).catch(() => {});
+}
             }
         })();
 
@@ -45,6 +52,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/quillbot', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ghibli } from '../../../../lib/ghibli';
 import tempService from '../../../../lib/tempService';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; 
@@ -60,10 +61,16 @@ export async function POST(req) {
                     await send(`[false] ${result.error || 'Gagal memproses gambar.'}`);
                 }
             } catch (err) {
+        // Auto-report error ke Telegram
+        reportError(err, { endpoint: '/tools/ghibli', method: 'POST' }).catch(() => {});
+
                 if (keepAliveInterval) clearInterval(keepAliveInterval);
                 await send(`[false] ${err.message}`);
             } finally {
-                try { await writer.close(); } catch (e) {}
+                try { await writer.close(); } catch (e) {
+        // Auto-report error ke Telegram
+        reportError(e, { endpoint: '/tools/ghibli', method: 'UNKNOWN' }).catch(() => {});
+}
             }
         })();
 
@@ -76,6 +83,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/tools/ghibli', method: 'UNKNOWN' }).catch(() => {});
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

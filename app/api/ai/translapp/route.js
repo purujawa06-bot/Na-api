@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import translappController from '../../../../lib/controllers/ai/translapp';
+import { reportError } from '../../../../lib/errorLogger';
 
 export async function POST(req) {
     try {
@@ -10,6 +11,9 @@ export async function POST(req) {
         const result = await translappController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/translapp', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 

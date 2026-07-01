@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import blogService from '../../../../lib/blogService';
+import { reportError } from '../../../../lib/errorLogger';
 
 const checkAuth = (req) => {
     const password = req.headers.get('authorization');
@@ -15,6 +16,9 @@ export async function GET(req, { params }) {
         }
         return NextResponse.json(post);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/blogs/:id', method: 'GET' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to fetch post', details: error.message }, { status: 500 });
     }
 }
@@ -28,6 +32,9 @@ export async function PUT(req, { params }) {
         const updatedPost = await blogService.update(params.id, body);
         return NextResponse.json(updatedPost);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/blogs/:id', method: 'PUT' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to update post', details: error.message }, { status: 404 });
     }
 }
@@ -40,6 +47,9 @@ export async function DELETE(req, { params }) {
         const result = await blogService.delete(params.id);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/blogs/:id', method: 'DELETE' }).catch(() => {});
+
         return NextResponse.json({ error: 'Failed to delete post', details: error.message }, { status: 500 });
     }
 }

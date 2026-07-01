@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import dracinController from '../../../../lib/controllers/ai/dracin';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,9 @@ export async function POST(req) {
         const result = await dracinController(mockReq);
         return NextResponse.json(result);
     } catch (error) {
+        // Auto-report error ke Telegram
+        reportError(error, { endpoint: '/ai/dracin', method: 'POST' }).catch(() => {});
+
         return NextResponse.json({ 
             success: false, 
             message: error.message 
