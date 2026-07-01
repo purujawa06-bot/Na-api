@@ -118,18 +118,22 @@ const ChannelPromo = () => (
     </div>
 );
 
-async function getContributors() {
-    try {
-        const res = await fetch('https://api.github.com/repos/purujawa06-bot/Na-api/contributors?per_page=15', {
-            next: { revalidate: 3600 }
-        });
-        if (!res.ok) return [];
-        return await res.json();
-    } catch (e) {
-        console.error("Failed to fetch contributors", e);
-        return [];
+const staticContributors = [
+    {
+        id: 7004559855,
+        login: 'Mas Puru',
+        html_url: 'https://github.com/purujawa06-bot',
+        avatar_url: 'https://avatars.githubusercontent.com/u/7004559855?v=4',
+        contributions: 999
+    },
+    {
+        id: 0,
+        login: 'picoclaw 🦞',
+        html_url: 'https://picoclaw.io',
+        avatar_url: 'https://picoclaw.io/icon.png',
+        contributions: 999
     }
-}
+];
 
 export default async function HomePage() {
     let stats = { endpoints: 0, categories: 0 };
@@ -143,7 +147,7 @@ export default async function HomePage() {
         console.error("Failed to fetch stats for SSG", e);
     }
 
-    const contributors = await getContributors();
+    const contributors = staticContributors;
 
     return (
         <div className="pb-4">
@@ -195,68 +199,41 @@ export default async function HomePage() {
             </div>
 
             {/* Contributors */}
-            {contributors && contributors.length > 0 && (
-                <div className="mb-8 animate-fade-in">
-                    <div className="flex justify-between items-center mb-4 px-1">
-                        <h2 className="text-sm font-bold text-primary flex items-center gap-2 uppercase tracking-wider">
-                            <i className="fas fa-crown text-yellow-500 text-xs"></i> Top Contributors
-                        </h2>
+            <div className="mb-8 animate-fade-in">
+                <h2 className="text-sm font-bold text-primary mb-4 px-1 flex items-center gap-2 uppercase tracking-wider">
+                    <i className="fas fa-crown text-yellow-500 text-xs"></i> Top Contributors
+                </h2>
+                
+                <div className="flex gap-3 flex-wrap">
+                    {contributors.map((contributor) => (
                         <a 
-                            href="https://github.com/purujawa06-bot/Na-api" 
-                            target="_blank" 
+                            key={contributor.id}
+                            href={contributor.html_url}
+                            target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[10px] bg-white/5 hover:bg-white/10 px-3 py-1 rounded-full text-secondary transition-colors border border-default"
+                            className="native-card min-w-[100px] w-[100px] p-3 flex flex-col items-center gap-2 snap-start border border-gray-800 hover:border-accent transition-all group"
                         >
-                            View All →
-                        </a>
-                    </div>
-                    
-                    <div className="relative -mx-4 px-4">
-                        <div className="flex gap-3 overflow-x-auto pb-4 snap-x hide-scrollbar">
-                            {contributors.map((contributor) => (
-                                <a 
-                                    key={contributor.id}
-                                    href={contributor.html_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="native-card min-w-[100px] w-[100px] p-3 flex flex-col items-center gap-2 snap-start border border-gray-800 hover:border-accent transition-all group"
-                                >
-                                    <div className="relative w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-accent to-purple-600 shadow-lg shadow-purple-900/20 group-hover:scale-110 transition-transform duration-300">
-                                        <div className="w-full h-full rounded-full overflow-hidden bg-black">
-                                            <Image
-                                                src={contributor.avatar_url}
-                                                alt={contributor.login}
-                                                width={44}
-                                                height={44}
-                                                className="object-cover"
-                                            />
-                                        </div>
-                                    </div>
-                                    <span className="text-[10px] font-bold text-secondary truncate w-full text-center group-hover:text-white transition-colors">
-                                        {contributor.login}
-                                    </span>
-                                    <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-mono border border-accent/20">
-                                        {contributor.contributions}✦
-                                    </span>
-                                </a>
-                            ))}
-                            <a 
-                                href="https://github.com/purujawa06-bot/Na-api"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="native-card min-w-[100px] w-[100px] p-3 flex flex-col items-center justify-center gap-2 snap-start border border-dashed border-gray-700 hover:border-accent hover:bg-accent/5 transition-all group"
-                            >
-                                <div className="w-11 h-11 rounded-full bg-gray-800 flex items-center justify-center text-gray-500 group-hover:text-accent transition-colors">
-                                    <i className="fas fa-plus"></i>
+                            <div className="relative w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-accent to-purple-600 shadow-lg shadow-purple-900/20 group-hover:scale-110 transition-transform duration-300">
+                                <div className="w-full h-full rounded-full overflow-hidden bg-black">
+                                    <Image
+                                        src={contributor.avatar_url}
+                                        alt={contributor.login}
+                                        width={44}
+                                        height={44}
+                                        className="object-cover"
+                                    />
                                 </div>
-                                <span className="text-[10px] font-bold text-gray-500 group-hover:text-accent text-center">
-                                    Join Us
-                                </span>
-                            </a>
-                        </div>
-                    </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-secondary truncate w-full text-center group-hover:text-white transition-colors">
+                                {contributor.login}
+                            </span>
+                            <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-mono border border-accent/20">
+                                {contributor.contributions}✦
+                            </span>
+                        </a>
+                    ))}
                 </div>
-            )}
+            </div>
 
             {/* Official Domains */}
             <div className="native-card p-5 mb-8 bg-gradient-to-br from-card to-transparent border border-default">
