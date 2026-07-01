@@ -31,6 +31,18 @@ API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI
 - **Parameter Chooser**: pilih opsi dengan tombol, bukan input teks
 - **Dark Mode**: UI gelap ramah mata
 
+## 🌟 Top Contributors
+
+| Avatar | Nama | Peran |
+|--------|------|------|
+| <img src="https://avatars.githubusercontent.com/u/7004559855?v=4" width="48" height="48" style="border-radius:50%"> | **Mas Puru** | Founder & Developer |
+| <img src="https://picoclaw.io/icon.png" width="48" height="48" style="border-radius:50%"> | **picoclaw** 🦞 | AI Assistant & Co-Developer |
+
+### Special Thanks
+- **You** — for using and supporting this project! 🙌
+
+---
+
 ## 🛠️ Teknologi
 
 - **Next.js 14** (App Router) + **Tailwind CSS**
