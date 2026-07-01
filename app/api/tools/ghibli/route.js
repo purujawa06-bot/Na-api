@@ -3,6 +3,8 @@ import { ghibli } from '../../../../lib/ghibli';
 import tempService from '../../../../lib/tempService';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60; 
 

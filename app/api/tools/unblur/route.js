@@ -4,6 +4,8 @@ import { uploadToTmp } from '../../../../lib/uploader';
 import tempService from '../../../../lib/tempService';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 120; // Unblur processing can be slow
 

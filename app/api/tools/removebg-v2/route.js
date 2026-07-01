@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import removeBgV2Controller from '../../../../lib/controllers/tools/removebgV2';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Proses mungkin memakan waktu
 
 export async function POST(req) {

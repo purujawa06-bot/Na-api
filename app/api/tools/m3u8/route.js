@@ -3,6 +3,8 @@ import M3U8ToMP4Converter from '../../../../lib/m3u8';
 import tempService from '../../../../lib/tempService';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 300; // Konversi video bisa sangat lama
 

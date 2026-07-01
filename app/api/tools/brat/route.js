@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import bratController from '../../../../lib/controllers/tools/brat';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export async function POST(req) {
     try {
         const body = await req.json();

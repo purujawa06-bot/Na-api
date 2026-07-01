@@ -3,6 +3,8 @@ import { upscale } from '../../../../lib/upscale';
 import tempService from '../../../../lib/tempService';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Proses upscale bisa memakan waktu
 

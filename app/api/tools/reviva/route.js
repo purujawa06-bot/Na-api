@@ -3,6 +3,8 @@ import { imggenColorize } from '../../../../lib/imggenColorize';
 import tempService from '../../../../lib/tempService';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 const FACTS = [
     "AI mewarnai foto dengan menganalisis tekstur dan konteks objek.",
     "Warna kulit manusia dan dedaunan adalah hal termudah bagi AI untuk dikenali.",

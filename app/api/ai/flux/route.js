@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { generateFluxV2 } from '../../../../lib/flux-v2';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // Anti-spam: map IP → timestamp terakhir request

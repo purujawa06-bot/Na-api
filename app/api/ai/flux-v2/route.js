@@ -4,6 +4,8 @@ import fs from 'fs';
 import { generateFluxV2 } from '../../../../lib/flux-v2';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // Keep-alive facts

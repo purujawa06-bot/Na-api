@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import tsundereController from '../../../../lib/controllers/ai/tsundere';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(req) {

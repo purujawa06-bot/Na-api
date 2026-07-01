@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import stabilizerController from '../../../../lib/controllers/tools/stabilizer';
 import { reportError } from '../../../../lib/errorLogger';
 
+
+export const dynamic = 'force-dynamic';
 export async function POST(req) {
     try {
         const body = await req.json();
