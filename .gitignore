@@ -62,3 +62,6 @@ TOKEN.md
 .vscode/
 .antigravitycli/
 .replit
+
+# Pico test/dummy files
+pico/
