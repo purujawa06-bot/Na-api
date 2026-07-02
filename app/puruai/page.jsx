@@ -14,6 +14,14 @@ const SAVE_DEBOUNCE = 800;
 const estimateTokens = (text) => Math.ceil((text?.length || 0) / 4);
 const formatTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+// 🔧 Fungsi untuk extract isi <message> dari XML response AI
+const extractMessage = (xml) => {
+    if (!xml || typeof xml !== 'string') return xml || '';
+    const match = xml.match(/<message>([\s\S]*?)<\/message>/);
+    if (match) return match[1].trim();
+    return xml;
+};
+
 // ⚡️ Pure component untuk pesan biar gak re-render pas ngetik
 const MessageBubble = React.memo(({ msg, isLast, loading }) => {
     const isUser = msg.role === 'user';
@@ -457,6 +465,21 @@ Contoh jika user ngobrol biasa:
                             }
                         } catch {}
                     }
+                }
+            }
+            
+            // 🧹 Bersihin XML tags — extract cuma <message>
+            if (fullContent && (fullContent.includes('<response>') || fullContent.includes('<message>'))) {
+                const cleaned = extractMessage(fullContent);
+                if (cleaned !== fullContent) {
+                    setMessages(prev => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last && last.role === 'assistant' && last.id === assistantId) {
+                            last.content = cleaned;
+                        }
+                        return updated;
+                    });
                 }
             }
         } catch (err) {
