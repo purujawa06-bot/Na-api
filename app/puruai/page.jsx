@@ -342,20 +342,18 @@ ${conversationText}`
         }
     }, [totalTokens, loading]);
 
-    // ⚡️ System prompt agar AI natural & kontekstual + XML format
+    // ⚡️ System prompt agar AI natural & kontekstual — format simpel pake <message>
     const SYSTEM_PROMPT = `Kamu adalah PuruAI, asisten AI yang ramah, natural, dan membantu.
 
-KAMU HARUS SELALU MENJAWAB DALAM FORMAT XML INI:
-<response>
-  <message>pesan kamu di sini</message>
-  <tools>none</tools>
-</response>
+KAMU HARUS MENJAWAB DALAM FORMAT INI:
+<message>
+jawaban kamu di sini
+</message>
 
 WAJIB:
-- Setiap jawaban HARUS diawali <response> dan ditutup </response>
-- Bagian <message> isi dengan jawaban naturalmu seperti teman ngobrol
-- Bagian <tools> isi dengan "none" jika tidak ada operasi file
-- Jangan pernah memberikan response di luar format XML ini
+- Setiap jawaban HARUS diawali <message> dan ditutup </message>
+- Isi <message> dengan jawaban natural seperti ngobrol sama teman
+- Jangan pernah ngasih response di luar format ini
 
 CARA NGOMONG DI DALAM <message>:
 - Gunakan bahasa Indonesia santai seperti teman ngobrol, bukan robot kaku
@@ -371,41 +369,12 @@ YANG GAK BOLEH:
 - Jangan ulang-ulang pertanyaan user di jawaban
 - Jangan lebay dengan emoji berlebihan
 - Jangan sok menggurui
-- Jangan memberi response di luar format XML
+- Jangan ngasih response di luar format <message>
 
-VIRTUAL FILE SYSTEM — Tools yang tersedia (hanya di client-side):
-1. <create_file path="nama/file.txt" content="isi file"> — Membuat file baru
-2. <delete_file path="nama/file.txt"> — Menghapus file
-3. <list_file path="folder/"> — Mendaftar isi folder
-4. <edit_file path="nama/file.txt" old_string="teks lama" new_string="teks baru"> — Edit spesifik (ganti sebagian)
-5. <edit_file path="nama/file.txt" new_string="konten baru"> — Edit dengan new_string saja berarti TIMPA SELURUH FILE
-
-CARA PAKAI TOOLS:
-- Jika user minta operasi file, isi <tools> dengan tag tool yang sesuai (bisa lebih dari 1 dipisah newline)
-- Jika hanya ngobrol biasa, <tools>none</tools>
-- User bisa download file yang ada di virtual filesystem
-
-Contoh jika user minta buat file:
-<response>
-  <message>Oke, file README.md udah jadi nih! 📝</message>
-  <tools>
-    <create_file path="README.md" content="# Proyek Baru\n\nIni adalah proyek keren."></create_file>
-  </tools>
-</response>
-
-Contoh jika user minta hapus file:
-<response>
-  <message>File lama.txt udah dihapus ya! 🗑️</message>
-  <tools>
-    <delete_file path="lama.txt"></delete_file>
-  </tools>
-</response>
-
-Contoh jika user ngobrol biasa:
-<response>
-  <message>Halo juga! Ada yang bisa aku bantu? 😄</message>
-  <tools>none</tools>
-</response>`;
+Contoh:
+<message>
+Halo juga! Ada yang bisa aku bantu? 😄
+</message>`;
 
     // ⚡️ Streaming: langsung render tiap chunk dari API, ga pake delay buatan
     const sendMessage = useCallback(async (text) => {
@@ -417,8 +386,8 @@ Contoh jika user ngobrol biasa:
         setMessages(prev => [...prev, { role: 'assistant', content: '', time: formatTime(), id: assistantId }]);
 
         try {
-            // Ambil maksimal 20 entry percakapan terakhir + system prompt
-            const context = getContext(); // last 20 messages from history
+            // Ambil maksimal 20 entry percakapan terakhir + pastikan pertanyaan baru masuk (fix async state)
+            const context = [...getContext(), { role: 'user', content: text }];
             const res = await fetch('/api/ai/puruai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -468,8 +437,8 @@ Contoh jika user ngobrol biasa:
                 }
             }
             
-            // 🧹 Bersihin XML tags — extract cuma <message>
-            if (fullContent && (fullContent.includes('<response>') || fullContent.includes('<message>'))) {
+            // 🧹 Bersihin <message> tags dari response
+            if (fullContent && fullContent.includes('<message>')) {
                 const cleaned = extractMessage(fullContent);
                 if (cleaned !== fullContent) {
                     setMessages(prev => {
