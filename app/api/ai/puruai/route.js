@@ -20,18 +20,74 @@ export async function POST(req) {
     try {
         const body = await req.json();
 
-        // Support both formats:
-        // 1. { prompt: "..." } — direct prompt
-        // 2. { messages: [{ role, content }, ...] } — OpenAI format (used by page)
-        let prompt;
+        // Extract system prompt (dari page atau default)
+        const systemPrompt = body.systemPrompt || `Kamu adalah PuruAI, asisten AI yang ramah, natural, dan membantu. 
+Gunakan bahasa Indonesia yang santai dan alami seperti teman ngobrol, bukan robot kaku.
+Ciri-ciri responsmu:
+- Gunakan bahasa sehari-hari yang natural, bukan bahasa formal kaku
+- Sesekali gunakan slang ringan yang wajar (santai, gitu, banget, dll)
+- Jawab dengan hangat dan peduli, seperti teman yang ngobrol
+- Jangan terlalu kaku atau terlalu formal
+- Berikan informasi yang akurat tapi dengan gaya yang enak dibaca
+- Jika ditanya hal teknis, jelaskan dengan cara yang mudah dimengerti
+- Gunakan emoji secukupnya untuk menambah kehangatan (👍😄🔥 dll)
+- Akui jika tidak tahu, jangan mengarang jawaban`;
+
+        // Build the final prompt from messages
+        let finalPrompt = '';
+
         if (body.prompt) {
-            prompt = body.prompt;
+            // Direct prompt mode — just use as-is
+            finalPrompt = body.prompt;
         } else if (body.messages && Array.isArray(body.messages)) {
-            const lastUserMsg = [...body.messages].reverse().find(m => m.role === 'user');
-            prompt = lastUserMsg?.content;
+            // Messages array mode — reconstruct full conversation context
+
+            // Separate system messages from conversation
+            const sysMessages = body.messages.filter(m => m.role === 'system');
+            const conversationMessages = body.messages.filter(m => m.role !== 'system');
+
+            // Use custom system prompt from messages if available
+            const customSysPrompt = sysMessages.map(m => m.content).join('\n');
+            const effectiveSystemPrompt = customSysPrompt || systemPrompt;
+
+            // Build conversation history text
+            const conversationLines = conversationMessages.map(m => {
+                const speaker = m.role === 'user' ? 'User' : 'PuruAI';
+                return `${speaker}: ${m.content}`;
+            }).join('\n');
+
+            // Find the last user message as the current question
+            const lastUserMsg = [...conversationMessages].reverse().find(m => m.role === 'user');
+            const currentQuestion = lastUserMsg?.content || '';
+
+            // Everything except the last user message is context
+            const contextLines = conversationMessages.slice(0, -1).map(m => {
+                const speaker = m.role === 'user' ? 'User' : 'PuruAI';
+                return `${speaker}: ${m.content}`;
+            }).join('\n');
+
+            // Construct prompt with system instructions + context + current question
+            if (contextLines) {
+                finalPrompt = `${effectiveSystemPrompt}
+
+=== RIWAYAT PERCAKAPAN ===
+${contextLines}
+
+=== PERTANYAAN BARU ===
+User: ${currentQuestion}
+
+PuruAI:`;
+            } else {
+                // No history — just system + question
+                finalPrompt = `${effectiveSystemPrompt}
+
+User: ${currentQuestion}
+
+PuruAI:`;
+            }
         }
 
-        if (!prompt) {
+        if (!finalPrompt) {
             const errorMsg = "Parameter 'prompt' atau 'messages' (array) wajib diisi.";
             const encoder = new TextEncoder();
             return new Response(new ReadableStream({
@@ -67,9 +123,9 @@ export async function POST(req) {
                             console.log(`[PuruAI] Attempt ${attempt}/${maxAttempts} — using ${modelName}`);
 
                             if (isV2) {
-                                answer = await chat(prompt);
+                                answer = await chat(finalPrompt);
                             } else {
-                                answer = await askGemini(prompt);
+                                answer = await askGemini(finalPrompt);
                             }
 
                             // Success!
@@ -80,9 +136,10 @@ export async function POST(req) {
                             console.log(`[PuruAI] Attempt ${attempt} (${modelName}) failed: ${err.message}`);
 
                             if (attempt < maxAttempts) {
-                                // Kirim notif fallback ke client (opsional)
+                                // Kirim notif fallback ke client
+                                const nextModel = attempt + 1 === 2 ? 'Gemini V1' : attempt + 1 === 3 ? 'Gemini V2' : 'Gemini V1';
                                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                                    content: `\n\n_${modelName} gagal, fallback ke ${attempt + 1 === 2 ? 'Gemini V1' : attempt + 1 === 3 ? 'Gemini V2' : 'Gemini V1'}..._\n\n`
+                                    content: `\n\n_${modelName} gagal, fallback ke ${nextModel}..._\n\n`
                                 })}\n\n`));
                                 continue;
                             }
@@ -90,16 +147,11 @@ export async function POST(req) {
                     }
 
                     if (answer) {
-                        // Kirim full answer sebagai SSE
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: answer })}\n\n`));
                     } else {
-                        // All attempts failed
                         const errMsg = `⚠️ Semua percobaan gagal setelah ${maxAttempts}x. Error: ${lastError?.message || 'Unknown'}`;
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                            content: errMsg 
-                        })}\n\n`));
-                        
-                        // Auto-report
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: errMsg })}\n\n`));
+
                         reportError(lastError || new Error(errMsg), { 
                             endpoint: '/ai/puruai', 
                             method: 'POST' 
