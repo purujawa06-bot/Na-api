@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, memo } from 'react';
-import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import InfoModal from './InfoModal';
+import BlogImage from './BlogImage';
 import { Virtuoso } from 'react-virtuoso';
 
 const getTimeAgo = (dateString) => {
@@ -48,14 +48,14 @@ const BlogCard = memo(({ post, onClick }) => {
         >
             {post.image ? (
                 <div className="relative h-48 w-full overflow-hidden">
-                    <Image 
+                    <BlogImage 
                         src={post.image} 
                         alt="Cover" 
                         fill
                         className="object-cover transition-transform duration-500 group-hover:scale-110"
-                        unoptimized
                         sizes="(max-width: 768px) 100vw, 50vw"
                         priority={false}
+                        containerClassName="absolute inset-0"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                     <div className="absolute bottom-3 left-4 right-4 flex justify-between items-end">
@@ -206,13 +206,13 @@ export default function BlogClient({ initialPosts, totalPages: initialTotalPages
 
                         {selectedPost.image && (
                             <div className="relative w-full h-64 mb-6 rounded-2xl overflow-hidden shadow-lg">
-                                <Image 
+                                <BlogImage 
                                     src={selectedPost.image} 
                                     alt="Cover" 
                                     fill
                                     className="object-cover"
-                                    unoptimized
                                     priority
+                                    containerClassName="absolute inset-0"
                                 />
                             </div>
                         )}
