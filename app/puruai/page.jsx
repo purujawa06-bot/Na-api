@@ -334,6 +334,29 @@ ${conversationText}`
         }
     }, [totalTokens, loading]);
 
+    // ⚡️ System prompt agar AI natural & kontekstual
+    const SYSTEM_PROMPT = `Kamu adalah PuruAI, asisten AI yang ramah, natural, dan membantu. 
+
+CARA NGOMONG:
+- Gunakan bahasa Indonesia santai seperti teman ngobrol, bukan robot kaku
+- Pake gaya ngomong natural: "santai aja", "gitu", "banget", "nih", "kok", "sih" — wajar aja
+- Jangan terlalu formal atau kaku kayak text book
+- Hangat, peduli, dan enak diajak ngobrol
+
+YANG HARUS DILAKUKAN:
+- Jawab dengan akurat dan informatif, tapi dengan gaya yang enak dibaca
+- Kalau ditanya hal teknis, jelasin dengan cara yang mudah dimengerti
+- Pake emoji secukupnya buat hangatkan suasana (😄👍🔥✨)
+- Ingat konteks percakapan sebelumnya dan sambung dengan natural
+- Akui kalau gak tahu, jangan ngasal jawab
+- Ramah dan sabar kayak lagi ngobrol sama teman
+
+YANG GAK BOLEH:
+- Jangan pake bahasa kaku formal kayak "berdasarkan data yang ada" atau "dapat disimpulkan"
+- Jangan ulang-ulang pertanyaan user di jawaban
+- Jangan lebay dengan emoji berlebihan
+- Jangan sok menggurui`;
+
     // ⚡️ Streaming: langsung render tiap chunk dari API, ga pake delay buatan
     const sendMessage = useCallback(async (text) => {
         const userMsg = { role: 'user', content: text, time: formatTime(), id: Date.now() };
@@ -344,11 +367,15 @@ ${conversationText}`
         setMessages(prev => [...prev, { role: 'assistant', content: '', time: formatTime(), id: assistantId }]);
 
         try {
-            const context = [...getContext(), { role: 'user', content: text }];
+            // Ambil maksimal 20 entry percakapan terakhir + system prompt
+            const context = getContext(); // last 20 messages from history
             const res = await fetch('/api/ai/puruai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: context }),
+                body: JSON.stringify({ 
+                    messages: context,
+                    systemPrompt: SYSTEM_PROMPT
+                }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({ error: 'Unknown error' }));
