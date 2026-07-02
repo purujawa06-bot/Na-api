@@ -8,7 +8,6 @@ const staticPages = [
   { loc: '/docs', changefreq: 'weekly', priority: 0.9 },
   { loc: '/blog', changefreq: 'daily', priority: 0.8 },
   { loc: '/chat', changefreq: 'always', priority: 0.7 },
-  { loc: '/puruai', changefreq: 'weekly', priority: 0.8 },
   { loc: '/listpage', changefreq: 'weekly', priority: 0.6 },
   { loc: '/fastupdate', changefreq: 'monthly', priority: 0.5 },
 ];
@@ -63,7 +62,6 @@ ${urlset}
   <url><loc>${BASE_URL}/docs</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
   <url><loc>${BASE_URL}/blog</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>${BASE_URL}/chat</loc><changefreq>always</changefreq><priority>0.7</priority></url>
-  <url><loc>${BASE_URL}/puruai</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>${BASE_URL}/listpage</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 </urlset>`;
     

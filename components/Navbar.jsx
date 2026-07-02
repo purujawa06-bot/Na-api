@@ -11,7 +11,6 @@ const Navbar = () => {
     const navLinks = [
         { name: 'Home', href: '/', icon: 'fa-home' },
         { name: 'Docs', href: '/docs', icon: 'fa-book-open' },
-        { name: 'PuruAI', href: '/puruai', icon: 'fa-robot' },
         { name: 'Chat', href: '/chat', icon: 'fa-comments' },
         { name: 'Blog', href: '/blog', icon: 'fa-newspaper' },
     ];
