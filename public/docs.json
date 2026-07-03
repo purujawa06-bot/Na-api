@@ -220,6 +220,24 @@
       ]
     },
     {
+      "title": "Gemini AI V3",
+      "summary": "Chat via Google Gemini (Hybrid V2+V1 Fallback).",
+      "description": "Menggabungkan metode V2 (BatchExecute) dan V1 (StreamGenerate) dengan fallback otomatis. Jika V2 gagal, otomatis beralih ke V1. Maksimal 3 kali percobaan. Mengembalikan JSON murni dari Gemini SDK yang diekstrak dari raw response.",
+      "method": "POST",
+      "path": "/api/ai/gemini-v3",
+      "responseType": "json",
+      "example": "async function chatGeminiV3() {\n   const response = await fetch('/api/ai/gemini-v3', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \"prompt\": \"Halo Gemini!\" })\n   });\n\n   const data = await response.json();\n   console.log(data);\n }",
+      "params": [
+        {
+          "name": "prompt",
+          "in": "body",
+          "type": "string",
+          "description": "Pertanyaan yang ingin diajukan ke Gemini.",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "Grok-4 Chat",
       "summary": "Chat AI Grok-4 Fast.",
       "description": "Berinteraksi dengan model Grok-4 Fast melalui ToolBaz. Model ini dikenal cepat dalam memberikan respons.",
