@@ -40,9 +40,20 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
         // First click: fill form
         setAutoFillActive(true);
         try {
+            // Try fetch JS format: body: JSON.stringify({...})
             const jsonMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
+            // Try curl format: -d '...'
+            const curlMatch = !jsonMatch ? endpoint.example.match(/-d\s+'([\s\S]*?)'/m) : null;
+            
+            let bodyStr = null;
             if (jsonMatch) {
-                const bodyStr = jsonMatch[1];
+                bodyStr = jsonMatch[1];
+            } else if (curlMatch) {
+                // Unescape the JSON string from curl -d '...'
+                bodyStr = curlMatch[1].replace(/\\'/g, "'");
+            }
+            
+            if (bodyStr) {
                 let parsedBody = {};
 
                 try {
@@ -67,24 +78,16 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
             }
             
             const urlMatch = endpoint.example.match(/fetch\(['"`](.*?)['"`]/);
-            if (urlMatch) {
-                const urlParts = urlMatch[1].split('?');
+            const urlCurlMatch = !urlMatch ? endpoint.example.match(/curl\s+.*?"(https?:\/\/[^"]+)"/) : null;
+            const urlString = urlMatch ? urlMatch[1] : (urlCurlMatch ? urlCurlMatch[1] : null);
+            
+            if (urlString) {
+                const urlParts = urlString.split('?');
                 if (urlParts.length > 1) {
                     const params = new URLSearchParams(urlParts[1]);
                     for (const [key, val] of params) {
                         setFormValues(prev => ({ ...prev, [key]: val }));
                     }
-                }
-                
-                const bodyMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
-                if (!bodyMatch) {
-                    try {
-                        const rawBody = endpoint.example.split('body: ')[1]?.split(',\n')[0];
-                        if (rawBody) {
-                            const parsedRaw = JSON.parse(rawBody);
-                            setFormValues(prev => ({ ...prev, ...parsedRaw }));
-                        }
-                    } catch (e) {}
                 }
             }
         } catch (error) {
@@ -373,7 +376,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                         <div className="border-t border-default">
                             {isGuideEndpoint ? null : (
                             <div className="flex border-b border-default bg-black/10">
-                                {['params', 'example', 'response'].map(tab => (
+                                {['params', 'example', ...(hasGuide ? ['raw'] : []), 'response'].map(tab => (
                                     <button 
                                         key={tab}
                                         onClick={() => setActiveTab(tab)} 
@@ -552,6 +555,21 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                 </div>
                                             </div>
                                         )}
+                                    </div>
+                                )}
+
+                                {activeTab === 'raw' && (
+                                    <div className="animate-fade-in">
+                                        <div className="prose prose-invert max-w-none">
+                                            <div className="relative group">
+                                                <pre className="bg-code p-4 rounded-xl overflow-x-auto text-xs border border-default custom-scrollbar shadow-inner whitespace-pre-wrap">
+                                                    <code className="language-markdown font-mono">{endpoint.guide}</code>
+                                                </pre>
+                                                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <CopyButton textToCopy={endpoint.guide} />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
