@@ -35,21 +35,21 @@ export default function BlogImage({
 }) {
     const [imgError, setImgError] = useState(false);
     const [imgSrc, setImgSrc] = useState(src);
-    const [loaded, setLoaded] = useState(false);
     const [timedOut, setTimedOut] = useState(false);
     const timeoutRef = useRef(null);
+    const loadedRef = useRef(false);    // ref, bukan state, agar tidak trigger re-render
     const mountedRef = useRef(true);
 
-    // Reset state when src changes
+    // Reset state ketika src berubah
     useEffect(() => {
         setImgError(false);
         setImgSrc(src);
-        setLoaded(false);
         setTimedOut(false);
+        loadedRef.current = false;
 
-        // Set timeout: fallback ke favicon jika gambar tidak selesai dimuat dalam 'timeout' ms
+        // Fallback ke favicon jika gambar tidak selesai dimuat dalam 'timeout' ms
         timeoutRef.current = setTimeout(() => {
-            if (mountedRef.current && !loaded) {
+            if (mountedRef.current && !loadedRef.current) {
                 setTimedOut(true);
                 setImgSrc('/favicon.ico');
                 setImgError(true);
@@ -59,7 +59,8 @@ export default function BlogImage({
         return () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [src, timeout, loaded]);
+        // loaded TIDAK di-deps — pakai loadedRef biar gak reset loop
+    }, [src, timeout]);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -71,7 +72,7 @@ export default function BlogImage({
 
     const handleError = () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        if (!imgError) {
+        if (!imgError && !loadedRef.current) {
             setImgError(true);
             setImgSrc('/favicon.ico');
         }
@@ -79,7 +80,7 @@ export default function BlogImage({
 
     const handleLoad = () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setLoaded(true);
+        loadedRef.current = true;
         setTimedOut(false);
     };
 
