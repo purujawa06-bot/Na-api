@@ -10,6 +10,14 @@ export async function GET(req) {
         const query = Object.fromEntries(searchParams);
         const origin = new URL(req.url).origin;
         
+        // Validasi parameter q
+        if (!query.q) {
+            return NextResponse.json({ 
+                success: false, 
+                message: "Parameter 'q' wajib diisi." 
+            }, { status: 400 });
+        }
+        
         const mockReq = { query, origin };
         
         const result = await samehadakuSearchController(mockReq);
