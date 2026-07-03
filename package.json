@@ -6,6 +6,7 @@
     "dev": "NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next dev -p 8080",
     "build": "NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next build",
     "build:full": "node scripts/generate-docs.js && NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next build",
+    "vercel:build": "node scripts/generate-docs.js && next build",
     "start": "NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next start",
     "lint": "next lint"
   },

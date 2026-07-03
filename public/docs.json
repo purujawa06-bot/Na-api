@@ -1,6 +1,31 @@
 {
   "ai": [
     {
+      "title": "ChatBotChatApp AI",
+      "summary": "Chat AI via ChatBotChatApp.com.",
+      "description": "Berinteraksi dengan model AI melalui layanan scraping ChatBotChatApp.",
+      "method": "POST",
+      "path": "/api/ai/chatbotchatapp",
+      "responseType": "json",
+      "example": "async function chat() {\n   const res = await fetch('/api/ai/chatbotchatapp', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \"message\": \"Halo, apa kabar?\" })\n   });\n   const data = await res.json();\n   console.log(data);\n }",
+      "params": [
+        {
+          "name": "message",
+          "in": "body",
+          "type": "string",
+          "description": "Pesan yang ingin diajukan ke AI.",
+          "required": true
+        },
+        {
+          "name": "model",
+          "in": "body",
+          "type": "string",
+          "description": "Model AI (auto, gpt5, gpt_oss, deepseek_r1, deepseek_v3, qwen_35, mistral_large3, pixtral, devstral2).",
+          "required": false
+        }
+      ]
+    },
+    {
       "title": "Chat Espanyol",
       "summary": "Chat AI (ChatEspanyol).",
       "description": "Melakukan percakapan dengan AI dari ChatEspanyolGratis. Mendukung percakapan berkelanjutan dengan menyertakan `sessionId` dan `conversationUuid`.",
@@ -39,6 +64,7 @@
       "method": "POST",
       "path": "/api/ai/deepseek",
       "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/ai/deepseek', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         prompt: 'Jelaskan teori relativitas secara singkat'\n     })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "prompt",
@@ -52,10 +78,11 @@
     {
       "title": "DeepSeek V4 - Free AI Chat",
       "summary": "Chat AI gratis via deep-seek.ai (proxy OpenRouter).",
-      "description": "Mengirim pesan ke DeepSeek AI secara gratis melalui deep-seek.ai. Mendukung model DeepSeek V4 Flash, R1, dan V3. Semua streaming menggunakan SSE (Server-Sent Events) dengan reasoning visible.",
+      "description": "Mengirim pesan ke DeepSeek AI secara gratis melalui deep-seek.ai. Mendukung model DeepSeek V4 Flash, R1, dan V3. Semua response menggunakan SSE (Server-Sent Events) dengan reasoning visible.",
       "method": "POST",
       "path": "/api/ai/deepseek/v4",
       "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/ai/deepseek/v4', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         message: 'Buatkan saya kalkulator sederhana di Python',\n         model: 'deepseek/deepseek-v4-flash',\n         history: []\n     })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "message",
@@ -84,6 +111,13 @@
               "label": "DeepSeek V3 (Balanced)"
             }
           ]
+        },
+        {
+          "name": "history",
+          "in": "body",
+          "type": "array",
+          "description": "Riwayat percakapan [{role, content}] (opsional)",
+          "required": false
         }
       ]
     },
@@ -123,24 +157,6 @@
           "type": "number",
           "description": "Volume musik latar (0.1 - 1.0). Default: 0.3.",
           "required": false
-        }
-      ]
-    },
-    {
-      "title": "Flux Image",
-      "summary": "Generate Gambar Flux AI.",
-      "description": "Menghasilkan gambar berkualitas tinggi menggunakan model Flux melalui proxy worker. Endpoint ini menggunakan Server-Sent Events (SSE).",
-      "method": "POST",
-      "path": "/api/ai/flux",
-      "responseType": "json",
-      "example": "// Contoh penggunaan (Membaca stream SSE di client)\n async function generateImage() {\n   const response = await fetch('/api/ai/flux', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \n       \"prompt\": \"Cyberpunk city with neon lights, realistic style\" \n     })\n   });\n \n   const reader = response.body.getReader();\n   const decoder = new TextDecoder();\n   \n   while (true) {\n     const { done, value } = await reader.read();\n     if (done) break;\n     const text = decoder.decode(value);\n     console.log(\"Stream:\", text);\n     \n     if(text.includes('[true]')) {\n        const resultUrl = text.replace('[true]', '').trim();\n        console.log(\"Result JSON URL:\", resultUrl);\n        // fetch(resultUrl).then(res => res.json()).then(console.log);\n     }\n   }\n }\n \n generateImage();",
-      "params": [
-        {
-          "name": "prompt",
-          "in": "body",
-          "type": "string",
-          "description": "Deskripsi gambar yang ingin dibuat.",
-          "required": true
         }
       ]
     },
@@ -221,21 +237,14 @@
     },
     {
       "title": "Gemini AI V3",
-      "summary": "Chat via Google Gemini (Hybrid V2+V1 Fallback).",
-      "description": "Menggabungkan metode V2 (BatchExecute) dan V1 (StreamGenerate) dengan fallback otomatis. Jika V2 gagal, otomatis beralih ke V1. Maksimal 3 kali percobaan. Mengembalikan JSON murni dari Gemini SDK yang diekstrak dari raw response.",
+      "summary": "Chat via Google Gemini (Hybrid V2+V1 Fallback) dengan format payload standar Gemini API.",
+      "description": "Menerima format payload standar Google Gemini API dan mengembalikan response JSON murni dari Gemini SDK. Menggabungkan metode V2 (BatchExecute) dan V1 (StreamGenerate) dengan fallback otomatis. Maksimal 3 kali percobaan.",
       "method": "POST",
       "path": "/api/ai/gemini-v3",
       "responseType": "json",
-      "example": "async function chatGeminiV3() {\n   const response = await fetch('/api/ai/gemini-v3', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ \"prompt\": \"Halo Gemini!\" })\n   });\n\n   const data = await response.json();\n   console.log(data);\n }",
-      "params": [
-        {
-          "name": "prompt",
-          "in": "body",
-          "type": "string",
-          "description": "Pertanyaan yang ingin diajukan ke Gemini.",
-          "required": true
-        }
-      ]
+      "example": "const response = await fetch('/api/ai/gemini-v3', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({\n     contents: [\n       {\n         role: \"user\",\n         parts: [{ text: \"Halo, siapa nama saya?\" }]\n       }\n     ],\n     systemInstruction: {\n       parts: [{ text: \"Anda adalah asisten AI yang ramah dan cerdas.\" }]\n     },\n     generationConfig: {\n       temperature: 0.7\n     }\n   })\n });\n \n const data = await response.json();\n console.log(data.candidates[0].content.parts[0].text);",
+      "params": [],
+      "guide": "## Request Body (Standar Gemini API)\n \n Endpoint ini menggunakan format payload **standar Google Gemini API**:\n \n ```json\n {\n   \"contents\": [\n     {\n       \"role\": \"user\",\n       \"parts\": [{ \"text\": \"Pesan Anda di sini\" }]\n     }\n   ],\n   \"systemInstruction\": {\n     \"parts\": [{ \"text\": \"Instruksi sistem untuk AI\" }]\n   },\n   \"generationConfig\": {\n     \"temperature\": 0.7\n   }\n }\n ```\n \n ### Penjelasan Field\n \n | Field | Tipe | Wajib | Deskripsi |\n |-------|------|-------|-----------|\n | `contents` | Array | ✅ | Riwayat percakapan. Setiap item punya `role` (\"user\"/\"model\") dan `parts` (array of `{text}`) |\n | `systemInstruction` | Object | ❌ | Instruksi sistem untuk mengatur perilaku AI |\n | `generationConfig` | Object | ❌ | Konfigurasi generation seperti `temperature` |\n \n ### Contoh Multi-turn Conversation\n \n Untuk percakapan multi-turn, tambahkan riwayat ke `contents`:\n \n ```json\n {\n   \"contents\": [\n     { \"role\": \"user\", \"parts\": [{ \"text\": \"Halo, nama saya Budi\" }] },\n     { \"role\": \"model\", \"parts\": [{ \"text\": \"Halo Budi! Ada yang bisa dibantu?\" }] },\n     { \"role\": \"user\", \"parts\": [{ \"text\": \"Siapa nama saya?\" }] }\n   ],\n   \"systemInstruction\": {\n     \"parts\": [{ \"text\": \"Anda adalah asisten yang ramah dan memiliki ingatan kuat.\" }]\n   },\n   \"generationConfig\": {\n     \"temperature\": 0.5,\n     \"topP\": 0.9,\n     \"topK\": 40\n   }\n }\n ```\n \n ## Response\n \n Response adalah **JSON murni dari Gemini SDK** (bukan wrapper buatan), contoh:\n \n ```json\n {\n   \"candidates\": [{\n     \"content\": {\n       \"parts\": [{ \"text\": \"Nama Anda adalah Budi!\" }],\n       \"role\": \"model\"\n     },\n     \"finishReason\": \"STOP\",\n     \"index\": 0,\n     \"safetyRatings\": [...]\n   }],\n   \"usageMetadata\": {\n     \"promptTokenCount\": 25,\n     \"candidatesTokenCount\": 10\n   }\n }\n ```"
     },
     {
       "title": "Grok-4 Chat",
@@ -269,6 +278,24 @@
           "in": "body",
           "type": "string",
           "description": "Pesan yang ingin diajukan ke AI.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "Monica AI Chat (Simplified)",
+      "summary": "Chat AI Monica — cukup kirim prompt saja.",
+      "description": "Endpoint chat Monica AI yang sudah disederhanakan.\n              Hanya menerima prompt, sisanya otomatis.",
+      "method": "POST",
+      "path": "/api/ai/monica",
+      "responseType": "json",
+      "example": "fetch('/api/ai/monica', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ \"prompt\": \"Halo, apa kabar?\" })\n })",
+      "params": [
+        {
+          "name": "prompt",
+          "in": "body",
+          "type": "string",
+          "description": "Pesan yang ingin dikirim ke AI (wajib).",
           "required": true
         }
       ]
@@ -1089,6 +1116,24 @@
   ],
   "downloader": [
     {
+      "title": "Facebook Downloader",
+      "summary": "Download video Facebook (Reel/Watch/Video/Share).",
+      "description": "Mendownload video Facebook menggunakan Embed Plugin Facebook + fallback fsave.io. Mendukung format Reel, Watch, Video, dan Share. Menghasilkan link HD, SD, thumbnail, subtitles, dan daftar kualitas video.",
+      "method": "POST",
+      "path": "/api/downloader/fb",
+      "responseType": "json",
+      "example": "async function downloadFB() {\n   try {\n     const response = await fetch('/api/downloader/fb', {\n       method: 'POST',\n       headers: { 'Content-Type': 'application/json' },\n       body: JSON.stringify({ \n         \"url\": \"https://www.facebook.com/reel/2195585950845288\" \n       })\n     });\n     const data = await response.json();\n     console.log(data);\n   } catch (error) {\n     console.error('Error:', error.message);\n   }\n }\n \n downloadFB();",
+      "params": [
+        {
+          "name": "url",
+          "in": "body",
+          "type": "string",
+          "description": "URL lengkap video Facebook (reel, watch, videos, share).",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "Facebook DL",
       "summary": "Download video Facebook.",
       "description": "Mengunduh video dari Facebook menggunakan layanan fsave.io. Mengembalikan thumbnail dan link download video dalam kualitas SD dan HD.",
@@ -1108,8 +1153,8 @@
     },
     {
       "title": "Instagram Downloader",
-      "summary": "Download Instagram Media (Reels/Slide/Photo).",
-      "description": "Mengunduh konten Instagram (Video, Reels, atau Carousel Slide) menggunakan VDFRDownloader.",
+      "summary": "Download Instagram Media (Reels/Photo/Carousel) + Metadata.",
+      "description": "Mengunduh konten Instagram (Video Reels, Foto, Carousel) lengkap dengan metadata seperti caption, author, thumbnail, dan link download.",
       "method": "POST",
       "path": "/api/downloader/instagram",
       "responseType": "json",
