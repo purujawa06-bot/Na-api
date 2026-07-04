@@ -37,14 +37,11 @@ export async function POST(req) {
         (async () => {
             let keepAliveInterval;
             try {
-                await send("Menghubungkan ke Conversion Engine...\n");
+                await send("Menghubungkan ke M3U8 Download Engine...\n");
 
                 const converter = new M3U8ToMP4Converter();
-                
-                // DEBUG: Kirim info path ffmpeg yang ditemukan
-                await send(`Debug: FFMPEG_PATH = ${converter.ffmpegPath}\n`);
 
-                await send("Memulai download & konversi menggunakan ffmpeg...\n");
+                await send("Menganalisis playlist & mendownload segmen video...\n");
 
                 keepAliveInterval = setInterval(() => {
                     const fact = FACTS[Math.floor(Math.random() * FACTS.length)];
