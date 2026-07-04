@@ -17,6 +17,7 @@
     "cloudscraper": "^4.6.0",
     "crypto-js": "^4.2.0",
     "fast-xml-parser": "^4.3.2",
+    "ffmpeg-static": "^5.2.0",
     "form-data": "^4.0.0",
     "fs-extra": "^11.2.0",
     "glob": "^10.5.0",

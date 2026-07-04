@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Nonaktifkan strict mode untuk menghindari double-invocation pada useEffect di dev (opsional)
+  serverComponentsExternalPackages: ['ffmpeg-static'],
+  experimental: {
+    serverComponentsExternalPackages: ['ffmpeg-static'],
+  },
   images: {
     remotePatterns: [
       {
