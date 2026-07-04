@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Virtuoso } from 'react-virtuoso';
 
 // --- INDEXED DB HELPERS ---
-const DB_NAME = 'PuruBoyChatDB';
+const DB_NAME = 'TiyanzChatDB';
 const STORE_NAME = 'chats';
 const DB_VERSION = 1;
 
@@ -172,7 +172,7 @@ const ChatBubble = memo(({ chat, username, prevChat, index }) => {
 
 ChatBubble.displayName = 'ChatBubble';
 
-const SECRET_KEY = 'PuruBoyChatSecureKey2025';
+const SECRET_KEY = 'TiyanzChatSecureKey2025';
 
 export default function ChatPage() {
     const router = useRouter();
@@ -197,16 +197,16 @@ export default function ChatPage() {
     useEffect(() => { chatsRef.current = chats; }, [chats]);
 
     useEffect(() => {
-        const storedUser = localStorage.getItem('puruboy-chat-username');
+        const storedUser = localStorage.getItem('tiyanz-chat-username');
         if (storedUser) {
             setUsername(storedUser);
             setIsLoggedIn(true);
         }
 
-        let did = localStorage.getItem('puruboy-device-id');
+        let did = localStorage.getItem('tiyanz-device-id');
         if (!did) {
             did = uuidv4();
-            localStorage.setItem('puruboy-device-id', did);
+            localStorage.setItem('tiyanz-device-id', did);
         }
         setDeviceId(did);
 
@@ -304,7 +304,7 @@ export default function ChatPage() {
         e.preventDefault();
         if (!tempUsername.trim()) return;
         const cleanName = tempUsername.trim().substring(0, 15);
-        localStorage.setItem('puruboy-chat-username', cleanName);
+        localStorage.setItem('tiyanz-chat-username', cleanName);
         setUsername(cleanName);
         setIsLoggedIn(true);
     };
@@ -361,7 +361,7 @@ export default function ChatPage() {
 
     const handleLogout = () => {
         if(confirm("Logout from community?")) {
-            localStorage.removeItem('puruboy-chat-username');
+            localStorage.removeItem('tiyanz-chat-username');
             setIsLoggedIn(false);
             setUsername('');
         }
@@ -410,7 +410,7 @@ export default function ChatPage() {
                     
                     <h1 className="text-2xl font-bold text-[#f2f3f5] mb-2">Welcome Back!</h1>
                     <p className="text-[#b5bac1] text-sm mb-8">
-                        Join the PuruBoy Community chat.
+                        Join the Tiyanz Community chat.
                     </p>
                     
                     <form onSubmit={handleLogin} className="space-y-4 text-left">
@@ -466,7 +466,7 @@ export default function ChatPage() {
                             <i className="fas fa-hashtag text-2xl text-[#5865f2]"></i>
                         </div>
                         <h2 className="text-xl font-bold text-[#f2f3f5] mb-2">Welcome to #general</h2>
-                        <p className="text-sm">This is the start of the PuruBoy Community server.</p>
+                        <p className="text-sm">This is the start of the Tiyanz Community server.</p>
                     </div>
                 ) : (
                     <Virtuoso

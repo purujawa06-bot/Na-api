@@ -6,7 +6,7 @@ Disallow: /admin.html
 Disallow: /fastupdate.html
 
 # Sitemap
-Sitemap: https://puruboy-api.vercel.app/sitemap.xml
+Sitemap: https://tiyanz-api.vercel.app/sitemap.xml
 
 # Crawl delay untuk beban server
 Crawl-delay: 1

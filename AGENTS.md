@@ -1,10 +1,10 @@
-# AGENTS.md — NextA-API (PuruBoy API)
+# AGENTS.md — NextA-API (Tiyanz API)
 
 ## Platform Context
 
 Public REST API platform built on **Next.js 14 App Router**. Provides 100+ free endpoints across AI, anime streaming, media downloading, search, and utility tools. Auto-generated docs, AI-assisted code updates, PostgreSQL-backed services (chat, blog, temp storage).
 
-**Live**: `https://puruboy-api.vercel.app`  
+**Live**: `https://tiyanz-api.vercel.app`
 **Framework**: Next.js 14 + React 18 + Tailwind CSS  
 **Runtime**: Node.js (Edge/Node hybrid)  
 **Database**: PostgreSQL (via `pg`)
@@ -20,7 +20,7 @@ You are a **full-stack Next.js developer** maintaining this API monolith. Your r
 - Maintain scrapers and third-party API wrappers in `lib/`
 - Keep the frontend docs/UI in sync with backend changes
 - Handle database operations (chat, blog, temp storage, admin)
-- Ensure consistency of response format (`{ success, author: 'PuruBoy', result }`)
+- Ensure consistency of response format (`{ success, author: 'Tiyanz', result }`)
 
 ## Critical Constraints
 
@@ -121,7 +121,7 @@ const myController = async (req) => {
 
     return {
         success: true,
-        author: 'PuruBoy',
+        author: 'Tiyanz',
         result: { /* endpoint-specific data */ }
     };
 };
@@ -357,7 +357,7 @@ All endpoints return **JSON** with this envelope:
 ```json
 {
     "success": true,
-    "author": "PuruBoy",
+    "author": "Tiyanz",
     "result": { /* endpoint-specific data */ }
 }
 ```
@@ -473,7 +473,7 @@ The frontend is a documentation/showcase UI for the API:
 
 ## 14. DEPLOYMENT
 
-Deployed on **Vercel** at `https://puruboy-api.vercel.app`.
+Deployed on **Vercel** at `https://tiyanz-api.vercel.app`.
 
 Build command: `node scripts/generate-docs.js && next build`
 

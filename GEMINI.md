@@ -1,4 +1,4 @@
-# NextA-API (PuruBoy API)
+# NextA-API (Tiyanz API)
 
 Project API Publik yang modular, modern, dan kaya fitur, dibangun menggunakan **Next.js 14** (App Router). Project ini menyediakan berbagai layanan REST API mulai dari AI Tools, Downloader, hingga Anime Streaming.
 
@@ -44,7 +44,7 @@ Standard successful response:
 ```json
 {
   "success": true,
-  "author": "PuruBoy",
+  "author": "Tiyanz",
   "result": { ... }
 }
 ```
@@ -62,4 +62,4 @@ Standard error response:
 Ensure `.env.local` is configured with:
 - `PURUBOY_PG_URL`: PostgreSQL connection string.
 - `PURUBOY_ADMIN_KEY`: Key for administrative actions.
-- `Contact Header`: https://t.me/puruboy_hub (Updated from WhatsApp)
+- `Contact Header`: https://t.me/tiyanz_hub (Updated from WhatsApp)

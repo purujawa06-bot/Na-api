@@ -45,7 +45,7 @@ export default function ErrorReportPopup() {
                     <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg border-2 border-red-500/20 ring-2 ring-red-500/10">
                         <img 
                             src="/favicon.jpg" 
-                            alt="PuruBoy API" 
+                            alt="Tiyanz API"
                             className="w-full h-full object-cover"
                         />
                     </div>

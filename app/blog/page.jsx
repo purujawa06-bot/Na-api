@@ -3,14 +3,14 @@ import blogService from '../../lib/blogService';
 import BlogClient from '../../components/BlogClient';
 
 export const metadata = {
-    title: 'Blog & Tutorial | PuruBoy API',
-    description: 'Blog resmi PuruBoy API. Dapatkan tutorial penggunaan API, informasi update fitur terbaru, changelog sistem, dan tips & trik untuk developer Indonesia.',
-    keywords: ['Blog PuruBoy API', 'Tutorial API Indonesia', 'Update API', 'Changelog', 'Tips Developer', 'PuruBoy Tutorial'],
+    title: 'Blog & Tutorial | Tiyanz API',
+    description: 'Blog resmi Tiyanz API. Dapatkan tutorial penggunaan API, informasi update fitur terbaru, changelog sistem, dan tips & trik untuk developer Indonesia.',
+    keywords: ['Blog Tiyanz API', 'Tutorial API Indonesia', 'Update API', 'Changelog', 'Tips Developer', 'Tiyanz Tutorial'],
     openGraph: {
-        title: 'Blog & Tutorial PuruBoy API',
-        description: 'Tutorial, update fitur, dan tips seputar PuruBoy API untuk developer Indonesia.',
-        url: 'https://puruboy-api.vercel.app/blog',
-        siteName: 'PuruBoy API',
+        title: 'Blog & Tutorial Tiyanz API',
+        description: 'Tutorial, update fitur, dan tips seputar Tiyanz API untuk developer Indonesia.',
+        url: 'https://tiyanz-api.vercel.app/blog',
+        siteName: 'Tiyanz API',
         type: 'website',
     },
 };
@@ -40,7 +40,7 @@ export default async function BlogPage() {
             <div className="sticky-header -mx-4 px-4 py-4 mb-6 flex justify-between items-end">
                 <div>
                     <h1 className="text-2xl font-bold text-primary tracking-tight">Blog Updates</h1>
-                    <p className="text-xs text-secondary mt-1">Berita & Tutorial PuruBoy API</p>
+                    <p className="text-xs text-secondary mt-1">Berita & Tutorial Tiyanz API</p>
                 </div>
                 <div className="w-10 h-10 bg-accent/10 rounded-full flex items-center justify-center text-accent">
                     <i className="fas fa-newspaper"></i>

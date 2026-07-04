@@ -89,7 +89,7 @@ export async function GET() {
                   textShadow: '0 2px 20px rgba(0,0,0,0.5)',
                 }}
               >
-                PuruBoy
+                Tiyanz
                 <span style={{ color: '#ec4899', marginLeft: '8px' }}>API</span>
               </h1>
             </div>
@@ -147,7 +147,7 @@ export async function GET() {
               letterSpacing: '2px',
             }}
           >
-            puruboy-api.vercel.app
+            tiyanz-api.vercel.app
           </div>
         </div>
       ),

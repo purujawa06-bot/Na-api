@@ -6,14 +6,14 @@ export default function JsonLd() {
     '@graph': [
       {
         '@type': 'WebApplication',
-        name: 'PuruBoy API',
-        url: 'https://puruboy-api.vercel.app',
+        name: 'Tiyanz API',
+        url: 'https://tiyanz-api.vercel.app',
         description: 'Platform REST API gratis untuk developer dengan fitur AI, Downloader, Anime Streaming, dan Tools.',
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'All',
         author: {
           '@type': 'Person',
-          name: 'PuruBoy',
+          name: 'Tiyanz',
           url: 'https://github.com/purujawa06-bot',
         },
         offers: {
@@ -25,44 +25,44 @@ export default function JsonLd() {
       },
       {
         '@type': 'WebSite',
-        name: 'PuruBoy API',
-        url: 'https://puruboy-api.vercel.app',
+        name: 'Tiyanz API',
+        url: 'https://tiyanz-api.vercel.app',
         description: 'Platform API modular terbaik dengan integrasi AI, Downloader, dan Anime Streaming. Gratis, cepat, dan mudah digunakan.',
         about: {
           '@type': 'Thing',
-          name: 'PuruBoy API – Solusi API Gratis untuk Developer Indonesia',
-          description: 'PuruBoy API adalah platform REST API gratis yang menyediakan berbagai layanan untuk developer, termasuk AI Chat, Text to Image, Downloader multimedia, dan tools pengembangan web.'
+          name: 'Tiyanz API – Solusi API Gratis untuk Developer Indonesia',
+          description: 'Tiyanz API adalah platform REST API gratis yang menyediakan berbagai layanan untuk developer, termasuk AI Chat, Text to Image, Downloader multimedia, dan tools pengembangan web.'
         },
         inLanguage: ['id', 'en'],
         publisher: {
           '@type': 'Person',
-          name: 'PuruBoy',
+          name: 'Tiyanz',
         },
         potentialAction: {
           '@type': 'SearchAction',
-          target: 'https://puruboy-api.vercel.app/search?q={search_term_string}',
+          target: 'https://tiyanz-api.vercel.app/search?q={search_term_string}',
           'query-input': 'required name=search_term_string',
         },
       },
       {
         '@type': 'CollectionPage',
-        name: 'Dokumentasi API – PuruBoy API',
-        description: 'Dokumentasi lengkap endpoint REST API PuruBoy: AI, Downloader, Anime, Tools, dan Search.',
-        url: 'https://puruboy-api.vercel.app/docs',
+        name: 'Dokumentasi API – Tiyanz API',
+        description: 'Dokumentasi lengkap endpoint REST API Tiyanz: AI, Downloader, Anime, Tools, dan Search.',
+        url: 'https://tiyanz-api.vercel.app/docs',
         isPartOf: {
           '@type': 'WebSite',
-          name: 'PuruBoy API',
-          url: 'https://puruboy-api.vercel.app',
+          name: 'Tiyanz API',
+          url: 'https://tiyanz-api.vercel.app',
         },
       },
       {
         '@type': 'BreadcrumbList',
         name: 'Breadcrumb',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Beranda', item: 'https://puruboy-api.vercel.app/' },
-          { '@type': 'ListItem', position: 2, name: 'Dokumentasi', item: 'https://puruboy-api.vercel.app/docs' },
-          { '@type': 'ListItem', position: 3, name: 'Blog', item: 'https://puruboy-api.vercel.app/blog' },
-          { '@type': 'ListItem', position: 4, name: 'Chat Room', item: 'https://puruboy-api.vercel.app/chat' },
+          { '@type': 'ListItem', position: 1, name: 'Beranda', item: 'https://tiyanz-api.vercel.app/' },
+          { '@type': 'ListItem', position: 2, name: 'Dokumentasi', item: 'https://tiyanz-api.vercel.app/docs' },
+          { '@type': 'ListItem', position: 3, name: 'Blog', item: 'https://tiyanz-api.vercel.app/blog' },
+          { '@type': 'ListItem', position: 4, name: 'Chat Room', item: 'https://tiyanz-api.vercel.app/chat' },
         ],
       },
     ],

@@ -43,7 +43,7 @@ const nextConfig = {
           { key: "Access-Control-Allow-Origin", value: "*" }, // Izinkan akses dari semua domain
           { key: "Access-Control-Allow-Methods", value: "GET,DELETE,PATCH,POST,PUT" },
           { key: "Access-Control-Allow-Headers", value: "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" },
-          { key: "Contact", value: "https://t.me/puruboy_hub" } // Header kontak tambahan
+          { key: "Contact", value: "https://t.me/tiyanz_hub" } // Header kontak tambahan
         ]
       }
     ]

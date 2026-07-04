@@ -6,14 +6,14 @@ import { getDocsSpec } from '../lib/docsService';
 export const revalidate = 3600;
 
 export const metadata = {
-    title: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
-    description: 'Beranda PuruBoy API. Platform REST API gratis dengan fitur AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools Developer. Cepat, stabil, dan gratis!',
-    keywords: ['PuruBoy API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'PuruBoy'],
+    title: 'Tiyanz API - Platform REST API Gratis untuk Developer Indonesia',
+    description: 'Beranda Tiyanz API. Platform REST API gratis dengan fitur AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools Developer. Cepat, stabil, dan gratis!',
+    keywords: ['Tiyanz API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'Tiyanz'],
     openGraph: {
-        title: 'PuruBoy API - REST API Gratis Indonesia',
+        title: 'Tiyanz API - REST API Gratis Indonesia',
         description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
-        url: 'https://puruboy-api.vercel.app',
-        siteName: 'PuruBoy API',
+        url: 'https://tiyanz-api.vercel.app',
+        siteName: 'Tiyanz API',
         type: 'website',
     },
 };
@@ -29,7 +29,7 @@ const Hero = () => (
             </div>
         </div>
         <h1 className="text-5xl font-extrabold text-primary mb-3 tracking-tight mt-4">
-            PuruBoy <span className="gradient-text">API</span>
+            Tiyanz <span className="gradient-text">API</span>
         </h1>
         <p className="text-secondary text-sm leading-relaxed max-w-sm mx-auto font-medium">
             Platform API modular terbaik dengan integrasi AI, Downloader, dan Anime Streaming. Gratis, cepat, dan mudah digunakan.
@@ -82,8 +82,8 @@ const ChannelPromo = () => (
     <div className="native-card overflow-hidden relative group mb-8 border-none ring-1 ring-white/10">
         <div className="relative h-40 w-full bg-gray-900">
             <Image 
-                src="/puruboy-ch.jpg" 
-                alt="PuruBoy Channel" 
+                src="/tiyanz-ch.jpg"
+                alt="Tiyanz Channel"
                 fill
                 className="object-cover opacity-70 group-hover:scale-105 transition-transform duration-700"
                 sizes="(max-width: 768px) 100vw, 600px"
@@ -106,7 +106,7 @@ const ChannelPromo = () => (
                 Dapatkan notifikasi update fitur, info maintenance, dan bagi-bagi script gratis langsung dari sumbernya.
             </p>
             <a 
-                href="https://t.me/puruboy_hub" 
+                href="https://t.me/tiyanz_hub"
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="w-full bg-[#24A1DE] hover:bg-[#1b8abf] text-white font-bold py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20"
@@ -244,17 +244,17 @@ export default async function HomePage() {
                     Official Domains
                 </h3>
                 <div className="space-y-2">
-                    <a href="https://www.puruboy.kozow.com" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
+                    <a href="https://www.tiyanz.kozow.com" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">www.puruboy.kozow.com</span>
+                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">www.tiyanz.kozow.com</span>
                         </div>
                         <span className="text-[9px] bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-green-500/20">Stabil</span>
                     </a>
-                    <a href="https://puruboy-api.vercel.app" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
+                    <a href="https://tiyanz-api.vercel.app" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">puruboy-api.vercel.app</span>
+                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">tiyanz-api.vercel.app</span>
                         </div>
                         <span className="text-[9px] bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-blue-500/20">Cloud</span>
                     </a>
@@ -264,7 +264,7 @@ export default async function HomePage() {
             {/* Footer CTA */}
             <div className="mt-8 p-5 native-card text-center border-dashed border-accent/30 bg-gradient-to-b from-accent/5 to-transparent">
                 <i className="fas fa-code text-accent text-2xl mb-3 block"></i>
-                <p className="text-xs text-secondary mb-4 leading-relaxed">Mulai integrasikan PuruBoy API ke proyek kamu sekarang. Gratis, tanpa auth.</p>
+                <p className="text-xs text-secondary mb-4 leading-relaxed">Mulai integrasikan Tiyanz API ke proyek kamu sekarang. Gratis, tanpa auth.</p>
                 <Link href="/docs" className="inline-flex items-center gap-2 bg-accent text-white text-sm font-bold px-6 py-3 rounded-xl shadow-lg shadow-accent/25 hover:bg-accent-hover transition-all active:scale-95">
                     <i className="fas fa-rocket text-sm"></i>
                     Mulai Sekarang
