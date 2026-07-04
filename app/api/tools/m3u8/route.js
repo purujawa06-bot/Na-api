@@ -48,6 +48,8 @@ export async function POST(req) {
                     send(`Proses sedang berjalan... ${fact}\n`);
                 }, 4000);
 
+                await send("Mengupload hasil ke server...\n");
+
                 const result = await converter.convertAndUpload(url, filename);
 
                 clearInterval(keepAliveInterval);
