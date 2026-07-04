@@ -99,6 +99,11 @@ export async function middleware(request) {
         return;
     }
 
+    // Skip route yang berdurasi panjang (download/konversi video)
+    if (pathname.includes('/m3u8') || pathname.includes('/temp/') || pathname.includes('/media/')) {
+        return;
+    }
+
     // Skip jika method OPTIONS (CORS preflight)
     if (request.method === 'OPTIONS') {
         return;
