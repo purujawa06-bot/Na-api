@@ -40,6 +40,9 @@ export async function POST(req) {
                 await send("Menghubungkan ke Conversion Engine...\n");
 
                 const converter = new M3U8ToMP4Converter();
+                
+                // DEBUG: Kirim info path ffmpeg yang ditemukan
+                await send(`Debug: FFMPEG_PATH = ${converter.ffmpegPath}\n`);
 
                 await send("Memulai download & konversi menggunakan ffmpeg...\n");
 
