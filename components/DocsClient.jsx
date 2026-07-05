@@ -683,7 +683,7 @@ export default function DocsClient({ apiSpec }) {
 
             {/* Footer Copyright */}
             <footer className="mt-8 pt-6 border-t border-default text-center">
-                <p className="text-xs text-muted">PuruBoy API &copy; {new Date().getFullYear()} - All rights reserved.</p>
+                <p className="text-xs text-muted">Tiyanz API &copy; {new Date().getFullYear()} - All rights reserved.</p>
             </footer>
 
             {/* Floating TOC Button */}

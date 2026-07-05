@@ -1,4 +1,4 @@
-# PuruBoy API (Na-api)
+# Tiyanz API (Na-api)
 
 API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI, Downloader, Anime, Search, dan Tools. Dilengkapi dokumentasi interaktif swagger-style dengan **Try It Out**, **Auto Fill**, dan **Streaming Response**.
 
@@ -109,4 +109,4 @@ git push
 
 ## 📝 Lisensi & Author
 
-**PuruBoy** — Open source untuk pembelajaran.
+**Tiyanz** — Open source untuk pembelajaran.

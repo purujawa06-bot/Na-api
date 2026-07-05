@@ -6,14 +6,14 @@ import { getDocsSpec } from '../lib/docsService';
 export const revalidate = 3600;
 
 export const metadata = {
-    title: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
-    description: 'Beranda PuruBoy API. Platform REST API gratis dengan fitur AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools Developer. Cepat, stabil, dan gratis!',
-    keywords: ['PuruBoy API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'PuruBoy'],
+    title: 'Tiyanz API - Platform REST API Gratis untuk Developer Indonesia',
+    description: 'Beranda Tiyanz API. Platform REST API gratis dengan fitur AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools Developer. Cepat, stabil, dan gratis!',
+    keywords: ['Tiyanz API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'Tiyanz'],
     openGraph: {
-        title: 'PuruBoy API - REST API Gratis Indonesia',
+        title: 'Tiyanz API - REST API Gratis Indonesia',
         description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
         url: 'https://puruboy-api.vercel.app',
-        siteName: 'PuruBoy API',
+        siteName: 'Tiyanz API',
         type: 'website',
     },
 };
@@ -29,7 +29,7 @@ const Hero = () => (
             </div>
         </div>
         <h1 className="text-5xl font-extrabold text-primary mb-3 tracking-tight mt-4">
-            PuruBoy <span className="gradient-text">API</span>
+            Tiyanz <span className="gradient-text">API</span>
         </h1>
         <p className="text-secondary text-sm leading-relaxed max-w-sm mx-auto font-medium">
             Platform API modular terbaik dengan integrasi AI, Downloader, dan Anime Streaming. Gratis, cepat, dan mudah digunakan.
@@ -83,7 +83,7 @@ const ChannelPromo = () => (
         <div className="relative h-40 w-full bg-gray-900">
             <Image 
                 src="/puruboy-ch.jpg" 
-                alt="PuruBoy Channel" 
+                alt="Tiyanz Channel"
                 fill
                 className="object-cover opacity-70 group-hover:scale-105 transition-transform duration-700"
                 sizes="(max-width: 768px) 100vw, 600px"
@@ -264,7 +264,7 @@ export default async function HomePage() {
             {/* Footer CTA */}
             <div className="mt-8 p-5 native-card text-center border-dashed border-accent/30 bg-gradient-to-b from-accent/5 to-transparent">
                 <i className="fas fa-code text-accent text-2xl mb-3 block"></i>
-                <p className="text-xs text-secondary mb-4 leading-relaxed">Mulai integrasikan PuruBoy API ke proyek kamu sekarang. Gratis, tanpa auth.</p>
+                <p className="text-xs text-secondary mb-4 leading-relaxed">Mulai integrasikan Tiyanz API ke proyek kamu sekarang. Gratis, tanpa auth.</p>
                 <Link href="/docs" className="inline-flex items-center gap-2 bg-accent text-white text-sm font-bold px-6 py-3 rounded-xl shadow-lg shadow-accent/25 hover:bg-accent-hover transition-all active:scale-95">
                     <i className="fas fa-rocket text-sm"></i>
                     Mulai Sekarang

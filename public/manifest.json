@@ -1,6 +1,6 @@
 {
-  "name": "PuruBoy API",
-  "short_name": "PuruBoy API",
+  "name": "Tiyanz API",
+  "short_name": "Tiyanz API",
   "description": "Platform REST API gratis untuk developer Indonesia dengan fitur AI, Downloader, Anime, dan Tools.",
   "start_url": "/",
   "display": "standalone",

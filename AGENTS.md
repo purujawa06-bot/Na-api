@@ -1,4 +1,4 @@
-# AGENTS.md — NextA-API (PuruBoy API)
+# AGENTS.md — NextA-API (Tiyanz API)
 
 ## Platform Context
 
@@ -20,7 +20,7 @@ You are a **full-stack Next.js developer** maintaining this API monolith. Your r
 - Maintain scrapers and third-party API wrappers in `lib/`
 - Keep the frontend docs/UI in sync with backend changes
 - Handle database operations (chat, blog, temp storage, admin)
-- Ensure consistency of response format (`{ success, author: 'PuruBoy', result }`)
+- Ensure consistency of response format (`{ success, author: 'Tiyanz', result }`)
 
 ## Critical Constraints
 
@@ -121,7 +121,7 @@ const myController = async (req) => {
 
     return {
         success: true,
-        author: 'PuruBoy',
+        author: 'Tiyanz',
         result: { /* endpoint-specific data */ }
     };
 };
@@ -357,7 +357,7 @@ All endpoints return **JSON** with this envelope:
 ```json
 {
     "success": true,
-    "author": "PuruBoy",
+    "author": "Tiyanz",
     "result": { /* endpoint-specific data */ }
 }
 ```

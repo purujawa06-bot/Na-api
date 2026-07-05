@@ -1,4 +1,4 @@
-# NextA-API (PuruBoy API)
+# NextA-API (Tiyanz API)
 
 ## Overview
 
@@ -50,7 +50,7 @@ All API endpoints return consistent JSON structure:
 ```json
 {
   "success": true,
-  "author": "PuruBoy",
+  "author": "Tiyanz",
   "result": { ... }
 }
 ```
