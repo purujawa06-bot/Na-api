@@ -12,7 +12,7 @@ export async function POST(req) {
         if (!prompt) {
             return NextResponse.json({
                 success: false,
-                author: 'PuruBoy',
+                author: 'Tiyanz',
                 message: "Parameter 'prompt' wajib diisi."
             }, { status: 400 });
         }
@@ -25,7 +25,7 @@ export async function POST(req) {
 
         return NextResponse.json({ 
             success: false, 
-            author: 'PuruBoy',
+            author: 'Tiyanz',
             message: error.message,
             error: error.message 
         }, { status: 500 });

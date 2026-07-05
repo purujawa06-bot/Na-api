@@ -23,7 +23,7 @@ const Navbar = () => {
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg overflow-hidden border border-white/10 relative">
                         <Image src="/favicon.jpg" alt="Logo" width={40} height={40} className="w-full h-full object-cover" />
                     </div>
-                    <span className="font-black text-white tracking-tighter text-lg">PuruBoy API</span>
+                    <span className="font-black text-white tracking-tighter text-lg">Tiyanz API</span>
                 </div>
 
                 <button 
@@ -66,7 +66,7 @@ const Navbar = () => {
 
                     <div className="mt-auto pt-6 border-t border-default">
                         <div className="p-4 rounded-2xl bg-default/50 border border-white/5">
-                            <p className="text-xs text-muted text-center font-medium">PuruBoy API &copy; {new Date().getFullYear()}</p>
+                            <p className="text-xs text-muted text-center font-medium">Tiyanz API &copy; {new Date().getFullYear()}</p>
                         </div>
                     </div>
                 </div>

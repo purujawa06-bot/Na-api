@@ -67,7 +67,7 @@ export async function POST(req) {
                         output: downloadLink,
                         original: url,
                         type: 'audio/mp3',
-                        author: 'PuruBoy'
+                        author: 'Tiyanz'
                     }, 30);
                     await send(`[true] ${origin}/api/temp/${dbId}`);
                 } else {

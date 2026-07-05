@@ -55,7 +55,7 @@ export async function POST(req) {
                 const dbId = await tempService.save({
                     output: origin + proxyPath,
                     original: url,
-                    author: 'PuruBoy'
+                    author: 'Tiyanz'
                 }, 30);
 
                 await send(`[true] ${origin}/api/temp/${dbId}`);

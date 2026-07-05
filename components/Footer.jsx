@@ -93,7 +93,7 @@ export default function Footer() {
             </div>
 
             <div className="text-center">
-                <p className="text-muted text-[10px] uppercase tracking-[0.4em] font-black opacity-40">PuruBoy API &copy; {new Date().getFullYear()} • Crafted for Excellence</p>
+                <p className="text-muted text-[10px] uppercase tracking-[0.4em] font-black opacity-40">Tiyanz API &copy; {new Date().getFullYear()} • Crafted for Excellence</p>
             </div>
         </footer>
     );

@@ -60,7 +60,7 @@ export async function POST(req) {
                         original: url,
                         filename: result.filename,
                         type: 'video/mp4',
-                        author: 'PuruBoy'
+                        author: 'Tiyanz'
                     }, 30);
 
                     await send(`[true] ${origin}/api/temp/${dbId}`);

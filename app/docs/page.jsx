@@ -3,14 +3,14 @@ import { getDocsSpec } from '../../lib/docsService';
 import DocsClient from '../../components/DocsClient';
 
 export const metadata = {
-    title: 'Dokumentasi Lengkap | PuruBoy API',
-    description: 'Jelajahi dan coba langsung seluruh endpoint REST API PuruBoy. Dokumentasi interaktif untuk fitur AI (DeepSeek, Gemini, Flux), Downloader (TikTok, YouTube, IG), Anime Streaming, Search, dan Tools lengkap dengan Try It Out!',
-    keywords: ['Dokumentasi API PuruBoy', 'API Docs Indonesia', 'REST API Documentation', 'PuruBoy Endpoints', 'Cara Pakai PuruBoy API', 'API AI Documentation', 'Try API Online'],
+    title: 'Dokumentasi Lengkap | Tiyanz API',
+    description: 'Jelajahi dan coba langsung seluruh endpoint REST API Tiyanz. Dokumentasi interaktif untuk fitur AI (DeepSeek, Gemini, Flux), Downloader (TikTok, YouTube, IG), Anime Streaming, Search, dan Tools lengkap dengan Try It Out!',
+    keywords: ['Dokumentasi API Tiyanz', 'API Docs Indonesia', 'REST API Documentation', 'Tiyanz Endpoints', 'Cara Pakai Tiyanz API', 'API AI Documentation', 'Try API Online'],
     openGraph: {
-        title: 'Dokumentasi API - PuruBoy API',
-        description: 'Dokumentasi interaktif lengkap endpoint REST API PuruBoy. Coba langsung dari browser!',
+        title: 'Dokumentasi API - Tiyanz API',
+        description: 'Dokumentasi interaktif lengkap endpoint REST API Tiyanz. Coba langsung dari browser!',
         url: 'https://puruboy-api.vercel.app/docs',
-        siteName: 'PuruBoy API',
+        siteName: 'Tiyanz API',
         type: 'website',
     },
 };

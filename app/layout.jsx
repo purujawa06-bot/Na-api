@@ -20,22 +20,22 @@ export const viewport = {
 export const metadata = {
   metadataBase: new URL('https://puruboy-api.vercel.app'),
   title: {
-    default: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
-    template: '%s | PuruBoy API'
+    default: 'Tiyanz API - Platform REST API Gratis untuk Developer Indonesia',
+    template: '%s | Tiyanz API'
   },
-  description: 'PuruBoy API adalah platform REST API gratis untuk developer Indonesia. Nikmati layanan AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools lengkap. Cepat, stabil, dan mudah diintegrasikan.',
-  keywords: ['PuruBoy API', 'REST API Gratis', 'API Indonesia', 'API AI Gratis', 'TikTok Downloader API', 'YouTube API Gratis', 'Anime Streaming API', 'Developer Tools', 'PuruBoy', 'API Publik Indonesia', 'Web Service API', 'Free REST API Indonesia'],
-  authors: [{ name: 'PuruBoy', url: 'https://github.com/purujawa06-bot' }],
-  creator: 'PuruBoy',
-  publisher: 'PuruBoy',
+  description: 'Tiyanz API adalah platform REST API gratis untuk developer Indonesia. Nikmati layanan AI Chat (DeepSeek, GPT, Gemini), Downloader (TikTok, YouTube, IG), Anime Streaming, dan Tools lengkap. Cepat, stabil, dan mudah diintegrasikan.',
+  keywords: ['Tiyanz API', 'REST API Gratis', 'API Indonesia', 'API AI Gratis', 'TikTok Downloader API', 'YouTube API Gratis', 'Anime Streaming API', 'Developer Tools', 'Tiyanz', 'API Publik Indonesia', 'Web Service API', 'Free REST API Indonesia'],
+  authors: [{ name: 'Tiyanz', url: 'https://github.com/purujawa06-bot' }],
+  creator: 'Tiyanz',
+  publisher: 'Tiyanz',
   alternates: {
     canonical: 'https://puruboy-api.vercel.app',
   },
   openGraph: {
-    title: 'PuruBoy API - Platform REST API Gratis & Modular',
+    title: 'Tiyanz API - Platform REST API Gratis & Modular',
     description: 'Akses ratusan endpoint API gratis untuk AI, Downloader, Anime, dan Tools. Dokumentasi lengkap, respons cepat, dan gratis untuk semua developer Indonesia.',
     url: 'https://puruboy-api.vercel.app',
-    siteName: 'PuruBoy API',
+    siteName: 'Tiyanz API',
     locale: 'id_ID',
     type: 'website',
     images: [
@@ -43,13 +43,13 @@ export const metadata = {
         url: 'https://puruboy-api.vercel.app/og',
         width: 1200,
         height: 630,
-        alt: 'PuruBoy API - Platform REST API Gratis Indonesia',
+        alt: 'Tiyanz API - Platform REST API Gratis Indonesia',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'PuruBoy API - Platform REST API & Tools AI Gratis',
+    title: 'Tiyanz API - Platform REST API & Tools AI Gratis',
     description: 'Platform REST API gratis untuk developer Indonesia dengan fitur AI, Downloader, Anime, dan Tools.',
     creator: '@puruboy',
     images: ['https://puruboy-api.vercel.app/og'],

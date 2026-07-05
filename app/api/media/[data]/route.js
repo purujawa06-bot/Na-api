@@ -49,7 +49,7 @@ export async function GET(req, { params }) {
             headers.set('Content-Length', response.headers['content-length']);
         }
         headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-        headers.set('X-Proxy-By', 'PuruBoy-Secure-Media');
+        headers.set('X-Proxy-By', 'Tiyanz-Secure-Media');
 
         return new NextResponse(response.data, { headers });
 

@@ -6,14 +6,14 @@ export default function JsonLd() {
     '@graph': [
       {
         '@type': 'WebApplication',
-        name: 'PuruBoy API',
+        name: 'Tiyanz API',
         url: 'https://puruboy-api.vercel.app',
         description: 'Platform REST API gratis untuk developer dengan fitur AI, Downloader, Anime Streaming, dan Tools.',
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'All',
         author: {
           '@type': 'Person',
-          name: 'PuruBoy',
+          name: 'Tiyanz',
           url: 'https://github.com/purujawa06-bot',
         },
         offers: {
@@ -25,18 +25,18 @@ export default function JsonLd() {
       },
       {
         '@type': 'WebSite',
-        name: 'PuruBoy API',
+        name: 'Tiyanz API',
         url: 'https://puruboy-api.vercel.app',
         description: 'Platform API modular terbaik dengan integrasi AI, Downloader, dan Anime Streaming. Gratis, cepat, dan mudah digunakan.',
         about: {
           '@type': 'Thing',
-          name: 'PuruBoy API – Solusi API Gratis untuk Developer Indonesia',
-          description: 'PuruBoy API adalah platform REST API gratis yang menyediakan berbagai layanan untuk developer, termasuk AI Chat, Text to Image, Downloader multimedia, dan tools pengembangan web.'
+          name: 'Tiyanz API – Solusi API Gratis untuk Developer Indonesia',
+          description: 'Tiyanz API adalah platform REST API gratis yang menyediakan berbagai layanan untuk developer, termasuk AI Chat, Text to Image, Downloader multimedia, dan tools pengembangan web.'
         },
         inLanguage: ['id', 'en'],
         publisher: {
           '@type': 'Person',
-          name: 'PuruBoy',
+          name: 'Tiyanz',
         },
         potentialAction: {
           '@type': 'SearchAction',
@@ -46,12 +46,12 @@ export default function JsonLd() {
       },
       {
         '@type': 'CollectionPage',
-        name: 'Dokumentasi API – PuruBoy API',
-        description: 'Dokumentasi lengkap endpoint REST API PuruBoy: AI, Downloader, Anime, Tools, dan Search.',
+        name: 'Dokumentasi API – Tiyanz API',
+        description: 'Dokumentasi lengkap endpoint REST API Tiyanz: AI, Downloader, Anime, Tools, dan Search.',
         url: 'https://puruboy-api.vercel.app/docs',
         isPartOf: {
           '@type': 'WebSite',
-          name: 'PuruBoy API',
+          name: 'Tiyanz API',
           url: 'https://puruboy-api.vercel.app',
         },
       },
