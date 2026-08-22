@@ -1,13 +1,13 @@
 {
   "name": "NextA-API",
   "version": "1.0.0",
-  "description": "Proyek API Publik modular dengan fitur Fast Update via AI - Next.js Version.",
+  "description": "Proyek API Publik modular - Next.js Version.",
   "scripts": {
-    "dev": "NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next dev -p 8080",
-    "build": "NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next build",
-    "build:full": "node scripts/generate-docs.js && NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next build",
+    "dev": "next dev -p 8080",
+    "build": "next build",
+    "build:full": "node scripts/generate-docs.js && next build",
     "vercel:build": "node scripts/generate-docs.js && next build",
-    "start": "NODE_PATH=/root/.picoclaw/workspace/scraper-collection/node_modules next start",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {

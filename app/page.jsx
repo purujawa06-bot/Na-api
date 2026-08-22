@@ -125,13 +125,6 @@ const staticContributors = [
         html_url: 'https://github.com/purujawa06-bot',
         avatar_url: 'https://avatars.githubusercontent.com/u/7004559855?v=4',
         contributions: 999
-    },
-    {
-        id: 0,
-        login: 'picoclaw 🦞',
-        html_url: 'https://picoclaw.io',
-        avatar_url: 'https://picoclaw.io/icon.png',
-        contributions: 999
     }
 ];
 
