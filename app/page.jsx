@@ -172,7 +172,6 @@ export default async function HomePage() {
                         { href: '/chat', icon: 'fa-comments', label: 'Chat Room', desc: 'Ngobrol realtime', color: 'from-blue-600 to-indigo-600' },
                         { href: '/blog', icon: 'fa-newspaper', label: 'Blog', desc: 'Update & berita', color: 'from-purple-600 to-violet-600' },
                         { href: '/listpage', icon: 'fa-file-alt', label: 'List Page', desc: 'Daftar custom page', color: 'from-emerald-500 to-teal-600' },
-                        { href: '/fastupdate', icon: 'fa-bolt', label: 'Fast Update', desc: 'Deploy via AI', color: 'from-amber-500 to-orange-500' },
                     ].map(item => (
                         <Link key={item.href} href={item.href} className="native-card p-4 flex flex-col gap-2 hover:border-accent/40 transition-all active:scale-95 group">
                             <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>

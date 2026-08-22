@@ -3,7 +3,6 @@ Allow: /
 Disallow: /api/
 Disallow: /admin
 Disallow: /admin.html
-Disallow: /fastupdate.html
 
 # Sitemap
 Sitemap: https://puruboy-api.vercel.app/sitemap.xml

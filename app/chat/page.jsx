@@ -210,20 +210,15 @@ export default function ChatPage() {
         }
         setDeviceId(did);
 
-        // Fetch Stickers Automatically
-        fetch('/api/stickers')
+        // Sticker list dari manifest statis public/sticker/list.json
+        fetch('/sticker/list.json')
             .then(res => res.json())
             .then(data => {
                 if(Array.isArray(data) && data.length > 0) {
                     setStickerList(data);
-                } else {
-                    // Fallback manual if API empty
-                    setStickerList(Array.from({length: 15}, (_, i) => `${i+1}.jpg`));
                 }
             })
-            .catch(() => {
-                setStickerList(Array.from({length: 15}, (_, i) => `${i+1}.jpg`));
-            });
+            .catch(() => {});
 
     }, []);
 

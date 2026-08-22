@@ -1,24 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Nonaktifkan strict mode untuk menghindari double-invocation pada useEffect di dev (opsional)
-  serverComponentsExternalPackages: ['ffmpeg-static'],
-  experimental: {
-    serverComponentsExternalPackages: ['ffmpeg-static'],
-    // Fallback: beberapa versi Next.js membutuhkan outputFileTracingIncludes di dalam experimental
-    outputFileTracingIncludes: {
-      '/api/chess/stockfish': ['./lib/stockfish/**/*'],
-      'app/api/chess/stockfish/route': ['./lib/stockfish/**/*'],
-    },
-  },
-  // Pastikan stockfish.wasm dan stockfish.js ikut tercopy saat deploy (top-level, Next.js 14+)
-  outputFileTracingIncludes: {
-    // URL path pattern
-    '/api/chess/stockfish': ['./lib/stockfish/**/*'],
-    // File path pattern (untuk beberapa versi Next.js)
-    'app/api/chess/stockfish/route': ['./lib/stockfish/**/*'],
-    // Wildcard pattern
-    '/api/**': ['./lib/stockfish/**/*'],
-  },
   images: {
     remotePatterns: [
       {
@@ -71,19 +53,6 @@ const nextConfig = {
       {
         source: '/admin',
         destination: '/admin.html',
-      },
-      {
-        source: '/fastupdate',
-        destination: '/fastupdate.html',
-      },
-      // Mapping endpoint lama agar kompatibel dengan frontend
-      {
-        source: '/download',
-        destination: '/api/fastupdate/download',
-      },
-      {
-        source: '/update',
-        destination: '/api/fastupdate/update',
       },
       // Fix Favicon untuk Search Engine (Map .ico request ke .jpg)
       {

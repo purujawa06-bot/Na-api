@@ -9,7 +9,6 @@ const staticPages = [
   { loc: '/blog', changefreq: 'daily', priority: 0.8 },
   { loc: '/chat', changefreq: 'always', priority: 0.7 },
   { loc: '/listpage', changefreq: 'weekly', priority: 0.6 },
-  { loc: '/fastupdate', changefreq: 'monthly', priority: 0.5 },
 ];
 
 export async function GET() {
@@ -24,14 +23,8 @@ export async function GET() {
         priority: 0.7,
       }));
     } catch (e) {
-      // Fallback: gunakan kategori utama
-      apiCategories = [
-        { loc: '/docs#ai', changefreq: 'weekly', priority: 0.7 },
-        { loc: '/docs#downloader', changefreq: 'weekly', priority: 0.7 },
-        { loc: '/docs#anime', changefreq: 'weekly', priority: 0.7 },
-        { loc: '/docs#search', changefreq: 'weekly', priority: 0.7 },
-        { loc: '/docs#tools', changefreq: 'weekly', priority: 0.7 },
-      ];
+      // Fallback: tanpa kategori
+      apiCategories = [];
     }
 
     const allPages = [...staticPages, ...apiCategories];
