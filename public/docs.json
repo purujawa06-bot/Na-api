@@ -3,11 +3,11 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (DeepSeek & Gemini) tanpa SDK resmi.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, dan reasoning_content\n              untuk model reasoning. Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom.",
+      "description": "Bridge OpenAI Chat Completions -> provider web (DeepSeek & Gemini) tanpa SDK resmi.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, dan reasoning_content\r              untuk model reasoning. Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom.",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-chat',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model reasoning\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-reasoner',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nGemini via web (butuh Brave CDP + login Google)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'gemini-flash',\n         stream: true,\n         messages: [{ role: 'user', content: 'Siapa penemu lampu pijar?' }]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });",
+      "example": "Kembalikan jawaban langsung (non-streaming)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'deepseek-chat',\r         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model reasoning\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'deepseek-reasoner',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nGemini via web (butuh Brave CDP + login Google)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'gemini-flash',\r         stream: true,\r         messages: [{ role: 'user', content: 'Siapa penemu lampu pijar?' }]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });",
       "params": [
         {
           "name": "model",
@@ -46,6 +46,40 @@
           "in": "body",
           "type": "boolean",
           "description": "true untuk streaming SSE (default false).",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "downloader": [
+    {
+      "title": "TikTok Downloader",
+      "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
+      "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\n              beserta metadata (author, avatar, caption) dan link MP3.\n              Hanya menerima URL HTTPS (http ditolak).",
+      "method": "GET",
+      "path": "/api/downloader/tiktok?url=https://www.tiktok.com/...&locale=id",
+      "responseType": "json",
+      "example": "GET\n fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\n     .then(res => res.json())\n     .then(console.log);\n\nPOST\n fetch('https://puruboy-api.vercel.app/api/downloader/tiktok', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         url: 'https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534'\n     })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL video TikTok (wajib, https only).",
+          "required": false
+        },
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Bahasa halaman ssstik (default id).",
+          "required": false
+        },
+        {
+          "name": "url",
+          "in": "body",
+          "type": "string",
+          "description": "URL video TikTok untuk method POST.",
           "required": false
         }
       ]
