@@ -107,7 +107,8 @@ export async function POST(req) {
     return NextResponse.json({ error: { message: 'Invalid JSON body', type: 'invalid_request_error' } }, { status: 400 });
   }
 
-  let { model = 'deepseek-chat', messages, stream = false } = body;
+  let { model = 'deepseek-chat', messages } = body;
+  const stream = body.stream === true || body.stream === 'true' || body.stream === 1 || body.stream === '1';
 
   if (!Array.isArray(messages) || !messages.length) {
     return NextResponse.json(
