@@ -78,6 +78,7 @@ import { generateGemini, MODELS as GEMINI_MODELS } from '../../../../lib/gemini-
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const CREATED = Math.floor(Date.now() / 1000);
 
