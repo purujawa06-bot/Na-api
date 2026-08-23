@@ -12,7 +12,7 @@ API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI
 - **Text Processing**: Translapp (Translate, Paraphrase, Summarize)
 
 ### 📥 Downloader
-- YouTube (Video/Audio), TikTok (No WM), Instagram, Facebook, X/Twitter, SoundCloud, Spotify
+- YouTube (Video/Audio), TikTok (No WM — `/api/downloader/tiktok`, via ssstik.io), Instagram, Facebook, X/Twitter, SoundCloud, Spotify
 
 ### 🎬 Anime
 - Oploverz Streaming, MyAnimeList (Search, Popular, Ongoing, Genre), Samehadaku
@@ -46,7 +46,7 @@ API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI
 
 - **Next.js 14** (App Router) + **Tailwind CSS**
 - **PostgreSQL** (via `pg`)
-- **Dokumentasi auto-generated** dari JSDoc Controller (`@title`, `@summary`, `@description`, `@method`, `@path`, `@param`, `@example`, `@choice`)
+- **Dokumentasi auto-generated** dari JSDoc di route handler (`@title`, `@summary`, `@description`, `@method`, `@path`, `@param`, `@example`, `@choice`)
 - **Axios & Fetch**, **IndexedDB** (chatroom), **ID-based Sticker System**
 
 ## ⚙️ Prasyarat
@@ -81,21 +81,20 @@ Buka **http://localhost:3000**.
 
 ```
 app/               → Halaman & API Routes
-  api/             → Endpoint REST (Route Handlers)
+  api/             → Endpoint REST (Route Handlers + JSDoc sumber docs)
   docs/            → Dokumentasi interaktif
   chat/            → Chatroom komunitas
 components/        → React UI komponen
 lib/
-  controllers/     → Logika endpoint + JSDoc (sumber otomatis docs)
-  deepseek-v4.js   → Wrapper DeepSeek AI & lainnya
-public/            → Aset statis
+  *.js             → Service/logika endpoint (ssstik.js, gemini-web.js, chatService.js, dll.)
+public/            → Aset statis + docs.json (hasil generate)
 ```
 
 ### Cara nambah endpoint baru
 
-1. Buat `lib/controllers/<kategori>/<nama>.js` dengan JSDoc.
-2. Buat `app/api/<kategori>/<nama>/route.js` → import controller + kirim response.
-3. Docs akan tergenerate otomatis (tinggal rebuild).
+1. Buat service/logika di `lib/<nama>.js`.
+2. Buat `app/api/<kategori>/<nama>/route.js` → tulis JSDoc (`@title`, `@summary`, `@description`, `@method`, `@path`, `@param`, `@example`) lalu import service & kirim response.
+3. Generate docs: `node scripts/rebuild-docs.js` (menghasilkan `public/docs.json`).
 
 ## 🚀 Deployment
 
