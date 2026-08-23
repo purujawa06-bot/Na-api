@@ -127,5 +127,8 @@ scripts/.l5adhe-*.json
 # ssstik sniff capture
 scripts/.ssstik-sniff.json
 
+# dramabox sniff capture
+scripts/.dramabox-sniff.json
+
 .vercel
 .env*
