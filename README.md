@@ -13,6 +13,7 @@ API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI
 
 ### 📥 Downloader
 - YouTube (Video/Audio), TikTok (No WM — `/api/downloader/tiktok`, via ssstik.io), Instagram, Facebook, X/Twitter, SoundCloud, Spotify
+- DramaBox (katalog drama pendek — `/api/dramabox/home`, tanpa browser, via dramabox.com)
 
 ### 🎬 Anime
 - Oploverz Streaming, MyAnimeList (Search, Popular, Ongoing, Genre), Samehadaku

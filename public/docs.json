@@ -71,6 +71,60 @@
       ]
     }
   ],
+  "dramabox": [
+    {
+      "title": "DramaBox Home",
+      "summary": "Daftar drama pendek populer dari dramabox.com.",
+      "description": "Mengambil data halaman beranda dramabox.com (drama unggulan &\n              seksi rekomendasi) tanpa menjalankan browser — cukup HTTPS\n              server-side. Parameter locale opsional (default: \"in\").",
+      "method": "GET",
+      "path": "/api/dramabox/home",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/home')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Kode bahasa konten (default: \"in\").",
+          "required": false,
+          "choices": [
+            {
+              "value": "in",
+              "label": "Indonesia"
+            },
+            {
+              "value": "en",
+              "label": "English"
+            },
+            {
+              "value": "es",
+              "label": "Español"
+            },
+            {
+              "value": "ko",
+              "label": "한국어"
+            },
+            {
+              "value": "zh",
+              "label": "中文"
+            },
+            {
+              "value": "ja",
+              "label": "日本語"
+            },
+            {
+              "value": "th",
+              "label": "ไทย"
+            },
+            {
+              "value": "vi",
+              "label": "Tiếng Việt"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "models": [
     {
       "title": "Daftar Model AI",
