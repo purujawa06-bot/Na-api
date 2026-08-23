@@ -1,7 +1,7 @@
 /**
- * @title Daftar Model DeepSeek
+ * @title Daftar Model AI
  * @summary List model AI yang tersedia (format OpenAI /v1/models).
- * @description Mengembalikan daftar model chat.deepseek.com yang bisa dipakai di endpoint
+ * @description Mengembalikan daftar model yang bisa dipakai di endpoint
  *              /api/chat/completions, dalam format kompatibel OpenAI.
  * @method GET
  * @path /api/models
@@ -12,6 +12,7 @@
  *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
+import { MODELS as GEMINI_MODELS } from '../../../lib/gemini-web.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,6 +21,8 @@ const CREATED = 1704067200; // 2024-01-01
 const MODELS = [
   { id: 'deepseek-chat', thinking: false, desc: 'DeepSeek V3 via web (cepat)' },
   { id: 'deepseek-reasoner', thinking: true, desc: 'DeepSeek R1 via web (reasoning)' },
+  { id: 'gemini-flash', thinking: false, desc: 'Gemini 3.6 Flash via gemini.google.com (serbaguna)' },
+  { id: 'gemini-flash-lite', thinking: false, desc: 'Gemini 3.5 Flash-Lite via gemini.google.com (tercepat)' },
 ];
 
 export async function GET() {
@@ -29,9 +32,10 @@ export async function GET() {
       id: m.id,
       object: 'model',
       created: CREATED,
-      owned_by: 'deepseek-web',
+      owned_by: m.id.startsWith('gemini') ? 'gemini-web' : 'deepseek-web',
       thinking: m.thinking,
       description: m.desc,
     })),
   });
 }
+

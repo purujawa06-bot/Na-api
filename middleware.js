@@ -10,6 +10,8 @@
  * Runtime: Edge (otomatis oleh Next.js untuk middleware)
  */
 
+import { NextResponse } from 'next/server';
+
 // Rate limiter sederhana (in-memory, reset tiap deploy)
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 menit
@@ -109,19 +111,38 @@ export async function middleware(request) {
         return;
     }
 
-    // Clone request untuk dibaca bodynya
+    // Baca body LENGKAP lalu bangun Request baru: meng-forward request asli
+    // (streaming body) dari middleware merusak/terpotong body di runtime Next dev.
     let requestBody = null;
+    let forwardRequest = request;
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
         try {
             const cloned = request.clone();
-            requestBody = await cloned.json().catch(() => null);
+            const rawText = await cloned.text();
+            try { requestBody = JSON.parse(rawText); } catch { requestBody = null; }
+            if (rawText) {
+                forwardRequest = new Request(request.url, {
+                    method: request.method,
+                    headers: request.headers,
+                    body: rawText,
+                    signal: request.signal,
+                });
+            }
         } catch (e) {
-            // ignore
+            // ignore — tetap forward request asli
         }
     }
 
-    // Lanjutkan request ke handler
-    const response = await fetch(request);
+    // Lanjutkan request ke handler.
+    // fetch-forward dari middleware kadang gagal di runtime Next dev (fetch failed).
+    // Jangan sampai memblokir API: kalau gagal, biarkan request jalan normal.
+    let response;
+    try {
+        response = await fetch(forwardRequest);
+    } catch (e) {
+        console.error('[Middleware] fetch-forward gagal, lanjut tanpa middleware:', e.message);
+        return NextResponse.next();
+    }
 
     // Jika response OK (2xx), tidak perlu report
     if (response.status >= 200 && response.status < 300) {

@@ -477,25 +477,27 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
 
                                                             <div className="relative">
                                                                 {param.choices ? (
-                                                                    <div className={`flex gap-3 p-1 bg-input rounded-xl border ${missingParams.includes(param.name) ? 'border-red-500' : 'border-default'}`}>
-                                                                        {param.choices.map(choice => {
-                                                                            const isSelected = formValues[param.name] !== undefined && formValues[param.name] === choice.value;
-                                                                            return (
-                                                                                <button
-                                                                                    key={choice.value}
-                                                                                    type="button"
-                                                                                    name={param.name}
-                                                                                    onClick={() => handleInputChange({ target: { name: param.name, value: choice.value } })}
-                                                                                    className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all ${
-                                                                                        isSelected
-                                                                                            ? 'bg-accent text-white shadow-lg shadow-accent/20'
-                                                                                            : 'text-muted hover:text-white hover:bg-white/5'
-                                                                                    }`}
-                                                                                >
+                                                                    <div className="relative">
+                                                                        <select
+                                                                            name={param.name}
+                                                                            value={formValues[param.name] || ''}
+                                                                            onChange={handleInputChange}
+                                                                            className={`w-full appearance-none bg-input border rounded-xl pl-3 pr-9 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 transition-all ${
+                                                                                missingParams.includes(param.name)
+                                                                                    ? 'border-red-500 ring-red-500/50 focus:border-red-400'
+                                                                                    : 'border-default focus:border-accent focus:ring-accent'
+                                                                            }`}
+                                                                        >
+                                                                            <option value="" disabled>
+                                                                                {`Pilih ${param.name}...`}
+                                                                            </option>
+                                                                            {param.choices.map(choice => (
+                                                                                <option key={choice.value} value={choice.value}>
                                                                                     {choice.label}
-                                                                                </button>
-                                                                            );
-                                                                        })}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-muted text-xs pointer-events-none"></i>
                                                                     </div>
                                                                 ) : (
                                                                 <>
