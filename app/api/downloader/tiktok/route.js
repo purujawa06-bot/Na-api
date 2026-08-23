@@ -3,28 +3,16 @@
  * @summary Download video TikTok tanpa watermark (via ssstik.io).
  * @description Endpoint untuk mengambil link download video TikTok tanpa watermark
  *              beserta metadata (author, avatar, caption) dan link MP3.
- *              Hanya menerima URL HTTPS (http ditolak).
+ *              Hanya menerima URL HTTPS (http ditolak). Juga mendukung method
+ *              POST dengan body JSON {"url": "..."}.
  * @method GET
- * @path /api/downloader/tiktok?url=https://www.tiktok.com/...&locale=id
- * @method POST
  * @path /api/downloader/tiktok
- * @param {string} [query.url] - URL video TikTok (wajib, https only).
- * @param {string} [query.locale] - Bahasa halaman ssstik (default id).
- * @param {string} [body.url] - URL video TikTok untuk method POST.
+ * @param {string} query.url - URL video TikTok (wajib, https only).
  * @response json
- * @example GET
+ * @example
  * fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')
  *     .then(res => res.json())
  *     .then(console.log);
- *
- * @example POST
- * fetch('https://puruboy-api.vercel.app/api/downloader/tiktok', {
- *     method: 'POST',
- *     headers: { 'Content-Type': 'application/json' },
- *     body: JSON.stringify({
- *         url: 'https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534'
- *     })
- * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { downloadTiktok } from '../../../../lib/ssstik.js';

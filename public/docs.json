@@ -55,32 +55,18 @@
     {
       "title": "TikTok Downloader",
       "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
-      "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\n              beserta metadata (author, avatar, caption) dan link MP3.\n              Hanya menerima URL HTTPS (http ditolak).",
+      "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\n              beserta metadata (author, avatar, caption) dan link MP3.\n              Hanya menerima URL HTTPS (http ditolak). Juga mendukung method\n              POST dengan body JSON {\"url\": \"...\"}.",
       "method": "GET",
-      "path": "/api/downloader/tiktok?url=https://www.tiktok.com/...&locale=id",
+      "path": "/api/downloader/tiktok",
       "responseType": "json",
-      "example": "GET\n fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\n     .then(res => res.json())\n     .then(console.log);\n\nPOST\n fetch('https://puruboy-api.vercel.app/api/downloader/tiktok', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         url: 'https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534'\n     })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
           "in": "query",
           "type": "string",
           "description": "URL video TikTok (wajib, https only).",
-          "required": false
-        },
-        {
-          "name": "locale",
-          "in": "query",
-          "type": "string",
-          "description": "Bahasa halaman ssstik (default id).",
-          "required": false
-        },
-        {
-          "name": "url",
-          "in": "body",
-          "type": "string",
-          "description": "URL video TikTok untuk method POST.",
-          "required": false
+          "required": true
         }
       ]
     }
