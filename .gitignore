@@ -123,3 +123,6 @@ scripts/.gemini-screen.png
 
 # gemini L5adhe capture (berisi payload sesi)
 scripts/.l5adhe-*.json
+
+.vercel
+.env*
