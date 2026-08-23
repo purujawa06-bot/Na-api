@@ -73,6 +73,63 @@
   ],
   "dramabox": [
     {
+      "title": "DramaBox Category",
+      "summary": "Daftar drama per kategori + daftar semua kategori dramabox.com.",
+      "description": "Tanpa id: mengembalikan daftar semua kategori. Dengan id:\n              mengembalikan daftar drama dalam kategori tersebut (12 per\n              halaman) beserta pagination. Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/dramabox/category",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/category?id=447')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "id",
+          "in": "query",
+          "type": "string",
+          "description": "ID kategori (typeTwoId, mis. 447 = Romansa).",
+          "required": false
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "type": "string",
+          "description": "Nomor halaman, mulai dari 1 (default: 1).",
+          "required": false
+        },
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Kode bahasa konten (default: \"in\").",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "DramaBox Detail",
+      "summary": "Detail drama pendek + daftar episode dari dramabox.com.",
+      "description": "Mengambil info lengkap sebuah drama (sinopsis, genre, pemain,\n              episode, drama terkait, bahasa) tanpa menjalankan browser.\n              Episode gratis menyertakan video_url siap putar.",
+      "method": "GET",
+      "path": "/api/dramabox/detail",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/detail?id=41000105764')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "id",
+          "in": "query",
+          "type": "string",
+          "description": "ID drama (bookId) dari dramabox.com (wajib).",
+          "required": true
+        },
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Kode bahasa konten (default: \"in\").",
+          "required": false
+        }
+      ]
+    },
+    {
       "title": "DramaBox Home",
       "summary": "Daftar drama pendek populer dari dramabox.com.",
       "description": "Mengambil data halaman beranda dramabox.com (drama unggulan &\n              seksi rekomendasi) tanpa menjalankan browser — cukup HTTPS\n              server-side. Parameter locale opsional (default: \"in\").",
@@ -121,6 +178,70 @@
               "label": "Tiếng Việt"
             }
           ]
+        }
+      ]
+    },
+    {
+      "title": "DramaBox Search",
+      "summary": "Cari drama pendek di dramabox.com.",
+      "description": "Mencari drama berdasarkan kata kunci dengan pagination\n              (20 hasil per halaman) plus rekomendasi serupa. Tanpa browser.",
+      "method": "GET",
+      "path": "/api/dramabox/search",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/search?q=cinta')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian (wajib).",
+          "required": true
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "type": "string",
+          "description": "Nomor halaman, mulai dari 1 (default: 1).",
+          "required": false
+        },
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Kode bahasa konten (default: \"in\").",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "DramaBox Stream",
+      "summary": "Link video (mp4) episode drama dari dramabox.com.",
+      "description": "Mengambil URL video langsung sebuah episode drama berdasarkan\n              bookId + chapterId. Hanya episode gratis (unlock) yang tersedia;\n              episode berbayar akan ditolak. Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/dramabox/stream",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/stream?id=41000105764&chapter=578668219')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "id",
+          "in": "query",
+          "type": "string",
+          "description": "ID drama (bookId) dari dramabox.com (wajib).",
+          "required": true
+        },
+        {
+          "name": "chapter",
+          "in": "query",
+          "type": "string",
+          "description": "ID episode (chapterId) dari dramabox.com (wajib).",
+          "required": true
+        },
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Kode bahasa konten (default: \"in\").",
+          "required": false
         }
       ]
     }

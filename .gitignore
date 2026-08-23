@@ -129,6 +129,7 @@ scripts/.ssstik-sniff.json
 
 # dramabox sniff capture
 scripts/.dramabox-sniff.json
+scripts/.dramabox-flow-sniff.json
 
 .vercel
 .env*
