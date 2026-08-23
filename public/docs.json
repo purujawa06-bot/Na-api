@@ -1,0 +1,58 @@
+{
+  "chat": [
+    {
+      "title": "DeepSeek Chat (OpenAI Compatible)",
+      "summary": "Endpoint chat completions kompatibel OpenAI API via chat.deepseek.com.",
+      "description": "Bridge OpenAI Chat Completions -> web chat.deepseek.com (pure HTTP, anti-bot PoW otomatis).\n              Mendukung multi-turn (system/user/assistant), streaming SSE, dan reasoning_content\n              untuk model deepseek-reasoner. Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom.",
+      "method": "POST",
+      "path": "/api/chat/completions",
+      "responseType": "json",
+      "example": "Kembalikan jawaban langsung (non-streaming)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-chat',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model reasoner\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-reasoner',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });",
+      "params": [
+        {
+          "name": "model",
+          "in": "body",
+          "type": "string",
+          "description": "ID model (default deepseek-chat).",
+          "required": false,
+          "choices": [
+            {
+              "value": "deepseek-chat",
+              "label": "DeepSeek V3 cepat (tanpa thinking)"
+            },
+            {
+              "value": "deepseek-reasoner",
+              "label": "DeepSeek R1 dengan thinking/reasoning"
+            }
+          ]
+        },
+        {
+          "name": "messages",
+          "in": "body",
+          "type": "array",
+          "description": "Array pesan format OpenAI [{role: \"system\"|\"user\"|\"assistant\", content: string}].",
+          "required": true
+        },
+        {
+          "name": "stream",
+          "in": "body",
+          "type": "boolean",
+          "description": "true untuk streaming SSE (default false).",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "models": [
+    {
+      "title": "Daftar Model DeepSeek",
+      "summary": "List model AI yang tersedia (format OpenAI /v1/models).",
+      "description": "Mengembalikan daftar model chat.deepseek.com yang bisa dipakai di endpoint\n              /api/chat/completions, dalam format kompatibel OpenAI.",
+      "method": "GET",
+      "path": "/api/models",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
+    }
+  ]
+}

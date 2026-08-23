@@ -111,3 +111,6 @@ memory/
 sessions/
 state/
 token.txt
+
+# capture sniffing berisi bearer token
+scripts/.deepseek-sniff.json

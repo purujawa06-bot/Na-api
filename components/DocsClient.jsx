@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import EndpointCard from './EndpointCard';
 import InfoModal from './InfoModal';
+import { collectExampleFields } from './docsPayload';
 
 const CATEGORY_ICONS = {
     ai: 'fa-robot',
@@ -296,16 +297,10 @@ export default function DocsClient({ apiSpec }) {
                         }
                     }
 
-                    const jsonMatch = ep.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
-                    if (jsonMatch) {
-                        const bodyStr = jsonMatch[1];
-                        try {
-                            bodyParams = JSON.parse(bodyStr);
-                        } catch (e) {
-                            try {
-                                bodyParams = new Function(`return ${bodyStr}`)();
-                            } catch(err) {}
-                        }
+                    // gabungkan semua blok body dari contoh agar payload lengkap
+                    const merged = collectExampleFields(ep.example);
+                    if (Object.keys(merged).length > 0) {
+                        bodyParams = merged;
                     }
                 }
 

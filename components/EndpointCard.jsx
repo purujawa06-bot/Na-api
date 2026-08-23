@@ -4,6 +4,7 @@ import Image from 'next/image';
 import MethodBadge from './MethodBadge';
 import CopyButton from './CopyButton';
 import InfoModal from './InfoModal';
+import { extractJsonBodies, parseBodyBlock } from './docsPayload';
 
 const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighlighted, onExpand, selectionMode, isSelected, onToggleSelect }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -15,6 +16,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
     const [formValues, setFormValues] = useState({});
     const [autoFillActive, setAutoFillActive] = useState(false);
     const [hasAutoFilled, setHasAutoFilled] = useState(false);
+    const [missingParams, setMissingParams] = useState([]);
     
     const formRef = useRef(null);
     const fullUrl = `${baseUrl}${endpoint.path}`;
@@ -38,48 +40,18 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
             return;
         }
         
-        // First click: fill form
+        // First click: fill form (gabungkan SEMUA body dari semua contoh agar payload lengkap)
         setAutoFillActive(true);
+        setMissingParams([]);
         try {
-            // Cari body JSON.stringify dari semua contoh yang digabung
-            const jsonMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)\s*\n?\s*\)/);
-            const altJsonMatch = !jsonMatch ? endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/) : null;
-            // Cari pattern fetch(url, { ... body: JSON.stringify(...) })
-            const fetchBodyMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)\s*\n?\s*\)/);
-            // Try curl format: -d '...'
-            const curlMatch = endpoint.example.match(/-d\s+'([\s\S]*?)'/m);
-            
-            let bodyStr = null;
-            
-            // Prioritaskan yang match dengan kurung tutup JSON.stringify
-            if (jsonMatch) {
-                bodyStr = jsonMatch[1];
-            } else if (altJsonMatch) {
-                bodyStr = altJsonMatch[1];
-            } else if (curlMatch) {
-                bodyStr = curlMatch[1].replace(/\\'/g, "'");
-            }
-            
-            if (bodyStr) {
-                let parsedBody = {};
+            // Semua blok JSON.stringify(...) dari semua contoh + format curl -d '...'
+            const bodyStrs = [
+                ...extractJsonBodies(endpoint.example),
+                ...[...endpoint.example.matchAll(/-d\s+'([\s\S]*?)'/g)].map((m) => m[1].replace(/\\'/g, "'")),
+            ];
 
-                // Parse JSON, handle trailing comma & unquoted keys
-                try {
-                    parsedBody = JSON.parse(bodyStr);
-                } catch (e) {
-                    try {
-                        // Wrap in parens so it's a valid expression
-                        parsedBody = new Function(`return (${bodyStr})`)();
-                    } catch (evalErr) {
-                        // Last resort: try to extract key-value pairs manually
-                        const kvRegex = /["']?(\w+)["']?\s*:\s*["']([^"']+)["']/g;
-                        let kvMatch;
-                        while ((kvMatch = kvRegex.exec(bodyStr)) !== null) {
-                            parsedBody[kvMatch[1]] = kvMatch[2];
-                        }
-                    }
-                }
-
+            for (const bodyStr of bodyStrs) {
+                const parsedBody = parseBodyBlock(bodyStr) || {};
                 const processedValues = {};
                 Object.keys(parsedBody).forEach(key => {
                     const val = parsedBody[key];
@@ -89,8 +61,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                         processedValues[key] = val;
                     }
                 });
-
-            setFormValues(prev => ({ ...prev, ...processedValues }));
+                setFormValues(prev => ({ ...prev, ...processedValues }));
             }
             
             // Ekstrak URL dari fetch untuk query params
@@ -119,10 +90,32 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
             URL.revokeObjectURL(finalData.data);
         }
         setFinalData(null);
-        setActiveTab('response');
         setIsLoading(true);
+        setActiveTab('response');
 
         const formData = new FormData(formRef.current);
+
+        // WAJIB: semua parameter required harus terisi sebelum request dikirim
+        const getParamValue = (param) => {
+            const v = formValues[param.name];
+            return (v !== undefined && v !== '') ? v : formData.get(param.name);
+        };
+        const missing = endpoint.params.filter((p) => p.required && !getParamValue(p));
+        if (missing.length > 0) {
+            setMissingParams(missing.map((m) => m.name));
+            setIsLoading(false);
+            setFinalData({
+                ok: false,
+                status: '400',
+                data: `Payload tidak lengkap. Parameter wajib belum diisi:\n\n${missing
+                    .map((m) => `- ${m.name} (${m.in || 'body'})`)
+                    .join('\n')}`,
+                isStream: false,
+            });
+            return;
+        }
+        setMissingParams([]);
+
         const queryParams = new URLSearchParams();
         const bodyParams = {};
         const formPayload = new FormData(); 
@@ -230,6 +223,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormValues(prev => ({ ...prev, [name]: value }));
+        // bersihkan penanda error saat field diisi
+        setMissingParams(prev => prev.filter((n) => n !== name));
     };
 
     const getGeneratedCurl = () => {
@@ -240,9 +235,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
 
         let defaultValues = {};
         if (endpoint.example) {
-            const jsonMatch = endpoint.example.match(/body:\s*JSON\.stringify\(([\s\S]*?)\)/);
-            if (jsonMatch) {
-                try { defaultValues = new Function(`return ${jsonMatch[1]}`)() || {}; } catch(e) {}
+            for (const block of extractJsonBodies(endpoint.example)) {
+                try { Object.assign(defaultValues, parseBodyBlock(block) || {}); } catch(e) {}
             }
             const urlMatch = endpoint.example.match(/fetch\(['"`](.*?)['"`]/);
             if (urlMatch) {
@@ -453,6 +447,14 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                             
                                             {endpoint.params.length > 0 ? (
                                                 <div className="space-y-4">
+                                                    {missingParams.length > 0 && (
+                                                        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-900/30 border border-red-500/40 text-red-300 text-xs animate-fade-in">
+                                                            <i className="fas fa-triangle-exclamation mt-0.5"></i>
+                                                            <span>
+                                                                Wajib isi payload lengkap: <b>{missingParams.join(', ')}</b>
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                     {endpoint.params.map(param => (
                                                         <div key={param.name} className="group">
                                                             <div className="flex justify-between items-center mb-1.5">
@@ -475,7 +477,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
 
                                                             <div className="relative">
                                                                 {param.choices ? (
-                                                                    <div className="flex gap-3 p-1 bg-input rounded-xl border border-default">
+                                                                    <div className={`flex gap-3 p-1 bg-input rounded-xl border ${missingParams.includes(param.name) ? 'border-red-500' : 'border-default'}`}>
                                                                         {param.choices.map(choice => {
                                                                             const isSelected = formValues[param.name] !== undefined && formValues[param.name] === choice.value;
                                                                             return (
@@ -508,7 +510,11 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                         value: formValues[param.name] || '', 
                                                                         onChange: handleInputChange 
                                                                     } : {})}
-                                                                    className={`w-full bg-input border border-default rounded-xl pl-9 pr-3 py-2.5 text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-gray-700 ${param.type === 'file' ? 'file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-gray-800 file:text-gray-300 hover:file:bg-gray-700' : ''}`}
+                                                                    className={`w-full bg-input border rounded-xl pl-9 pr-3 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 transition-all placeholder-gray-700 ${
+                                                                        missingParams.includes(param.name)
+                                                                            ? 'border-red-500 ring-red-500/50 focus:border-red-400'
+                                                                            : 'border-default focus:border-accent focus:ring-accent'
+                                                                    } ${param.type === 'file' ? 'file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-gray-800 file:text-gray-300 hover:file:bg-gray-700' : ''}`}
                                                                     required={param.required}
                                                                     accept={param.type === 'file' ? 'image/*' : undefined}
                                                                 />
