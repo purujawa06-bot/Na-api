@@ -86,7 +86,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
     const handleTryItOut = async (e) => {
         e.preventDefault();
         // Revoke previous blob URL to prevent memory leak
-        if (finalData?.isImage && finalData?.data) {
+        if ((finalData?.isImage || finalData?.isMedia) && finalData?.data) {
             URL.revokeObjectURL(finalData.data);
         }
         setFinalData(null);
@@ -173,6 +173,22 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                     status: res.status,
                     data: imageUrl,
                     isImage: true
+                });
+                return;
+            }
+
+            // Audio/video biner: jadikan blob + player, JANGAN di-decode sebagai teks
+            if (contentType.startsWith("audio/") || contentType.startsWith("video/")) {
+                const blob = await res.blob();
+                const mediaUrl = URL.createObjectURL(blob);
+                setIsLoading(false);
+                setFinalData({
+                    ok: res.ok,
+                    status: res.status,
+                    data: mediaUrl,
+                    isMedia: true,
+                    mediaType: contentType,
+                    size: blob.size,
                 });
                 return;
             }
@@ -316,7 +332,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
 
     useEffect(() => {
         if (isOpen && window.hljs) {
-            if (activeTab === 'example' || (activeTab === 'response' && finalData?.data && !finalData.isStream)) {
+            if (activeTab === 'example' || (activeTab === 'response' && finalData?.data && !finalData.isStream && !finalData.isMedia)) {
                 setTimeout(() => {
                     document.querySelectorAll('pre code').forEach((block) => {
                         delete block.dataset.highlighted;
@@ -628,13 +644,33 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                     <span className={`text-xs font-bold px-2 py-1 rounded ${finalData.ok ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
                                                         {finalData.status} {finalData.ok ? 'OK' : 'Error'}
                                                         {finalData.isImage && <span className="ml-2 text-[10px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded">IMAGE</span>}
+                                                        {finalData.isMedia && (
+                                                            <span className="ml-2 text-[10px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded">
+                                                                AUDIO{finalData.size ? ` · ${(finalData.size / 1024 / 1024).toFixed(2)} MB` : ''}
+                                                            </span>
+                                                        )}
                                                         {finalData.isStream && <span className="ml-2 text-[10px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded animate-pulse">STREAMING</span>}
                                                     </span>
-                                                    {!finalData.isImage && <CopyButton textToCopy={finalData.data} />}
+                                                    {!finalData.isImage && !finalData.isMedia && <CopyButton textToCopy={finalData.data} />}
                                                 </div>
                                                 {finalData.isImage ? (
                                                     <div className="flex justify-center p-4 bg-input/50 rounded-xl border border-default">
                                                         <Image src={finalData.data} alt="Response Image" className="max-w-full max-h-[400px] rounded-lg object-contain" width={400} height={400} unoptimized />
+                                                    </div>
+                                                ) : finalData.isMedia ? (
+                                                    <div className="p-4 bg-input/50 rounded-xl border border-default flex flex-col items-center gap-3">
+                                                        {finalData.mediaType?.startsWith('video/') ? (
+                                                            <video src={finalData.data} controls className="max-w-full max-h-[400px] rounded-lg" />
+                                                        ) : (
+                                                            <audio src={finalData.data} controls className="w-full max-w-md" />
+                                                        )}
+                                                        <a
+                                                            href={finalData.data}
+                                                            download={`${endpoint.path.split('/').pop()}-${Date.now()}${finalData.mediaType?.startsWith('video/') ? '.mp4' : '.mp3'}`}
+                                                            className="text-xs font-bold px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white transition-all active:scale-95 inline-flex items-center gap-2"
+                                                        >
+                                                            <i className="fas fa-download"></i> Download File
+                                                        </a>
                                                     </div>
                                                 ) : (
                                                 <pre className="bg-code p-4 rounded-xl overflow-x-auto max-h-[400px] text-xs border border-default custom-scrollbar shadow-inner">
