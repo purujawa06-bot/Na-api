@@ -11,7 +11,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk-tool/parser": "^5.1.6",
     "@langchain/core": "^1.2.9",
+    "ai": "^7.0.77",
     "axios": "^1.7.2",
     "axios-cookiejar-support": "^5.0.0",
     "cheerio": "^1.0.0-rc.12",
