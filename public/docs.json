@@ -1,5 +1,5 @@
 {
-  "chat": [
+  "AI": [
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
@@ -49,6 +49,16 @@
           "required": false
         }
       ]
+    },
+    {
+      "title": "Daftar Model AI",
+      "summary": "List model AI yang tersedia (format OpenAI /v1/models).",
+      "description": "Mengembalikan daftar model yang bisa dipakai di endpoint\n              /api/chat/completions, dalam format kompatibel OpenAI.",
+      "method": "GET",
+      "path": "/api/models",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
     }
   ],
   "downloader": [
@@ -297,18 +307,6 @@
           "required": false
         }
       ]
-    }
-  ],
-  "models": [
-    {
-      "title": "Daftar Model AI",
-      "summary": "List model AI yang tersedia (format OpenAI /v1/models).",
-      "description": "Mengembalikan daftar model yang bisa dipakai di endpoint\n              /api/chat/completions, dalam format kompatibel OpenAI.",
-      "method": "GET",
-      "path": "/api/models",
-      "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
-      "params": []
     }
   ],
   "search": [
