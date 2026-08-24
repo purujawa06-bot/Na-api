@@ -12,7 +12,7 @@ API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI
 - **Text Processing**: Translapp (Translate, Paraphrase, Summarize)
 
 ### 📥 Downloader
-- YouTube (Video/Audio), TikTok (No WM — `/api/downloader/tiktok`, via ssstik.io), Instagram, Facebook, X/Twitter, SoundCloud, Spotify
+- YouTube (Video/Audio), TikTok (No WM — `/api/downloader/tiktok`, via ssstik.io), Instagram (`/api/downloader/instagram` — Reels/Post/IGTV/Carousel, tanpa browser, via instasave.website), Facebook, X/Twitter, SoundCloud, Spotify
 - DramaBox (katalog & pencarian drama pendek — `/api/dramabox/home`, `/detail`, `/search`, `/category`, `/stream`; tanpa browser, via dramabox.com)
 
 ### 🎬 Anime
