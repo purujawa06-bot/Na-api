@@ -53,6 +53,59 @@
   ],
   "downloader": [
     {
+      "title": "Instagram Downloader",
+      "summary": "Download media Instagram (Reels, Post, IGTV) tanpa watermark.",
+      "description": "Mengambil link download video/foto dari URL Instagram publik\n              (https only, tanpa menjalankan browser). Mendukung link /p/, /reel/,\n              /reels/, /tv/, dan /share/. Utama via embed proxy kkinstagram\n              (redirect langsung ke CDN Instagram); fallback instasave.website\n              untuk carousel. Link CDN Instagram kedaluwarsa ±1 jam.",
+      "method": "GET",
+      "path": "/api/downloader/instagram",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL Instagram publik (wajib, https only).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "SoundCloud Downloader",
+      "summary": "Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.",
+      "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\n              Utama: progressive MP3 tunggal; bila tidak ada, HLS segment MP3 digabung\n              otomatis dengan ?raw=1. Track Go+ (policy SNIP) hanya menghasilkan preview\n              30 detik (ditandai is_preview=true). Link kedaluwarsa ±1 jam.",
+      "method": "GET",
+      "path": "/api/downloader/soundcloud",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL track SoundCloud publik (wajib, https only).",
+          "required": true
+        },
+        {
+          "name": "raw",
+          "in": "query",
+          "type": "boolean",
+          "description": "Jika \"1\", kirim langsung file audio (bukan JSON).",
+          "required": false,
+          "choices": [
+            {
+              "value": "0",
+              "label": "JSON metadata + link"
+            },
+            {
+              "value": "1",
+              "label": "File audio langsung"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "title": "TikTok Downloader",
       "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
       "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\n              beserta metadata (author, avatar, caption) dan link MP3.\n              Hanya menerima URL HTTPS (http ditolak). Juga mendukung method\n              POST dengan body JSON {\"url\": \"...\"}.",
