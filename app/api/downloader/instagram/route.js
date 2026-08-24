@@ -1,10 +1,11 @@
 /**
  * @title Instagram Downloader
- * @summary Download media Instagram (Reels, Post, IGTV, Carousel) tanpa watermark.
+ * @summary Download media Instagram (Reels, Post, IGTV) tanpa watermark.
  * @description Mengambil link download video/foto dari URL Instagram publik
  *              (https only, tanpa menjalankan browser). Mendukung link /p/, /reel/,
- *              /reels/, /tv/, dan /share/. Link CDN Instagram kedaluwarsa ±1 jam;
- *              tersedia juga proxy_url (cdn.instasave.website) sebagai alternatif.
+ *              /reels/, /tv/, dan /share/. Utama via embed proxy kkinstagram
+ *              (redirect langsung ke CDN Instagram); fallback instasave.website
+ *              untuk carousel. Link CDN Instagram kedaluwarsa ±1 jam.
  * @method GET
  * @path /api/downloader/instagram
  * @param {string} query.url - URL Instagram publik (wajib, https only).
@@ -47,7 +48,7 @@ async function handle(url) {
 
   try {
     const result = await downloadInstagram(url);
-    return NextResponse.json({ success: true, source: 'instasave.website', ...result });
+    return NextResponse.json({ success: true, source: result._via, ...result, _via: undefined });
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 502 });
   }
