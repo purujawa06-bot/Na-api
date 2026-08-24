@@ -310,5 +310,68 @@
       "example": "fetch('https://puruboy-api.vercel.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     }
+  ],
+  "search": [
+    {
+      "title": "SoundCloud Search",
+      "summary": "Cari track, playlist, album, dan user di SoundCloud.",
+      "description": "Pencarian via api-v2.soundcloud.com (hasil reverse-engineering,\n              tanpa browser). Hasil berupa daftar item dengan tipe \"track\",\n              \"playlist\", \"album\", atau \"user\". Item track bertanda\n              is_preview=true hanya preview 30 detik (Go+/SNIP).\n              Gunakan parameter type untuk memfilter jenis hasil, dan\n              next_offset dari response untuk mengambil halaman berikutnya.",
+      "method": "GET",
+      "path": "/api/search/soundcloud",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian (wajib).",
+          "required": true
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "type": "string",
+          "description": "Filter jenis hasil.",
+          "required": false,
+          "choices": [
+            {
+              "value": "all",
+              "label": "Semua jenis (default)"
+            },
+            {
+              "value": "tracks",
+              "label": "Hanya track"
+            },
+            {
+              "value": "playlists",
+              "label": "Hanya playlist"
+            },
+            {
+              "value": "albums",
+              "label": "Hanya album"
+            },
+            {
+              "value": "users",
+              "label": "Hanya user/artis"
+            }
+          ]
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "description": "Jumlah hasil per halaman (1-50, default 20).",
+          "required": false
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "type": "number",
+          "description": "Offset paginasi (default 0). Pakai nilai",
+          "required": false
+        }
+      ]
+    }
   ]
 }
