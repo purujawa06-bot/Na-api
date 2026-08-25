@@ -13,7 +13,7 @@
           "name": "model",
           "in": "body",
           "type": "string",
-          "description": "ID model (default \"auto\": Gemini dulu, otomatis fallback DeepSeek V4 bila Gemini error/konten kosong).",
+          "description": "ID model (default \"auto\": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html).",
           "required": false,
           "choices": [
             {
@@ -23,6 +23,10 @@
             {
               "value": "deepseek-v4",
               "label": "deepseek-v4"
+            },
+            {
+              "value": "easemate",
+              "label": "easemate"
             },
             {
               "value": "auto",

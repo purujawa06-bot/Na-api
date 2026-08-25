@@ -195,6 +195,7 @@
             <button onclick="switchTab('create')" id="tab-create" class="tab-btn active flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">New Post</button>
             <button onclick="switchTab('list')" id="tab-list" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">All Posts</button>
             <button onclick="switchTab('featured')" id="tab-featured" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">Popup Fitur</button>
+            <button onclick="switchTab('aichain')" id="tab-aichain" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">Auto Model</button>
             <button onclick="switchTab('pages')" id="tab-pages" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">Custom Pages</button>
         </div>
 
@@ -287,6 +288,24 @@
                         </div>
                         <button type="submit" class="btn-primary w-full shadow-lg shadow-pink-900/20 mt-4">
                             <i class="fas fa-save"></i> Simpan Pengaturan
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- VIEW: AUTO MODEL FALLBACK CHAIN -->
+            <div id="view-aichain" class="hidden animate-fade-in">
+                <div class="native-card p-5">
+                    <h2 class="text-lg font-bold text-white mb-2">Urutan Fallback Model Auto</h2>
+                    <p class="text-xs text-gray-500 mb-4">Berlaku untuk <code class="bg-gray-800 px-1 rounded">/api/chat/completions</code> saat body.model = "auto". Provider #1 dicoba lebih dulu; bila error ATAU selesai tanpa tool call &amp; konten kosong, otomatis lanjut ke provider berikutnya dalam stream yang sama.</p>
+                    <form id="aichain-form" class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Provider Prioritas (#1)</label>
+                            <select id="ai-primary" class="input-field text-sm"></select>
+                            <p id="aichain-hint" class="text-[10px] text-gray-500 mt-1"></p>
+                        </div>
+                        <button type="submit" class="btn-primary w-full shadow-lg shadow-pink-900/20 mt-4">
+                            <i class="fas fa-save"></i> Simpan Urutan
                         </button>
                     </form>
                 </div>
@@ -403,7 +422,7 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(`tab-${tabName}`).classList.add('active');
             
-            ['create', 'list', 'featured', 'pages'].forEach(v => {
+            ['create', 'list', 'featured', 'pages', 'aichain'].forEach(v => {
                 document.getElementById(`view-${v}`).classList.add('hidden');
             });
             
@@ -412,6 +431,7 @@
             if(tabName === 'list') fetchPosts(1);
             if(tabName === 'featured') fetchFeatured();
             if(tabName === 'pages') checkGithubConfig();
+            if(tabName === 'aichain') fetchAiChain();
         }
 
         function showAdmin() {
@@ -583,6 +603,61 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
+        };
+
+        /* --- AI CHAIN (urutan fallback model auto) --- */
+        const AI_MODELS = [
+            { id: 'gemini-lite', label: 'Gemini Flash-Lite' },
+            { id: 'deepseek-v4', label: 'DeepSeek V4 (NoteGPT)' },
+            { id: 'easemate', label: 'EaseMate AI' },
+        ];
+
+        function aiChainOrdered() {
+            const primary = document.getElementById('ai-primary').value;
+            return [primary, ...AI_MODELS.map(m => m.id).filter(id => id !== primary)];
+        }
+
+        function updateAiChainHint() {
+            const labels = aiChainOrdered().map(id => AI_MODELS.find(m => m.id === id)?.label ?? id);
+            document.getElementById('aichain-hint').textContent = `Urutan final: ${labels.join(' → ')}`;
+        }
+
+        async function fetchAiChain() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/aichain`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const chain = Array.isArray(data.chain) ? data.chain : [];
+                const sel = document.getElementById('ai-primary');
+                sel.innerHTML = '';
+                for (const m of AI_MODELS) {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.label;
+                    sel.appendChild(opt);
+                }
+                sel.value = chain[0] || AI_MODELS[0].id;
+                updateAiChainHint();
+            } catch(e) { console.error(e); }
+        }
+
+        document.getElementById('ai-primary').onchange = updateAiChainHint;
+
+        document.getElementById('aichain-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+            btn.disabled = true;
+            try {
+                const res = await api('/admin/aichain', { method: 'POST', body: JSON.stringify({ chain: aiChainOrdered() }) });
+                if(res.ok) alert('Urutan fallback berhasil diperbarui!');
+                else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.error || 'Gagal memperbarui urutan fallback.');
+                }
+            } catch(err) { alert('Terjadi kesalahan jaringan.'); }
+            finally { btn.innerHTML = originalText; btn.disabled = false; }
         };
 
         /* --- CUSTOM PAGES LOGIC --- */

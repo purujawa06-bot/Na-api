@@ -12,9 +12,10 @@
  * @method POST
  * @path /api/chat/completions
  * @response stream
- * @param {string} [body.model] - ID model (default "auto": Gemini dulu, otomatis fallback DeepSeek V4 bila Gemini error/konten kosong).
+ * @param {string} [body.model] - ID model (default "auto": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html).
  * @choice gemini-lite
  * @choice deepseek-v4
+ * @choice easemate
  * @choice auto
  * @param {array} body.messages - Array pesan format OpenAI [{role: "system"|"user"|"assistant"|"tool", content}].
  *                                 Pesan assistant boleh punya tool_calls; role "tool" membawa hasil eksekusi tool.
@@ -82,6 +83,7 @@ import { qwen3CoderToolMiddleware } from '@ai-sdk-tool/parser';
 import { jsonSchema } from '@ai-sdk/provider-utils';
 import { reportError } from '../../../../lib/errorLogger';
 import { createWebModel, ALL_MODEL_IDS } from '../../../../lib/ai-provider-web.js';
+import settingsService from '../../../../lib/settingsService';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -215,9 +217,10 @@ function forcedChoiceInstructions(choice, hasTools) {
 /**
  * Susun model siap generate: adapter web, dibungkus middleware XML bila ada tools.
  * `meta` diteruskan ke adapter auto agar route tahu model aktual yang dipakai.
+ * `chain` = urutan fallback mode 'auto' dari settings admin (diabaikan model lain).
  */
-function buildModel(modelId, { tools, meta }) {
-  const base = createWebModel(modelId, { meta });
+function buildModel(modelId, { tools, meta, chain }) {
+  const base = createWebModel(modelId, { meta, chain });
   return tools && Object.keys(tools).length
     ? wrapLanguageModel({ model: base, middleware: qwen3CoderToolMiddleware })
     : base;
@@ -300,9 +303,12 @@ export async function POST(req) {
   // 'required' & named-tool dijemahkan jadi instruksi teks (bukan toolChoice SDK)
   const forceNotes = forcedChoiceInstructions(body.tool_choice, Object.keys(aiTools).length > 0);
   const instructions = [baseInstructions, ...forceNotes].filter(Boolean).join('\n\n') || undefined;
-  // meta.used diisi adapter auto dengan ID model aktual (gemini-lite | deepseek-v4)
+  // meta.used diisi adapter auto dengan ID model aktual yang menjawab
   const meta = {};
-  const lm = buildModel(model, { tools: aiTools, meta });
+  // Urutan fallback mode 'auto' dari settings admin (cache 60s; DB opsional ->
+  // tanpa DB dipakai urutan default gemini-lite -> deepseek-v4).
+  const autoChain = model === 'auto' ? await settingsService.getAutoChain() : undefined;
+  const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
 
   // ---------- STREAMING ----------
   if (stream) {
@@ -458,7 +464,7 @@ export async function GET() {
     usage: {
       method: 'POST',
       body: {
-        model: 'gemini-lite | deepseek-v4 | auto (default auto: gemini dulu, fallback deepseek-v4 bila error/kosong)',
+        model: 'gemini-lite | deepseek-v4 | easemate | auto (default auto: rantai fallback dinamis dari panel admin; default gemini-lite dulu, fallback deepseek-v4 lalu easemate)',
         messages: '[{role: system|user|assistant|tool, content}]',
         stream: 'boolean (opsional)',
         tools: '[{type:"function", function:{name, description, parameters}}] (opsional)',
