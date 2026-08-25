@@ -1,7 +1,7 @@
 /**
  * @title Chat Completions (OpenAI Compatible)
  * @summary Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.
- * @description Bridge OpenAI Chat Completions -> provider web (DeepSeek & Gemini) via Vercel AI SDK.
+ * @description Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools + body.tool_choice) untuk semua model — tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol Hermes),
@@ -11,10 +11,10 @@
  * @method POST
  * @path /api/chat/completions
  * @response stream
- * @param {string} [body.model] - ID model (default "auto": Gemini dulu, otomatis fallback DeepSeek V3 bila Gemini error/konten kosong).
- * @choice gemini-lite - Gemini Flash-Lite via gemini.google.com (tercepat)
- * @choice deepseek-v3 - DeepSeek V3 tanpa reasoning (cepat)
- * @choice auto - Default: coba gemini-lite, fallback otomatis ke deepseek-v3 bila error/konten kosong
+ * @param {string} [body.model] - ID model (default "auto": Gemini dulu, otomatis fallback DeepSeek V4 bila Gemini error/konten kosong).
+ * @choice gemini-lite
+ * @choice deepseek-v4
+ * @choice auto
  * @param {array} body.messages - Array pesan format OpenAI [{role: "system"|"user"|"assistant"|"tool", content}].
  *                                 Pesan assistant boleh punya tool_calls; role "tool" membawa hasil eksekusi tool.
  * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
@@ -31,12 +31,12 @@
  *     })
  * }).then(res => res.json()).then(console.log);
  *
- * @example Streaming SSE + model deepseek-v3
+ * @example Streaming SSE + model deepseek-v4
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
- *         model: 'deepseek-v3',
+ *         model: 'deepseek-v4',
  *         stream: true,
  *         messages: [
  *             { role: 'system', content: 'Jawab singkat.' },
@@ -215,8 +215,8 @@ function forcedChoiceInstructions(choice, hasTools) {
  * Susun model siap generate: adapter web, dibungkus middleware Hermes bila ada tools.
  * `meta` diteruskan ke adapter auto agar route tahu model aktual yang dipakai.
  */
-function buildModel(modelId, { searchEnabled, tools, meta }) {
-  const base = createWebModel(modelId, { searchEnabled, meta });
+function buildModel(modelId, { tools, meta }) {
+  const base = createWebModel(modelId, { meta });
   return tools && Object.keys(tools).length
     ? wrapLanguageModel({ model: base, middleware: hermesToolMiddleware })
     : base;
@@ -293,16 +293,15 @@ export async function POST(req) {
   }
   if (!ALL_MODEL_IDS.includes(model)) model = 'auto';
 
-  const searchEnabled = body.search_enabled === true;
   const aiTools = toAiTools(body.tools ?? []);
   const toolChoice = toToolChoice(body.tool_choice);
   const { instructions: baseInstructions, messages: modelMessages } = splitPrompt(messages);
   // 'required' & named-tool dijemahkan jadi instruksi teks (bukan toolChoice SDK)
   const forceNotes = forcedChoiceInstructions(body.tool_choice, Object.keys(aiTools).length > 0);
   const instructions = [baseInstructions, ...forceNotes].filter(Boolean).join('\n\n') || undefined;
-  // meta.used diisi adapter auto dengan ID model aktual (gemini-lite | deepseek-v3)
+  // meta.used diisi adapter auto dengan ID model aktual (gemini-lite | deepseek-v4)
   const meta = {};
-  const lm = buildModel(model, { searchEnabled, tools: aiTools, meta });
+  const lm = buildModel(model, { tools: aiTools, meta });
 
   // ---------- STREAMING ----------
   if (stream) {
@@ -458,7 +457,7 @@ export async function GET() {
     usage: {
       method: 'POST',
       body: {
-        model: 'gemini-lite | deepseek-v3 | auto (default auto: gemini dulu, fallback deepseek bila error/kosong)',
+        model: 'gemini-lite | deepseek-v4 | auto (default auto: gemini dulu, fallback deepseek-v4 bila error/kosong)',
         messages: '[{role: system|user|assistant|tool, content}]',
         stream: 'boolean (opsional)',
         tools: '[{type:"function", function:{name, description, parameters}}] (opsional)',

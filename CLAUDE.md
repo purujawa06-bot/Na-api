@@ -41,8 +41,8 @@ Upstream sering berubah (blokir IP datacenter, ubah protokol, minta login). Saat
 
 - `PURUBOY_PG_URL` — PostgreSQL (Neon/Supabase); opsional.
 - `PURUBOY_ADMIN_KEY` — auth panel admin.
-- `GEMINI_COOKIES` — cookie akun Google untuk `lib/gemini-web.js`.
-- `DEEPSEEK_TOKEN`, `DEEPSEEK_LOCALE`, `DEEPSEEK_TZ_OFFSET` — klien DeepSeek web.
+- `GEMINI_COOKIES` — override manual cookie untuk `lib/gemini-web.js`; normalnya TIDAK PERLU karena Gemini dipanggil tanpa cookie sama sekali (sesi anonim stateless; gagal -> retry 1x dengan sesi baru).
+- `DEEPSEEK_TOKEN`, `DEEPSEEK_LOCALE`, `DEEPSEEK_TZ_OFFSET` — TIDAK DIPAKAI LAGI (model deepseek-v4 kini lewat NoteGPT `lib/notegpt-web.js`: POST notegpt.io/api/v2/chat/stream, tanpa login/cookie, SSE `{text,reasoning,done}`).
 - `CDP_URL` — alamat Chrome DevTools Protocol untuk skrip sniffing (default `http://127.0.0.1:9222`).
 - `GITHUB_TOKEN` — akses GitHub API.
 

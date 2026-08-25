@@ -509,7 +509,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                             </option>
                                                                             {param.choices.map(choice => (
                                                                                 <option key={choice.value} value={choice.value}>
-                                                                                    {choice.label}
+                                                                                    {choice.value}
                                                                                 </option>
                                                                             ))}
                                                                         </select>

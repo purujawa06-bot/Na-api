@@ -20,8 +20,8 @@ export const runtime = 'nodejs';
 const CREATED = 1704067200; // 2024-01-01
 const MODELS = [
   { id: 'gemini-lite', thinking: false, desc: 'Gemini Flash-Lite via gemini.google.com (tercepat)' },
-  { id: 'deepseek-v3', thinking: false, desc: 'DeepSeek V3 tanpa reasoning via web (cepat)' },
-  { id: 'auto', thinking: false, desc: 'Default: gemini-lite dulu, fallback otomatis ke deepseek-v3 bila error/konten kosong' },
+  { id: 'deepseek-v4', thinking: true, desc: 'DeepSeek V4 via notegpt.io/ai-chat (tanpa login, bisa reasoning)' },
+  { id: 'auto', thinking: false, desc: 'Default: gemini-lite dulu, fallback otomatis ke deepseek-v4 bila error/konten kosong' },
 ];
 
 export async function GET() {
@@ -31,7 +31,7 @@ export async function GET() {
       id: m.id,
       object: 'model',
       created: CREATED,
-      owned_by: m.id.startsWith('gemini') ? 'gemini-web' : m.id === 'auto' ? 'auto-web' : 'deepseek-web',
+      owned_by: m.id.startsWith('gemini') ? 'gemini-web' : m.id === 'auto' ? 'auto-web' : 'notegpt-web',
       thinking: m.thinking,
       description: m.desc,
     })),

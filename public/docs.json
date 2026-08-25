@@ -3,30 +3,30 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (DeepSeek & Gemini) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools + body.tool_choice) untuk semua model — tool calls\n              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol Hermes),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools + body.tool_choice) untuk semua model — tool calls\n              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol Hermes),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model deepseek-v3\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-v3',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'gemini-lite',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tool_choice: 'auto',\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model deepseek-v4\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-v4',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'gemini-lite',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tool_choice: 'auto',\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
           "in": "body",
           "type": "string",
-          "description": "ID model (default \"auto\": Gemini dulu, otomatis fallback DeepSeek V3 bila Gemini error/konten kosong).",
+          "description": "ID model (default \"auto\": Gemini dulu, otomatis fallback DeepSeek V4 bila Gemini error/konten kosong).",
           "required": false,
           "choices": [
             {
               "value": "gemini-lite",
-              "label": "Gemini Flash-Lite via gemini.google.com (tercepat)"
+              "label": "gemini-lite"
             },
             {
-              "value": "deepseek-v3",
-              "label": "DeepSeek V3 tanpa reasoning (cepat)"
+              "value": "deepseek-v4",
+              "label": "deepseek-v4"
             },
             {
               "value": "auto",
-              "label": "Default: coba gemini-lite, fallback otomatis ke deepseek-v3 bila error/konten kosong"
+              "label": "auto"
             }
           ]
         },
