@@ -4,6 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 
 export default function SupportPage() {
+    const qrisUrl = "https://github.com/purujawa06-bot/purujawa06-bot.github.io/raw/refs/heads/main/qr_ID1026577441748_25.08.26_1787642919_1787642939656.jpeg";
+
     return (
         <div className="container mx-auto px-4 py-12 max-w-4xl">
             <div className="text-center mb-10">
@@ -34,17 +36,20 @@ export default function SupportPage() {
                 </div>
             </div>
 
-            {/* Leaderboard Section */}
-            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden backdrop-blur-sm mb-12">
-                <h2 className="text-xl md:text-2xl font-black text-white mb-6 text-center flex items-center justify-center gap-3">
-                    <i className="fas fa-trophy text-amber-400"></i> Leaderboard Supporters
+            {/* QRIS Section */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden backdrop-blur-sm mb-12 flex flex-col items-center text-center">
+                <h2 className="text-xl md:text-2xl font-black text-white mb-2 flex items-center justify-center gap-3">
+                    <i className="fas fa-qrcode text-amber-400"></i> Pembayaran QRIS
                 </h2>
-                <div className="w-full overflow-hidden rounded-2xl border border-zinc-800 bg-black/50">
-                    <iframe
-                        src="https://saweria.co/widgets/leaderboard?streamKey=2f795858ba9218d431f755e36a19f3ee"
-                        className="w-full h-[600px] border-0"
-                        title="Saweria Leaderboard"
-                    ></iframe>
+                <p className="text-gray-400 text-xs md:text-sm mb-6 max-w-md">
+                    Scan kode QRIS di bawah ini menggunakan aplikasi E-Wallet (Gopay, OVO, Dana, ShopeePay) atau Mobile Banking favorit Anda.
+                </p>
+                <div className="p-4 bg-white rounded-2xl shadow-inner max-w-xs md:max-w-sm">
+                    <img 
+                        src={qrisUrl} 
+                        alt="QRIS Donasi" 
+                        className="w-full h-auto rounded-xl object-contain"
+                    />
                 </div>
             </div>
 
