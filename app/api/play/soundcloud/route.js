@@ -11,70 +11,40 @@
  *     .then(res => res.json())
  *     .then(console.log);
  */
-import { NextResponse } from 'next/server';
 import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';
-
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-export const maxDuration = 60;
-
-function formatDuration(ms) {
-  if (!ms || isNaN(ms)) return '0:00';
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-async function handle(q) {
-  if (!q || typeof q !== 'string' || !q.trim()) {
-    return NextResponse.json({ success: false, error: 'Parameter q wajib diisi' }, { status: 400 });
-  }
-  if (q.length > 200) {
-    return NextResponse.json({ success: false, error: 'Query terlalu panjang (maks 200 karakter)' }, { status: 400 });
-  }
-
-  try {
-    const searchRes = await searchSoundCloud(q.trim(), { type: 'tracks', limit: 1 });
-    const firstTrack = searchRes.results?.[0];
-
-    if (!firstTrack || !firstTrack.permalink_url) {
-      return NextResponse.json({ success: false, error: 'Lagu tidak ditemukan' }, { status: 404 });
-    }
-
-    const dlRes = await downloadSoundCloud(firstTrack.permalink_url);
-    const directUrl = dlRes.download_url || dlRes.stream_url;
-
-    if (!directUrl) {
-      return NextResponse.json({ success: false, error: 'Gagal mengambil URL audio' }, { status: 502 });
-    }
-
-    return NextResponse.json({
-      success: true,
-      author: 'NextA',
-      result: {
-        title: dlRes.title || firstTrack.title,
-        duration: formatDuration(dlRes.duration_ms || firstTrack.duration_ms),
-        url: directUrl
-      }
-    });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 502 });
-  }
-}
+import { NextResponse } from 'next/server';
 
 export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  return handle(searchParams.get('q'));
-}
+    try {
+        const { searchParams } = new URL(req.url);
+        const q = searchParams.get('q');
+        if (!q) {
+            return NextResponse.json({ success: false, error: 'Parameter "q" wajib diisi' }, { status: 400 });
+        }
 
-export async function POST(req) {
-  let q = null;
-  try {
-    const body = await req.json();
-    q = body?.q;
-  } catch {
-    return NextResponse.json({ success: false, error: 'Body harus JSON: {"q": "..."}' }, { status: 400 });
-  }
-  return handle(q);
+        const searchResult = await searchSoundCloud(q, 'tracks', 1);
+        if (!searchResult.items || searchResult.items.length === 0) {
+            return NextResponse.json({ success: false, error: 'Track tidak ditemukan' }, { status: 404 });
+        }
+
+        const track = searchResult.items[0];
+        const streamUrl = await downloadSoundCloud(track.permalink_url);
+
+        return NextResponse.json({
+            success: true,
+            source: 'api-v2.soundcloud.com',
+            query: q,
+            track: {
+                id: track.id,
+                title: track.title,
+                duration_ms: track.duration,
+                duration_formatted: track.duration_formatted,
+                artwork_url: track.artwork_url,
+                permalink_url: track.permalink_url,
+                stream_url: streamUrl
+            }
+        });
+    } catch (err) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    }
 }
