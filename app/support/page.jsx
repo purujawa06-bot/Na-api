@@ -39,9 +39,12 @@ export default function SupportPage() {
             {/* QRIS Section */}
             <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden backdrop-blur-sm mb-12 flex flex-col items-center text-center">
                 <h2 className="text-xl md:text-2xl font-black text-white mb-2 flex items-center justify-center gap-3">
-                    <i className="fas fa-qrcode text-amber-400"></i> Pembayaran QRIS
+                    <i className="fas fa-qrcode text-amber-400"></i> Bantu lewat QRIS
                 </h2>
-                <p className="text-gray-400 text-xs md:text-sm mb-6 max-w-md">
+                <p className="text-gray-400 text-xs md:text-sm mb-2 max-w-md">
+                    Biar PuruBoy lebih gacor 🔥
+                </p>
+                <p className="text-gray-500 text-xs mb-6 max-w-md">
                     Scan kode QRIS di bawah ini menggunakan aplikasi E-Wallet (Gopay, OVO, Dana, ShopeePay) atau Mobile Banking favorit Anda.
                 </p>
                 <div className="p-4 bg-white rounded-2xl shadow-inner max-w-xs md:max-w-sm">
