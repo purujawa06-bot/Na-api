@@ -12,17 +12,16 @@
  *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
-import { MODELS as GEMINI_MODELS } from '../../../lib/gemini-web.js';
+import { ALL_MODEL_IDS } from '../../../lib/ai-provider-web.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const CREATED = 1704067200; // 2024-01-01
 const MODELS = [
-  { id: 'deepseek-chat', thinking: false, desc: 'DeepSeek V3 via web (cepat)' },
-  { id: 'deepseek-reasoner', thinking: true, desc: 'DeepSeek R1 via web (reasoning)' },
-  { id: 'gemini-flash', thinking: false, desc: 'Gemini 3.6 Flash via gemini.google.com (serbaguna)' },
-  { id: 'gemini-flash-lite', thinking: false, desc: 'Gemini 3.5 Flash-Lite via gemini.google.com (tercepat)' },
+  { id: 'gemini-lite', thinking: false, desc: 'Gemini Flash-Lite via gemini.google.com (tercepat)' },
+  { id: 'deepseek-v3', thinking: false, desc: 'DeepSeek V3 tanpa reasoning via web (cepat)' },
+  { id: 'auto', thinking: false, desc: 'Default: gemini-lite dulu, fallback otomatis ke deepseek-v3 bila error/konten kosong' },
 ];
 
 export async function GET() {
@@ -32,10 +31,10 @@ export async function GET() {
       id: m.id,
       object: 'model',
       created: CREATED,
-      owned_by: m.id.startsWith('gemini') ? 'gemini-web' : 'deepseek-web',
+      owned_by: m.id.startsWith('gemini') ? 'gemini-web' : m.id === 'auto' ? 'auto-web' : 'deepseek-web',
       thinking: m.thinking,
       description: m.desc,
     })),
+    default: ALL_MODEL_IDS.includes('auto') ? 'auto' : ALL_MODEL_IDS[0],
   });
 }
-

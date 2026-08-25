@@ -11,35 +11,32 @@
  * @method POST
  * @path /api/chat/completions
  * @response stream
- * @param {string} [body.model] - ID model (default deepseek-chat).
- * @choice deepseek-chat - DeepSeek V3 cepat (tanpa thinking)
- * @choice deepseek-reasoner - DeepSeek R1 dengan thinking/reasoning
- * @choice deepseek-v3 - alias deepseek-chat
- * @choice deepseek-r1 - alias deepseek-reasoner
- * @choice gemini-flash - Gemini 3.6 Flash (serbaguna)
- * @choice gemini-flash-lite - Gemini 3.5 Flash-Lite (tercepat)
+ * @param {string} [body.model] - ID model (default "auto": Gemini dulu, otomatis fallback DeepSeek V3 bila Gemini error/konten kosong).
+ * @choice gemini-lite - Gemini Flash-Lite via gemini.google.com (tercepat)
+ * @choice deepseek-v3 - DeepSeek V3 tanpa reasoning (cepat)
+ * @choice auto - Default: coba gemini-lite, fallback otomatis ke deepseek-v3 bila error/konten kosong
  * @param {array} body.messages - Array pesan format OpenAI [{role: "system"|"user"|"assistant"|"tool", content}].
  *                                 Pesan assistant boleh punya tool_calls; role "tool" membawa hasil eksekusi tool.
  * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
  *                               Diemulasi via protokol Hermes (model web tidak punya native function calling).
  * @param {string|object} [body.tool_choice] - "auto" | "none" | "required" | {type:"function", function:{name}}.
- * @example Kembalikan jawaban langsung (non-streaming)
+ * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
- *         model: 'deepseek-chat',
+ *         model: 'auto',
  *         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]
  *     })
  * }).then(res => res.json()).then(console.log);
  *
- * @example Streaming SSE + model reasoning
+ * @example Streaming SSE + model deepseek-v3
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
- *         model: 'deepseek-reasoner',
+ *         model: 'deepseek-v3',
  *         stream: true,
  *         messages: [
  *             { role: 'system', content: 'Jawab singkat.' },
@@ -63,7 +60,7 @@
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
- *         model: 'gemini-flash',
+ *         model: 'gemini-lite',
  *         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],
  *         tool_choice: 'auto',
  *         tools: [{
@@ -216,9 +213,10 @@ function forcedChoiceInstructions(choice, hasTools) {
 
 /**
  * Susun model siap generate: adapter web, dibungkus middleware Hermes bila ada tools.
+ * `meta` diteruskan ke adapter auto agar route tahu model aktual yang dipakai.
  */
-function buildModel(modelId, { searchEnabled, tools }) {
-  const base = createWebModel(modelId, { searchEnabled });
+function buildModel(modelId, { searchEnabled, tools, meta }) {
+  const base = createWebModel(modelId, { searchEnabled, meta });
   return tools && Object.keys(tools).length
     ? wrapLanguageModel({ model: base, middleware: hermesToolMiddleware })
     : base;
@@ -284,7 +282,7 @@ export async function POST(req) {
     return NextResponse.json({ error: { message: 'Invalid JSON body', type: 'invalid_request_error' } }, { status: 400 });
   }
 
-  let { model = 'deepseek-chat', messages } = body;
+  let { model = 'auto', messages } = body;
   const stream = body.stream === true || body.stream === 'true' || body.stream === 1 || body.stream === '1';
 
   if (!Array.isArray(messages) || !messages.length) {
@@ -293,7 +291,7 @@ export async function POST(req) {
       { status: 400 }
     );
   }
-  if (!ALL_MODEL_IDS.includes(model)) model = 'deepseek-chat';
+  if (!ALL_MODEL_IDS.includes(model)) model = 'auto';
 
   const searchEnabled = body.search_enabled === true;
   const aiTools = toAiTools(body.tools ?? []);
@@ -302,7 +300,9 @@ export async function POST(req) {
   // 'required' & named-tool dijemahkan jadi instruksi teks (bukan toolChoice SDK)
   const forceNotes = forcedChoiceInstructions(body.tool_choice, Object.keys(aiTools).length > 0);
   const instructions = [baseInstructions, ...forceNotes].filter(Boolean).join('\n\n') || undefined;
-  const lm = buildModel(model, { searchEnabled, tools: aiTools });
+  // meta.used diisi adapter auto dengan ID model aktual (gemini-lite | deepseek-v3)
+  const meta = {};
+  const lm = buildModel(model, { searchEnabled, tools: aiTools, meta });
 
   // ---------- STREAMING ----------
   if (stream) {
@@ -310,13 +310,16 @@ export async function POST(req) {
     const id = genId();
     const customStream = new TransformStream();
     const writer = customStream.writable.getWriter();
+    // Nama model pada tiap chunk: untuk mode 'auto' di-update setelah adapter
+    // memutuskan fallback (selalu terjadi SEBELUM part konten pertama tiba).
+    let reportedModel = model;
 
     const sendChunk = (delta, finishReason = null) =>
       writer.write(encoder.encode(`data: ${JSON.stringify({
         id,
         object: 'chat.completion.chunk',
         created: CREATED,
-        model,
+        model: reportedModel,
         choices: [{ index: 0, delta, finish_reason: finishReason }],
       })}\n\n`));
 
@@ -333,6 +336,15 @@ export async function POST(req) {
         await writer.write(encoder.encode(`data: ${JSON.stringify({ error: { message, type: 'internal_error' } })}\n\n`));
         closed = true;
       };
+      // Chunk role dikirim lazy (saat part pertama tiba) agar sudah membawa
+      // nama model final hasil keputusan fallback mode 'auto'.
+      let roleSent = false;
+      const ensureRole = async () => {
+        if (roleSent || closed) return;
+        roleSent = true;
+        if (meta.used && meta.used !== reportedModel) reportedModel = meta.used;
+        await sendChunk({ role: 'assistant', content: '' });
+      };
 
       try {
         const result = streamText({
@@ -346,8 +358,6 @@ export async function POST(req) {
           } : {}),
         });
 
-        await sendChunk({ role: 'assistant', content: '' });
-
         /** @type {Map<string, number>} toolCallId -> index dalam delta.tool_calls[] */
         const tcIndex = new Map();
         let lastFinish = 'stop';
@@ -356,12 +366,15 @@ export async function POST(req) {
           switch (part.type) {
             case 'reasoning-delta':
               // fullStream level SDK memakai field `text` (bukan `delta`)
+              await ensureRole();
               await sendChunk({ reasoning_content: part.text });
               break;
             case 'text-delta':
+              await ensureRole();
               await sendChunk({ content: part.text });
               break;
             case 'tool-input-start': {
+              await ensureRole();
               // buka blok arguments di chunk baru
               const idx = tcIndex.size;
               tcIndex.set(part.id, idx);
@@ -383,6 +396,7 @@ export async function POST(req) {
           }
         }
 
+        await ensureRole();
         await finishOnce(lastFinish);
       } catch (err) {
         reportError(err, { endpoint: '/api/chat/completions', stream: true, model }).catch(() => {});
@@ -422,7 +436,7 @@ export async function POST(req) {
       id: genId(),
       object: 'chat.completion',
       created: CREATED,
-      model,
+      model: meta.used || model, // mode auto: laporkan model aktual yang menjawab
       choices: [{ index: 0, message, finish_reason: finishReason }],
       usage: usageFrom(result),
     });
@@ -444,13 +458,13 @@ export async function GET() {
     usage: {
       method: 'POST',
       body: {
-        model: 'deepseek-chat | deepseek-reasoner | gemini-flash | gemini-flash-lite (default deepseek-chat)',
+        model: 'gemini-lite | deepseek-v3 | auto (default auto: gemini dulu, fallback deepseek bila error/kosong)',
         messages: '[{role: system|user|assistant|tool, content}]',
         stream: 'boolean (opsional)',
         tools: '[{type:"function", function:{name, description, parameters}}] (opsional)',
         tool_choice: '"auto" | "none" | "required" | {type:"function",function:{name}} (opsional)',
       },
-      curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"deepseek-reasoner","messages":[{"role":"user","content":"halo"}]}'`,
+      curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
     note: 'Function calling diemulasi via prompt injection (Hermes protocol) karena model web tidak punya native tools.',
   });
