@@ -4,7 +4,8 @@
  * @description Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools + body.tool_choice) untuk semua model — tool calls
- *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol Hermes),
+ *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
+ *              Qwen3-Coder XML),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
  *              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:
  *              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api
@@ -19,7 +20,7 @@
  *                                 Pesan assistant boleh punya tool_calls; role "tool" membawa hasil eksekusi tool.
  * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
- *                               Diemulasi via protokol Hermes (model web tidak punya native function calling).
+ *                               Diemulasi via protokol Qwen3-Coder XML (model web tidak punya native function calling).
  * @param {string|object} [body.tool_choice] - "auto" | "none" | "required" | {type:"function", function:{name}}.
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
@@ -77,7 +78,7 @@
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { generateText, streamText, wrapLanguageModel, stepCountIs } from 'ai';
-import { hermesToolMiddleware } from '@ai-sdk-tool/parser';
+import { qwen3CoderToolMiddleware } from '@ai-sdk-tool/parser';
 import { jsonSchema } from '@ai-sdk/provider-utils';
 import { reportError } from '../../../../lib/errorLogger';
 import { createWebModel, ALL_MODEL_IDS } from '../../../../lib/ai-provider-web.js';
@@ -96,7 +97,7 @@ function genId() {
 
 /**
  * Pesan assistant OpenAI dengan tool_calls -> parts teks + tool-call.
- * Middleware Hermes mengubah keduanya jadi teks sebelum sampai adapter.
+ * Middleware Qwen3-Coder XML mengubah keduanya jadi teks sebelum sampai adapter.
  */
 function assistantToolCallParts(toolCalls = []) {
   return toolCalls.map((tc) => ({
@@ -126,7 +127,7 @@ function contentToText(content) {
 /**
  * OpenAI messages -> { instructions, ModelMessage[] } (format ai v7).
  * ai v7 melarang role system di dalam `messages` — harus lewat opsi `instructions`.
- * Role "tool" dipetakan jadi tool-result message; middleware Hermes yang merapikan jadi teks.
+ * Role "tool" dipetakan jadi tool-result message; middleware XML yang merapikan jadi teks.
  */
 function splitPrompt(messages = []) {
   const instructions = [];
@@ -187,9 +188,9 @@ function toAiTools(tools = []) {
 /**
  * OpenAI tool_choice -> toolChoice AI SDK.
  * Hanya 'none' yang diteruskan ke SDK ('auto' = undefined).
- * 'required' & {type:'function'} TIDAK diteruskan: parser Hermes mengharapkan
- * output JSON murni sesuai responseFormat pada mode itu, sedangkan adapter web
- * mengabaikan responseFormat (model web tetap memakai protokol <tool_call>) —
+ * 'required' & {type:'function'} TIDAK diteruskan: parser tool call mengharapkan
+ * output murni sesuai protokol pada mode itu, sedangkan adapter web
+ * mengabaikan responseFormat (model web tetap memakai protokol <tool_call> XML) —
  * hasilnya tool call invalid "unknown". Keduanya diterjemahkan menjadi instruksi
  * teks tambahan di instructions (lihat POST) lewat jalur 'auto' yang terbukti.
  */
@@ -212,13 +213,13 @@ function forcedChoiceInstructions(choice, hasTools) {
 }
 
 /**
- * Susun model siap generate: adapter web, dibungkus middleware Hermes bila ada tools.
+ * Susun model siap generate: adapter web, dibungkus middleware XML bila ada tools.
  * `meta` diteruskan ke adapter auto agar route tahu model aktual yang dipakai.
  */
 function buildModel(modelId, { tools, meta }) {
   const base = createWebModel(modelId, { meta });
   return tools && Object.keys(tools).length
-    ? wrapLanguageModel({ model: base, middleware: hermesToolMiddleware })
+    ? wrapLanguageModel({ model: base, middleware: qwen3CoderToolMiddleware })
     : base;
 }
 
@@ -453,7 +454,7 @@ export async function GET() {
     endpoint: '/api/chat/completions',
     compatible: 'OpenAI Chat Completions API',
     models: ALL_MODEL_IDS,
-    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (hermes emulation)'],
+    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (qwen3coder-xml emulation)'],
     usage: {
       method: 'POST',
       body: {
@@ -465,6 +466,6 @@ export async function GET() {
       },
       curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
-    note: 'Function calling diemulasi via prompt injection (Hermes protocol) karena model web tidak punya native tools.',
+    note: 'Function calling diemulasi via prompt injection (Qwen3-Coder XML protocol) karena model web tidak punya native tools.',
   });
 }
