@@ -144,6 +144,44 @@
       ]
     },
     {
+      "title": "YouTube Downloader",
+      "summary": "Download video/audio YouTube via API vidssave.com.",
+      "description": "Endpoint untuk mengambil link download video atau audio (MP3)\n              YouTube beserta metadata (judul, thumbnail, durasi) dan daftar\n              kualitas yang tersedia. Gunakan param type=audio untuk musik/MP3,\n              atau quality=360P untuk memilih kualitas tertentu. Hanya menerima\n              URL HTTPS dari domain youtube.com / youtu.be.",
+      "method": "GET",
+      "path": "/api/downloader/youtube",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL video YouTube (wajib, https only).",
+          "required": true
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "type": "string",
+          "description": "Jenis media: \"video\" (default) atau \"audio\".",
+          "required": true,
+          "choices": [
+            {
+              "value": "type video,audio",
+              "label": "type video,audio"
+            }
+          ]
+        },
+        {
+          "name": "quality",
+          "in": "query",
+          "type": "string",
+          "description": "Kualitas spesifik, misal \"720P\" atau \"360P\" (opsional).",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "SoundCloud Play",
       "summary": "Cari lagu dari kata kunci dan dapatkan direct stream URL MP3 SoundCloud.",
       "description": "Mencari track di SoundCloud berdasarkan kata kunci q (mengambil\r              hasil teratas), lalu mengambil direct URL stream MP3 128 kbps\r              beserta metadata judul dan durasinya. Track Go+ (policy SNIP)\r              hanya menghasilkan preview 30 detik (ditandai is_preview=true).\r              Link stream kedaluwarsa ±1 jam.",
