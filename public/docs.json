@@ -154,6 +154,24 @@
           "required": true
         }
       ]
+    },
+    {
+      "title": "SoundCloud Play",
+      "summary": "Cari lagu dari kata kunci dan dapatkan direct stream URL MP3 SoundCloud.",
+      "description": "Mencari track di SoundCloud berdasarkan kata kunci q (mengambil\r              hasil teratas), lalu mengambil direct URL stream MP3 128 kbps\r              beserta metadata judul dan durasinya. Track Go+ (policy SNIP)\r              hanya menghasilkan preview 30 detik (ditandai is_preview=true).\r              Link stream kedaluwarsa ±1 jam.",
+      "method": "GET",
+      "path": "/api/play/soundcloud",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/play/soundcloud?q=dj%20ya%20odna')\r     .then(res => res.json())\r     .then(console.log);",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian lagu SoundCloud (wajib).",
+          "required": true
+        }
+      ]
     }
   ],
   "dramabox": [

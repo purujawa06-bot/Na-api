@@ -1,50 +1,65 @@
 /**
  * @title SoundCloud Play
- * @summary Cari dan dapatkan direct stream URL track SoundCloud berdasarkan query pencarian.
- * @description Mencari track di SoundCloud berdasarkan kata kunci `q`, kemudian mengambil direct URL stream MP3 beserta metadata judul dan durasinya.
+ * @summary Cari lagu dari kata kunci dan dapatkan direct stream URL MP3 SoundCloud.
+ * @description Mencari track di SoundCloud berdasarkan kata kunci q (mengambil
+ *              hasil teratas), lalu mengambil direct URL stream MP3 128 kbps
+ *              beserta metadata judul dan durasinya. Track Go+ (policy SNIP)
+ *              hanya menghasilkan preview 30 detik (ditandai is_preview=true).
+ *              Link stream kedaluwarsa ±1 jam.
  * @method GET
  * @path /api/play/soundcloud
  * @param {string} query.q - Kata kunci pencarian lagu SoundCloud (wajib).
  * @response json
  * @example
- * fetch('[https://puruboy-api.vercel.app/api/play/soundcloud?q=dj%20ya%20odna](https://puruboy-api.vercel.app/api/play/soundcloud?q=dj%20ya%20odna)')
+ * fetch('https://puruboy-api.vercel.app/api/play/soundcloud?q=dj%20ya%20odna')
  *     .then(res => res.json())
  *     .then(console.log);
  */
-import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';
 import { NextResponse } from 'next/server';
+import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function GET(req) {
-    try {
-        const { searchParams } = new URL(req.url);
-        const q = searchParams.get('q');
-        if (!q) {
-            return NextResponse.json({ success: false, error: 'Parameter "q" wajib diisi' }, { status: 400 });
-        }
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get('q');
+  if (!q || !q.trim()) {
+    return NextResponse.json(
+      { success: false, error: 'Parameter "q" wajib diisi' },
+      { status: 400 }
+    );
+  }
 
-        const searchResult = await searchSoundCloud(q, 'tracks', 1);
-        if (!searchResult.items || searchResult.items.length === 0) {
-            return NextResponse.json({ success: false, error: 'Track tidak ditemukan' }, { status: 404 });
-        }
-
-        const track = searchResult.items[0];
-        const streamUrl = await downloadSoundCloud(track.permalink_url);
-
-        return NextResponse.json({
-            success: true,
-            source: 'api-v2.soundcloud.com',
-            query: q,
-            track: {
-                id: track.id,
-                title: track.title,
-                duration_ms: track.duration,
-                duration_formatted: track.duration_formatted,
-                artwork_url: track.artwork_url,
-                permalink_url: track.permalink_url,
-                stream_url: streamUrl
-            }
-        });
-    } catch (err) {
-        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  try {
+    // Ambil hasil pencarian teratas (type=tracks, limit=1)
+    const searchResult = await searchSoundCloud(q.trim(), { type: 'tracks', limit: 1 });
+    const track = searchResult.results[0];
+    if (!track) {
+      return NextResponse.json({ success: false, error: 'Track tidak ditemukan' }, { status: 404 });
     }
+
+    // downloadSoundCloud mengembalikan objek metadata + stream_url (bukan string)
+    const dl = await downloadSoundCloud(track.permalink_url);
+
+    return NextResponse.json({
+      success: true,
+      source: 'api-v2.soundcloud.com',
+      query: q.trim(),
+      track: {
+        id: dl.id,
+        title: dl.title,
+        author: dl.user?.username ?? null,
+        duration_ms: dl.duration_ms,
+        artwork_url: dl.artwork_url,
+        permalink_url: dl.permalink_url,
+        policy: dl.policy,
+        is_preview: dl.is_preview,
+        stream_url: dl.stream_url,
+      },
+    });
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 502 });
+  }
 }
