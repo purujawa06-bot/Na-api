@@ -168,11 +168,15 @@
           "in": "query",
           "type": "string",
           "description": "Jenis media: \"video\" (default) atau \"audio\".",
-          "required": true,
+          "required": false,
           "choices": [
             {
-              "value": "type video,audio",
-              "label": "type video,audio"
+              "value": "video",
+              "label": "Video (default)"
+            },
+            {
+              "value": "audio",
+              "label": "Audio / MP3"
             }
           ]
         },
@@ -180,8 +184,8 @@
           "name": "quality",
           "in": "query",
           "type": "string",
-          "description": "Kualitas spesifik, misal \"720P\" atau \"360P\" (opsional).",
-          "required": true
+          "description": "Kualitas spesifik, misal \"720P\" atau \"360P\".",
+          "required": false
         }
       ]
     },

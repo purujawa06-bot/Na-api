@@ -300,8 +300,8 @@
                     <p class="text-xs text-gray-500 mb-4">Berlaku untuk <code class="bg-gray-800 px-1 rounded">/api/chat/completions</code> saat body.model = "auto". Provider #1 dicoba lebih dulu; bila error ATAU selesai tanpa tool call &amp; konten kosong, otomatis lanjut ke provider berikutnya dalam stream yang sama.</p>
                     <form id="aichain-form" class="space-y-4">
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Provider Prioritas (#1)</label>
-                            <select id="ai-primary" class="input-field text-sm"></select>
+                            <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Urutan Prioritas</label>
+                            <div id="ai-chain-rows" class="space-y-2"></div>
                             <p id="aichain-hint" class="text-[10px] text-gray-500 mt-1"></p>
                         </div>
                         <button type="submit" class="btn-primary w-full shadow-lg shadow-pink-900/20 mt-4">
@@ -612,14 +612,38 @@
             { id: 'easemate', label: 'EaseMate AI' },
         ];
 
-        function aiChainOrdered() {
-            const primary = document.getElementById('ai-primary').value;
-            return [primary, ...AI_MODELS.map(m => m.id).filter(id => id !== primary)];
-        }
+        let aiChain = [];
 
-        function updateAiChainHint() {
-            const labels = aiChainOrdered().map(id => AI_MODELS.find(m => m.id === id)?.label ?? id);
-            document.getElementById('aichain-hint').textContent = `Urutan final: ${labels.join(' → ')}`;
+        const aiLabel = (id) => AI_MODELS.find(m => m.id === id)?.label ?? id;
+
+        function renderAiChain() {
+            const box = document.getElementById('ai-chain-rows');
+            box.innerHTML = '';
+            aiChain.forEach((id, i) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-gray-800/60 rounded-lg px-3 py-2';
+                const num = document.createElement('span');
+                num.className = 'text-[10px] font-bold text-pink-400 w-5';
+                num.textContent = '#' + (i + 1);
+                const label = document.createElement('span');
+                label.className = 'flex-1 text-sm text-white';
+                label.textContent = aiLabel(id);
+                row.append(num, label);
+                [[-1, '↑'], [1, '↓']].forEach(([dir, ch]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = ch;
+                    btn.className = 'w-8 h-8 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg font-bold';
+                    btn.disabled = dir < 0 ? i === 0 : i === aiChain.length - 1;
+                    btn.onclick = () => {
+                        [aiChain[i], aiChain[i + dir]] = [aiChain[i + dir], aiChain[i]];
+                        renderAiChain();
+                    };
+                    row.appendChild(btn);
+                });
+                box.appendChild(row);
+            });
+            document.getElementById('aichain-hint').textContent = `Urutan final: ${aiChain.map(aiLabel).join(' → ')}`;
         }
 
         async function fetchAiChain() {
@@ -627,21 +651,14 @@
                 const res = await fetch(`${API_BASE}/admin/aichain`);
                 if (!res.ok) return;
                 const data = await res.json();
-                const chain = Array.isArray(data.chain) ? data.chain : [];
-                const sel = document.getElementById('ai-primary');
-                sel.innerHTML = '';
-                for (const m of AI_MODELS) {
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.textContent = m.label;
-                    sel.appendChild(opt);
-                }
-                sel.value = chain[0] || AI_MODELS[0].id;
-                updateAiChainHint();
+                const saved = Array.isArray(data.chain) ? data.chain : [];
+                aiChain = [
+                    ...saved.filter(id => AI_MODELS.some(m => m.id === id)),
+                    ...AI_MODELS.map(m => m.id).filter(id => !saved.includes(id)),
+                ];
+                renderAiChain();
             } catch(e) { console.error(e); }
         }
-
-        document.getElementById('ai-primary').onchange = updateAiChainHint;
 
         document.getElementById('aichain-form').onsubmit = async (e) => {
             e.preventDefault();
@@ -650,7 +667,7 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
             btn.disabled = true;
             try {
-                const res = await api('/admin/aichain', { method: 'POST', body: JSON.stringify({ chain: aiChainOrdered() }) });
+                const res = await api('/admin/aichain', { method: 'POST', body: JSON.stringify({ chain: aiChain }) });
                 if(res.ok) alert('Urutan fallback berhasil diperbarui!');
                 else {
                     const err = await res.json().catch(() => ({}));
