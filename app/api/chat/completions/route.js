@@ -3,9 +3,9 @@
  * @summary Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.
  * @description Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
- *              FUNCTION CALLING (body.tools + body.tool_choice) untuk semua model — tool calls
+ *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
- *              Qwen3-Coder XML),
+ *              Qwen3-Coder XML; body.tool_choice diabaikan),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
  *              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:
  *              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api
@@ -22,7 +22,6 @@
  * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
  *                               Diemulasi via protokol Qwen3-Coder XML (model web tidak punya native function calling).
- * @param {string|object} [body.tool_choice] - "auto" | "none" | "required" | {type:"function", function:{name}}.
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
@@ -64,7 +63,6 @@
  *     body: JSON.stringify({
  *         model: 'gemini-lite',
  *         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],
- *         tool_choice: 'auto',
  *         tools: [{
  *             type: 'function',
  *             function: {
@@ -189,33 +187,6 @@ function toAiTools(tools = []) {
 }
 
 /**
- * OpenAI tool_choice -> toolChoice AI SDK.
- * Hanya 'none' yang diteruskan ke SDK ('auto' = undefined).
- * 'required' & {type:'function'} TIDAK diteruskan: parser tool call mengharapkan
- * output murni sesuai protokol pada mode itu, sedangkan adapter web
- * mengabaikan responseFormat (model web tetap memakai protokol <tool_call> XML) —
- * hasilnya tool call invalid "unknown". Keduanya diterjemahkan menjadi instruksi
- * teks tambahan di instructions (lihat POST) lewat jalur 'auto' yang terbukti.
- */
-function toToolChoice(choice) {
-  if (!choice || choice === 'auto') return undefined;
-  if (choice === 'none') return 'none';
-  return undefined;
-}
-
-/** Instruksi teks pengganti tool_choice 'required' / named-tool (prompt injection). */
-function forcedChoiceInstructions(choice, hasTools) {
-  if (!hasTools) return [];
-  const notes = [];
-  if (choice === 'required') {
-    notes.push('You MUST call one of the available functions in this turn. Do not answer with plain text.');
-  } else if (typeof choice === 'object' && choice.type === 'function' && choice.function?.name) {
-    notes.push(`You MUST call the function "${choice.function.name}" in this turn. Do not answer with plain text.`);
-  }
-  return notes;
-}
-
-/**
  * Susun model siap generate: adapter web, dibungkus middleware XML bila ada tools.
  * `meta` diteruskan ke adapter auto agar route tahu model aktual yang dipakai.
  * `chain` = urutan fallback mode 'auto' dari settings admin (diabaikan model lain).
@@ -303,11 +274,9 @@ export async function POST(req) {
   if (!ALL_MODEL_IDS.includes(model)) model = 'auto';
 
   const aiTools = toAiTools(body.tools ?? []);
-  const toolChoice = toToolChoice(body.tool_choice);
-  const { instructions: baseInstructions, messages: modelMessages } = splitPrompt(messages);
-  // 'required' & named-tool dijemahkan jadi instruksi teks (bukan toolChoice SDK)
-  const forceNotes = forcedChoiceInstructions(body.tool_choice, Object.keys(aiTools).length > 0);
-  const instructions = [baseInstructions, ...forceNotes].filter(Boolean).join('\n\n') || undefined;
+  // body.tool_choice sengaja diabaikan: format & pemaksaan murni lewat
+  // injeksi bawaan middleware parser (@ai-sdk-tool/parser).
+  const { instructions, messages: modelMessages } = splitPrompt(messages);
   // meta.used diisi adapter auto dengan ID model aktual yang menjawab
   const meta = {};
   // Urutan fallback mode 'auto' dari settings admin (cache 60s; DB opsional ->
@@ -362,11 +331,7 @@ export async function POST(req) {
           model: lm,
           instructions, // system prompt (ai v7 melarang system di messages)
           messages: modelMessages,
-          ...(Object.keys(aiTools).length ? {
-            tools: aiTools,
-            ...(toolChoice ? { toolChoice } : {}),
-            stopWhen: stepCountIs(1), // mode passthrough: agent eksekusi tool-nya sendiri
-          } : {}),
+          ...(Object.keys(aiTools).length ? { tools: aiTools } : {}),
         });
 
         /** @type {Map<string, number>} toolCallId -> index dalam delta.tool_calls[] */
@@ -435,7 +400,6 @@ export async function POST(req) {
       messages: modelMessages,
       ...(Object.keys(aiTools).length ? {
         tools: aiTools,
-        ...(toolChoice ? { toolChoice } : {}),
         stopWhen: stepCountIs(1), // passthrough: balas tool_calls ke agent, JANGAN auto-eksekusi
       } : {}),
     });
@@ -473,7 +437,7 @@ export async function GET() {
         messages: '[{role: system|user|assistant|tool, content}]',
         stream: 'boolean (opsional)',
         tools: '[{type:"function", function:{name, description, parameters}}] (opsional)',
-        tool_choice: '"auto" | "none" | "required" | {type:"function",function:{name}} (opsional)',
+        tool_choice: 'diabaikan (kompatibilitas OpenAI saja)',
       },
       curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
