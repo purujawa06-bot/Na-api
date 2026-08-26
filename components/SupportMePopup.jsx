@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const STORAGE_KEY = 'support_popup_shown_at';
 const EXPIRY_MS = 23 * 60 * 60 * 1000; // 23 jam
@@ -47,9 +48,11 @@ export default function SupportMePopup() {
                 {/* Logo Favicon */}
                 <div className="flex justify-center mb-4">
                     <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg border-2 border-pink-500/20 ring-2 ring-pink-500/10">
-                        <img 
+                        <Image 
                             src="/favicon.jpg" 
                             alt="PuruBoy API" 
+                            width={64}
+                            height={64}
                             className="w-full h-full object-cover"
                         />
                     </div>

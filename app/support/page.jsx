@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function SupportPage() {
     const qrisUrl = "https://github.com/purujawa06-bot/purujawa06-bot.github.io/raw/refs/heads/main/qr_ID1026577441748_25.08.26_1787642919_1787642939656.jpeg";
@@ -25,10 +26,13 @@ export default function SupportPage() {
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-3 bg-[#EAA524] hover:bg-[#d8951a] text-black font-black px-8 py-4 rounded-2xl shadow-xl hover:shadow-amber-500/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm md:text-base"
                     >
-                        <img 
+                        <Image 
                             src="https://saweria.co/favicon.ico" 
                             alt="Saweria Logo" 
-                            className="w-6 h-6 rounded-md bg-white p-0.5"
+                            width={24}
+                            height={24}
+                            unoptimized
+                            className="rounded-md bg-white p-0.5"
                         />
                         <span>Dukung via Saweria (saweria.co/puruboy)</span>
                         <i className="fas fa-external-link-alt text-xs opacity-70"></i>
@@ -48,9 +52,12 @@ export default function SupportPage() {
                     Scan kode QRIS di bawah ini menggunakan aplikasi E-Wallet (Gopay, OVO, Dana, ShopeePay) atau Mobile Banking favorit Anda.
                 </p>
                 <div className="p-4 bg-white rounded-2xl shadow-inner max-w-xs md:max-w-sm">
-                    <img 
+                    <Image 
                         src={qrisUrl} 
                         alt="QRIS Donasi" 
+                        width={400}
+                        height={400}
+                        unoptimized
                         className="w-full h-auto rounded-xl object-contain"
                     />
                 </div>

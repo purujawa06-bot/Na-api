@@ -360,7 +360,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                 }, 10);
             }
         }
-    }, [isOpen, activeTab, codeFormat, finalData?.data, finalData?.isStream, formValues]);
+    }, [isOpen, activeTab, codeFormat, finalData?.data, finalData?.isStream, finalData?.isMedia, formValues]);
 
     // Auto-fill params when opening an endpoint with example data
     useEffect(() => {

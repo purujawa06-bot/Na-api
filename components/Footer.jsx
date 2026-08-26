@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export default function Footer() {
@@ -17,10 +18,13 @@ export default function Footer() {
                     href="/support"
                     className="inline-flex items-center gap-3 bg-[#EAA524] hover:bg-[#d8951a] text-black font-black px-8 py-4 rounded-2xl shadow-lg hover:shadow-amber-500/20 transition-all transform hover:scale-105 active:scale-95 text-base"
                 >
-                    <img 
+                    <Image 
                         src="https://saweria.co/favicon.ico" 
                         alt="Saweria Logo" 
-                        className="w-6 h-6 rounded-md bg-white p-0.5" 
+                        width={24}
+                        height={24}
+                        unoptimized
+                        className="rounded-md bg-white p-0.5" 
                     />
                     <span>Support Saya</span>
                     <i className="fas fa-chevron-right text-xs opacity-70"></i>
