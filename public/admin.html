@@ -683,9 +683,10 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 const saved = Array.isArray(data.chain) ? data.chain : [];
+                const chainableIds = AI_MODELS.filter(m => m.chainable).map(m => m.id);
                 aiChain = [
-                    ...saved.filter(id => AI_MODELS.some(m => m.id === id)),
-                    ...AI_MODELS.map(m => m.id).filter(id => !saved.includes(id)),
+                    ...saved.filter(id => chainableIds.includes(id)),
+                    ...chainableIds.filter(id => !saved.includes(id)),
                 ];
                 renderAiChain();
             } catch(e) { console.error(e); }
