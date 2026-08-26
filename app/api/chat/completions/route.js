@@ -28,12 +28,12 @@
  *     })
  * }).then(res => res.json()).then(console.log);
  *
- * @example Streaming SSE + model deepseek-v4
+ * @example Streaming SSE
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
- *         model: 'deepseek-v4',
+ *         model: 'auto',
  *         stream: true,
  *         messages: [
  *             { role: 'system', content: 'Jawab singkat.' },
@@ -57,7 +57,7 @@
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
- *         model: 'gemini-lite',
+ *         model: 'auto',
  *         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],
  *         tools: [{
  *             type: 'function',
