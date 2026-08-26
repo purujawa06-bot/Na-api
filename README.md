@@ -1,110 +1,38 @@
-# PuruBoy API (Na-api)
+# Na-api 🚀
 
-API berbasis **Next.js (App Router)** yang menyediakan layanan AI (termasuk OpenAI-compatible `/v1/chat/completions`), Downloader, DramaBox, Search, Blogs, dan Admin management.
+Next.js API platform providing OpenAI-compatible endpoints, multimedia search, and AI response optimization.
 
-## 🚀 Fitur & Endpoint Utama
+## 🌐 Base URL
+`https://puruboy-api.vercel.app`
 
-### 🤖 AI
-- **OpenAI Compatible**: `/api/chat/completions` (support provider web, DSML sanitizing, streaming SSE)
-- **DeepSeek Web Direct**:
-  - `/api/deepseek/instant`
-  - `/api/deepseek/reasoning`
-  - `/api/deepseek/vision`
-- **Models List**: `/api/models`
+## 🛠 Features
 
-### 📥 Downloader & Play
-- **TikTok**: `/api/downloader/tiktok` (via ssstik.io)
-- **Instagram**: `/api/downloader/instagram` (via instasave.website)
-- **YouTube**: `/api/downloader/youtube` (via vidssave / e2b)
-- **SoundCloud**: `/api/downloader/soundcloud` & `/api/play/soundcloud`
+### 1. AI & Chat (OpenAI Compatible)
+Standardized endpoints for seamless integration with existing tools.
+- **POST** `/v1/chat/completions`
+  - **Models**: Gemini Web, DeepSeek Web (Direct)
+- **GET** `/api/models`
+  - Lists currently supported and active models.
 
-### 🎬 DramaBox
-- `/api/dramabox/home`
-- `/api/dramabox/category`
-- `/api/dramabox/search`
-- `/api/dramabox/detail`
-- `/api/dramabox/stream`
+### 2. Multimedia Services
+- **SoundCloud**:
+  - `GET /api/search/soundcloud?q=...` - Search tracks.
+  - `GET /api/play/soundcloud?q=...` - Get streaming/download URLs.
+- **DramaBox**:
+  - `GET /api/search/dramabox?q=...` - Discover content.
+- **Blogs**:
+  - `GET /api/search/blog?q=...` - Search across indexed blogs.
 
-### 🔍 Search
-- `/api/search/soundcloud`
+### 3. Core Libraries (Internal)
+- **UI Artifact Sanitizer**: Automatically cleans AI-generated artifacts for safe UI rendering.
+- **Gemini Share Web**: Advanced session handling for Google AI models.
+- **AI Models Registry**: Centralized management for multi-provider model routing.
 
-### 📝 Blogs & Chat
-- **Blogs**: `/api/blogs` & `/api/blogs/[id]`
-- **Chat**: `/api/chat`
+### 4. Admin & Monitoring
+- **GET** `/api/admin`: Real-time system status and API metrics.
 
-### 🛠️ Admin & System
-- **Admin**: `/api/admin/login`, `/api/admin/featured`, `/api/admin/aichain`
-- **Diag**: `/api/ _diag/upstream`
-- **Temp Storage**: `/api/temp/[id]`
-- **Pages / System Settings**: `/api/pages`
+## 🚀 Deployment
+Built with **Next.js 14+** and optimized for **Vercel**.
 
 ---
-
-## 🛠️ Teknologi
-
-- **Next.js 14** (App Router) + **Tailwind CSS**
-- **PostgreSQL** (via `pg`)
-- **Dokumentasi Auto-Generated**: JSDoc di route handler diproses via `scripts/rebuild-docs.js` (`public/docs.json`)
-- **Provider Integrations**: DeepSeek Web, Gemini Web, NoteGPT, EaseMate WASM/Web, SSSTik, InstaSave, SoundCloud, Dramabox
-
----
-
-## ⚙️ Prasyarat
-
-- Node.js ≥18
-- PostgreSQL (Neon.tech / Supabase / PostgreSQL local)
-
----
-
-## 📦 Instalasi & Penggunaan Lokal
-
-1. Clone repository:
-   ```bash
-   git clone https://github.com/purujawa06-bot/Na-api.git
-   cd Na-api
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Buat file `.env.local`:
-   ```env
-   PURUBOY_PG_URL="postgres://user:password@host:port/db?sslmode=require"
-   PURUBOY_ADMIN_KEY="password_admin_kamu"
-   ```
-
-4. Jalankan mode development:
-   ```bash
-   npm run dev
-   ```
-   Buka `http://localhost:3000`.
-
----
-
-## 📂 Struktur Project
-
-```
-app/               → Next.js App Router (Pages, UI, & API Routes)
-  api/             → Endpoint REST API & OpenAI Compatible proxy
-  docs/            → UI Dokumentasi API interaktif
-components/        → Komponen UI React
-lib/               → Core services (ai-provider-web, dsml-sanitizer, dramabox, soundcloud, dll.)
-public/            → Aset statis & docs.json
-scripts/           → Script utility (rebuild-docs.js)
-utils/             → Helper functions
-```
-
-### Tambah / Update Documentation
-
-Setelah mengubah route JSDoc, jalankan:
-```bash
-node scripts/rebuild-docs.js
-```
-
----
-
-## 🌟 Author
-
-**Mas Puru** — purujawa06-bot
+*Updated on 2026-08-26 by picoclaw (Commit: 8382501)*
