@@ -80,6 +80,7 @@ import { generateText, streamText, wrapLanguageModel, stepCountIs } from 'ai';
 import { qwen3CoderToolMiddleware } from '@ai-sdk-tool/parser';
 import { jsonSchema } from '@ai-sdk/provider-utils';
 import { dsmlSanitizerMiddleware } from '../../../../lib/dsml-sanitizer.js';
+import { uiArtifactSanitizerMiddleware } from '../../../../lib/ui-artifact-sanitizer.js';
 import { reportError } from '../../../../lib/errorLogger';
 import { createWebModel, ALL_MODEL_IDS } from '../../../../lib/ai-provider-web.js';
 import settingsService from '../../../../lib/settingsService';
@@ -193,11 +194,13 @@ function toAiTools(tools = []) {
  */
 function buildModel(modelId, { tools, meta, chain }) {
   const base = createWebModel(modelId, { meta, chain });
-  if (!tools || !Object.keys(tools).length) return base;
+  // Lapisan terdalam: buang markup UI bocoran (<ElicitationsGroup> dll.) dari
+  // semua provider — dipasang tanpa syarat karena mode auto bisa jatuh ke mana pun.
+  const clean = wrapLanguageModel({ model: base, middleware: uiArtifactSanitizerMiddleware });
+  if (!tools || !Object.keys(tools).length) return clean;
   // Lapisan dalam: konversi bocoran format DSML DeepSeek -> Qwen3 XML.
-  // Dipasang tanpa syarat model karena mode 'auto' bisa jatuh ke deepseek saat runtime.
   return wrapLanguageModel({
-    model: wrapLanguageModel({ model: base, middleware: dsmlSanitizerMiddleware }),
+    model: wrapLanguageModel({ model: clean, middleware: dsmlSanitizerMiddleware }),
     middleware: qwen3CoderToolMiddleware,
   });
 }
