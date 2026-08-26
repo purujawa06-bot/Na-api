@@ -1,12 +1,18 @@
 {
-  "name": "NextA-API",
+  "name": "na-api",
   "version": "1.0.0",
-  "description": "Proyek API Publik modular - Next.js Version.",
+  "description": "Professional Next.js API platform with OpenAI-compatible endpoints and multimedia services.",
+  "author": "Mas Puru <purujawa06-bot>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/purujawa06-bot/Na-api.git"
+  },
   "scripts": {
     "dev": "next dev -p 8080",
     "build": "next build",
-    "build:full": "node scripts/generate-docs.js && next build",
-    "vercel:build": "node scripts/generate-docs.js && next build",
+    "build:full": "node scripts/rebuild-docs.js && next build",
+    "vercel:build": "node scripts/rebuild-docs.js && next build",
     "start": "next start",
     "lint": "next lint"
   },

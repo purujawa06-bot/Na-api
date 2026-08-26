@@ -1,110 +1,73 @@
-# PuruBoy API (Na-api)
+# Na-api 🚀
 
-API berbasis **Next.js (App Router)** yang menyediakan layanan AI (termasuk OpenAI-compatible `/v1/chat/completions`), Downloader, DramaBox, Search, Blogs, dan Admin management.
+[![Next.js](https://img.shields.io/badge/Next.js-14+-black?logo=next.js)](https://nextjs.org)
+[![Vercel](https://img.shields.io/badge/Deployed-Vercel-blue?logo=vercel)](https://vercel.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 Fitur & Endpoint Utama
-
-### 🤖 AI
-- **OpenAI Compatible**: `/api/chat/completions` (support provider web, DSML sanitizing, streaming SSE)
-- **DeepSeek Web Direct**:
-  - `/api/deepseek/instant`
-  - `/api/deepseek/reasoning`
-  - `/api/deepseek/vision`
-- **Models List**: `/api/models`
-
-### 📥 Downloader & Play
-- **TikTok**: `/api/downloader/tiktok` (via ssstik.io)
-- **Instagram**: `/api/downloader/instagram` (via instasave.website)
-- **YouTube**: `/api/downloader/youtube` (via vidssave / e2b)
-- **SoundCloud**: `/api/downloader/soundcloud` & `/api/play/soundcloud`
-
-### 🎬 DramaBox
-- `/api/dramabox/home`
-- `/api/dramabox/category`
-- `/api/dramabox/search`
-- `/api/dramabox/detail`
-- `/api/dramabox/stream`
-
-### 🔍 Search
-- `/api/search/soundcloud`
-
-### 📝 Blogs & Chat
-- **Blogs**: `/api/blogs` & `/api/blogs/[id]`
-- **Chat**: `/api/chat`
-
-### 🛠️ Admin & System
-- **Admin**: `/api/admin/login`, `/api/admin/featured`, `/api/admin/aichain`
-- **Diag**: `/api/ _diag/upstream`
-- **Temp Storage**: `/api/temp/[id]`
-- **Pages / System Settings**: `/api/pages`
+**Na-api** adalah ekosistem API modern berbasis Next.js yang dirancang untuk performa tinggi, skalabilitas, dan integrasi AI yang mulus. Menyediakan endpoint yang kompatibel dengan standar industri untuk pengolahan multimedia, pencarian konten, dan orkestrasi model AI.
 
 ---
 
-## 🛠️ Teknologi
-
-- **Next.js 14** (App Router) + **Tailwind CSS**
-- **PostgreSQL** (via `pg`)
-- **Dokumentasi Auto-Generated**: JSDoc di route handler diproses via `scripts/rebuild-docs.js` (`public/docs.json`)
-- **Provider Integrations**: DeepSeek Web, Gemini Web, NoteGPT, EaseMate WASM/Web, SSSTik, InstaSave, SoundCloud, Dramabox
+## 🌐 Quick Links
+- **Base URL**: `https://puruboy-api.vercel.app`
+- **Interactive Documentation**: `https://puruboy-api.vercel.app/docs`
 
 ---
 
-## ⚙️ Prasyarat
+## 🛠 Fitur Utama
 
-- Node.js ≥18
-- PostgreSQL (Neon.tech / Supabase / PostgreSQL local)
+### 🤖 AI Ecosystem (OpenAI Compatible)
+Integrasi satu pintu untuk berbagai model bahasa besar (LLM).
+- **Standardized Endpoint**: `/v1/chat/completions` mendukung provider Web (Gemini, DeepSeek).
+- **Dynamic Routing**: Fallback cerdas antar model via AI Models Registry.
+- **Response Sanitization**: UI Artifact Sanitizer untuk memastikan output AI aman dirender.
+
+### 📥 Multimedia & Streaming
+Layanan download dan pemutaran media tanpa hambatan.
+- **Social Media**: TikTok, Instagram, YouTube (High-quality & No-watermark).
+- **Audio Hub**: SoundCloud Play & Download dengan metadata lengkap.
+- **Short Drama**: Ekosistem DramaBox (Search, Detail, Stream).
+
+### 🔍 Discovery & Content
+- **Deep Search**: Pencarian SoundCloud dan konten blog.
+- **System Monitoring**: Admin dashboard untuk metrik real-time.
 
 ---
 
-## 📦 Instalasi & Penggunaan Lokal
+## ⚙️ Stack Teknologi
+- **Core**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS
+- **Database**: PostgreSQL
+- **AI Integration**: Vercel AI SDK, DeepSeek Web, Gemini Web
+- **Reliability**: JSDoc-powered documentation, Custom Middlewares
 
-1. Clone repository:
+---
+
+## 📦 Instalasi Lokal
+
+1. **Clone & Install**:
    ```bash
    git clone https://github.com/purujawa06-bot/Na-api.git
    cd Na-api
-   ```
-
-2. Install dependencies:
-   ```bash
    npm install
    ```
 
-3. Buat file `.env.local`:
+2. **Environment Setup**:
+   Buat file `.env.local`:
    ```env
-   PURUBOY_PG_URL="postgres://user:password@host:port/db?sslmode=require"
-   PURUBOY_ADMIN_KEY="password_admin_kamu"
+   PURUBOY_PG_URL="your_postgresql_url"
+   PURUBOY_ADMIN_KEY="your_admin_secret"
    ```
 
-4. Jalankan mode development:
+3. **Development**:
    ```bash
    npm run dev
    ```
-   Buka `http://localhost:3000`.
 
 ---
 
-## 📂 Struktur Project
-
-```
-app/               → Next.js App Router (Pages, UI, & API Routes)
-  api/             → Endpoint REST API & OpenAI Compatible proxy
-  docs/            → UI Dokumentasi API interaktif
-components/        → Komponen UI React
-lib/               → Core services (ai-provider-web, dsml-sanitizer, dramabox, soundcloud, dll.)
-public/            → Aset statis & docs.json
-scripts/           → Script utility (rebuild-docs.js)
-utils/             → Helper functions
-```
-
-### Tambah / Update Documentation
-
-Setelah mengubah route JSDoc, jalankan:
-```bash
-node scripts/rebuild-docs.js
-```
+## 📄 Lisensi
+Didistribusikan di bawah Lisensi MIT. Lihat `LICENSE` untuk informasi lebih lanjut.
 
 ---
-
-## 🌟 Author
-
-**Mas Puru** — purujawa06-bot
+**PuruBoy API** — *Empowering developers with efficient tools.*
