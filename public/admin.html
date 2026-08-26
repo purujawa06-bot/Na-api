@@ -611,11 +611,13 @@
 
         /* --- AI CHAIN (urutan fallback model auto) --- */
         // Daftar model diambil dari registry lib/ai-models.js lewat /api/models
-        // (hanya model chainable). Array ini hanya fallback offline.
+        // (semua model; yang non-chainable ditampilkan abu-abu). Fallback offline:
         let AI_MODELS = [
-            { id: 'gemini-lite', label: 'Gemini Flash-Lite' },
-            { id: 'deepseek-v4', label: 'DeepSeek V4 (NoteGPT)' },
-            { id: 'easemate', label: 'EaseMate AI' },
+            { id: 'gemini-lite', label: 'Gemini Flash-Lite', chainable: true },
+            { id: 'deepseek-v4', label: 'DeepSeek V4 (NoteGPT)', chainable: true },
+            { id: 'easemate', label: 'EaseMate AI', chainable: true },
+            { id: 'gemini-share', label: 'Gemini Share', chainable: false },
+            { id: 'auto', label: 'Auto (Fallback)', chainable: false },
         ];
 
         async function loadAiModels() {
@@ -623,10 +625,8 @@
                 const res = await fetch(`${API_BASE}/models`);
                 if (!res.ok) return;
                 const data = await res.json();
-                const chainable = (data.data || []).filter(m => m.chainable);
-                if (chainable.length) {
-                    AI_MODELS = chainable.map(m => ({ id: m.id, label: m.label || m.description || m.id }));
-                }
+                const list = (data.data || []).map(m => ({ id: m.id, label: m.label || m.description || m.id, chainable: !!m.chainable }));
+                if (list.length) AI_MODELS = list;
             } catch (e) { console.error(e); }
         }
 
@@ -659,6 +659,18 @@
                     };
                     row.appendChild(btn);
                 });
+                box.appendChild(row);
+            });
+            AI_MODELS.filter(m => !m.chainable && m.id !== 'auto').forEach(m => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-gray-900/50 rounded-lg px-3 py-2 opacity-60';
+                const num = document.createElement('span');
+                num.className = 'text-[10px] font-bold text-gray-500 w-5';
+                num.textContent = '•';
+                const label = document.createElement('span');
+                label.className = 'flex-1 text-sm text-gray-400';
+                label.textContent = `${aiLabel(m.id)} — non-chainable, tidak bisa masuk rantai auto`;
+                row.append(num, label);
                 box.appendChild(row);
             });
             document.getElementById('aichain-hint').textContent = `Urutan final: ${aiChain.map(aiLabel).join(' → ')}`;
