@@ -81,6 +81,7 @@ import { NextResponse } from 'next/server';
 import { generateText, streamText, wrapLanguageModel, stepCountIs } from 'ai';
 import { qwen3CoderToolMiddleware } from '@ai-sdk-tool/parser';
 import { jsonSchema } from '@ai-sdk/provider-utils';
+import { dsmlSanitizerMiddleware } from '../../../../lib/dsml-sanitizer.js';
 import { reportError } from '../../../../lib/errorLogger';
 import { createWebModel, ALL_MODEL_IDS } from '../../../../lib/ai-provider-web.js';
 import settingsService from '../../../../lib/settingsService';
@@ -221,9 +222,13 @@ function forcedChoiceInstructions(choice, hasTools) {
  */
 function buildModel(modelId, { tools, meta, chain }) {
   const base = createWebModel(modelId, { meta, chain });
-  return tools && Object.keys(tools).length
-    ? wrapLanguageModel({ model: base, middleware: qwen3CoderToolMiddleware })
-    : base;
+  if (!tools || !Object.keys(tools).length) return base;
+  // Lapisan dalam: konversi bocoran format DSML DeepSeek -> Qwen3 XML.
+  // Dipasang tanpa syarat model karena mode 'auto' bisa jatuh ke deepseek saat runtime.
+  return wrapLanguageModel({
+    model: wrapLanguageModel({ model: base, middleware: dsmlSanitizerMiddleware }),
+    middleware: qwen3CoderToolMiddleware,
+  });
 }
 
 // ---------------- Pemetaan hasil -> OpenAI response ----------------
