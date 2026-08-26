@@ -1,45 +1,42 @@
 # PuruBoy API (Na-api)
 
-API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI, Downloader, Anime, Search, dan Tools. Dilengkapi dokumentasi interaktif swagger-style dengan **Try It Out**, **Auto Fill**, dan **Streaming Response**.
+API berbasis **Next.js (App Router)** yang menyediakan layanan AI (termasuk OpenAI-compatible `/v1/chat/completions`), Downloader, DramaBox, Search, Blogs, dan Admin management.
 
-## 🚀 Fitur Utama
+## 🚀 Fitur & Endpoint Utama
 
 ### 🤖 AI
-- **Chat**: DeepSeek V4, Grok-4, GPT-4 (Typli/ChatEspanyol), Draco AI, LetMeGPT, NoteGPT, Gemini, Tsundere
-- **Image Generation**: Flux, Flux V2, Ghibli Style, Vheer AI
-- **Vision**: ScreenApp (analisis gambar via Gemini)
-- **Text-to-Speech**: Svara, Aitwo (Bahasa Indonesia)
-- **Text Processing**: Translapp (Translate, Paraphrase, Summarize)
+- **OpenAI Compatible**: `/api/chat/completions` (support provider web, DSML sanitizing, streaming SSE)
+- **DeepSeek Web Direct**:
+  - `/api/deepseek/instant`
+  - `/api/deepseek/reasoning`
+  - `/api/deepseek/vision`
+- **Models List**: `/api/models`
 
-### 📥 Downloader
-- YouTube (Video/Audio), TikTok (No WM — `/api/downloader/tiktok`, via ssstik.io), Instagram (`/api/downloader/instagram` — Reels/Post/IGTV/Carousel, tanpa browser, via instasave.website), Facebook, X/Twitter, SoundCloud, Spotify
-- DramaBox (katalog & pencarian drama pendek — `/api/dramabox/home`, `/detail`, `/search`, `/category`, `/stream`; tanpa browser, via dramabox.com)
+### 📥 Downloader & Play
+- **TikTok**: `/api/downloader/tiktok` (via ssstik.io)
+- **Instagram**: `/api/downloader/instagram` (via instasave.website)
+- **YouTube**: `/api/downloader/youtube` (via vidssave / e2b)
+- **SoundCloud**: `/api/downloader/soundcloud` & `/api/play/soundcloud`
 
-### 🎬 Anime
-- Oploverz Streaming, MyAnimeList (Search, Popular, Ongoing, Genre), Samehadaku
+### 🎬 DramaBox
+- `/api/dramabox/home`
+- `/api/dramabox/category`
+- `/api/dramabox/search`
+- `/api/dramabox/detail`
+- `/api/dramabox/stream`
 
 ### 🔍 Search
-- Yahoo, YouTube, SoundCloud, Pinterest, Lahelu, Lyrics, Suggestions
+- `/api/search/soundcloud`
 
-### 🛠️ Tools
-- Remove Background, Upscale, Colorize, QRIS Generator, TikTok Chart, AI Blog System
+### 📝 Blogs & Chat
+- **Blogs**: `/api/blogs` & `/api/blogs/[id]`
+- **Chat**: `/api/chat`
 
-### 📖 Dokumentasi Interaktif
-- **Try It Out**: langsung coba endpoint dari browser
-- **Auto Fill**: isi parameter otomatis dari contoh kode
-- **Live Streaming**: response SSE tampil real-time
-- **Copy cURL/JS**: contoh kode siap pakai
-- **Parameter Chooser**: pilih opsi dengan tombol, bukan input teks
-- **Dark Mode**: UI gelap ramah mata
-
-## 🌟 Top Contributors
-
-| Avatar | Nama | Peran |
-|--------|------|------|
-| <img src="https://avatars.githubusercontent.com/u/7004559855?v=4" width="48" height="48" style="border-radius:50%"> | **Mas Puru** | Founder & Developer |
-
-### Special Thanks
-- **You** — for using and supporting this project! 🙌
+### 🛠️ Admin & System
+- **Admin**: `/api/admin/login`, `/api/admin/featured`, `/api/admin/aichain`
+- **Diag**: `/api/ _diag/upstream`
+- **Temp Storage**: `/api/temp/[id]`
+- **Pages / System Settings**: `/api/pages`
 
 ---
 
@@ -47,65 +44,67 @@ API publik gratis berbasis **Next.js** — menyediakan layanan REST API untuk AI
 
 - **Next.js 14** (App Router) + **Tailwind CSS**
 - **PostgreSQL** (via `pg`)
-- **Dokumentasi auto-generated** dari JSDoc di route handler (`@title`, `@summary`, `@description`, `@method`, `@path`, `@param`, `@example`, `@choice`)
-- **Axios & Fetch**, **IndexedDB** (chatroom), **ID-based Sticker System**
+- **Dokumentasi Auto-Generated**: JSDoc di route handler diproses via `scripts/rebuild-docs.js` (`public/docs.json`)
+- **Provider Integrations**: DeepSeek Web, Gemini Web, NoteGPT, EaseMate WASM/Web, SSSTik, InstaSave, SoundCloud, Dramabox
+
+---
 
 ## ⚙️ Prasyarat
 
 - Node.js ≥18
-- PostgreSQL (Neon.tech / Supabase gratis)
+- PostgreSQL (Neon.tech / Supabase / PostgreSQL local)
 
-## 📦 Instalasi Lokal
+---
 
+## 📦 Instalasi & Penggunaan Lokal
+
+1. Clone repository:
+   ```bash
+   git clone https://github.com/purujawa06-bot/Na-api.git
+   cd Na-api
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Buat file `.env.local`:
+   ```env
+   PURUBOY_PG_URL="postgres://user:password@host:port/db?sslmode=require"
+   PURUBOY_ADMIN_KEY="password_admin_kamu"
+   ```
+
+4. Jalankan mode development:
+   ```bash
+   npm run dev
+   ```
+   Buka `http://localhost:3000`.
+
+---
+
+## 📂 Struktur Project
+
+```
+app/               → Next.js App Router (Pages, UI, & API Routes)
+  api/             → Endpoint REST API & OpenAI Compatible proxy
+  docs/            → UI Dokumentasi API interaktif
+components/        → Komponen UI React
+lib/               → Core services (ai-provider-web, dsml-sanitizer, dramabox, soundcloud, dll.)
+public/            → Aset statis & docs.json
+scripts/           → Script utility (rebuild-docs.js)
+utils/             → Helper functions
+```
+
+### Tambah / Update Documentation
+
+Setelah mengubah route JSDoc, jalankan:
 ```bash
-git clone https://github.com/purujawa06-bot/Na-api.git
-cd Na-api
-npm install
+node scripts/rebuild-docs.js
 ```
 
-Buat `.env.local`:
+---
 
-```env
-PURUBOY_PG_URL="postgres://user:password@host:port/db?sslmode=require"
-PURUBOY_ADMIN_KEY="password_admin_kamu"
-```
+## 🌟 Author
 
-Jalankan:
-
-```bash
-npm run dev
-```
-
-Buka **http://localhost:3000**.
-
-## 📂 Struktur
-
-```
-app/               → Halaman & API Routes
-  api/             → Endpoint REST (Route Handlers + JSDoc sumber docs)
-  docs/            → Dokumentasi interaktif
-  chat/            → Chatroom komunitas
-components/        → React UI komponen
-lib/
-  *.js             → Service/logika endpoint (ssstik.js, gemini-web.js, chatService.js, dll.)
-public/            → Aset statis + docs.json (hasil generate)
-```
-
-### Cara nambah endpoint baru
-
-1. Buat service/logika di `lib/<nama>.js`.
-2. Buat `app/api/<kategori>/<nama>/route.js` → tulis JSDoc (`@title`, `@summary`, `@description`, `@method`, `@path`, `@param`, `@example`) lalu import service & kirim response.
-3. Generate docs: `node scripts/rebuild-docs.js` (menghasilkan `public/docs.json`).
-
-## 🚀 Deployment
-
-**Vercel** (recommended):
-
-```bash
-git push
-# Import di Vercel, set env vars, deploy
-```
-
-## 📝 Lisensi & Author
-
-**PuruBoy** — Open source untuk pembelajaran.
+**Mas Puru** — purujawa06-bot
