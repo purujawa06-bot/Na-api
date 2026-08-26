@@ -135,7 +135,15 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                 else if (param.in === 'body') {
                     try {
                         const trimmed = typeof value === 'string' ? value.trim() : value;
-                        if (typeof trimmed === 'string' && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+                        if (param.type && param.type.toLowerCase() === 'boolean') {
+                            if (trimmed === 'true') bodyParams[param.name] = true;
+                            else if (trimmed === 'false') bodyParams[param.name] = false;
+                            else bodyParams[param.name] = value;
+                        } else if (trimmed === 'true' && (value === 'true' || value === 'false')) {
+                            bodyParams[param.name] = true;
+                        } else if (trimmed === 'false' && (value === 'true' || value === 'false')) {
+                            bodyParams[param.name] = false;
+                        } else if (typeof trimmed === 'string' && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
                             (trimmed.startsWith('[') && trimmed.endsWith(']')))) {
                             bodyParams[param.name] = JSON.parse(trimmed);
                         } else {
