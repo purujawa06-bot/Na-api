@@ -11,8 +11,8 @@
   "scripts": {
     "dev": "next dev -p 8080",
     "build": "next build",
-    "build:full": "node scripts/generate-docs.js && next build",
-    "vercel:build": "node scripts/generate-docs.js && next build",
+    "build:full": "node scripts/rebuild-docs.js && next build",
+    "vercel:build": "node scripts/rebuild-docs.js && next build",
     "start": "next start",
     "lint": "next lint"
   },
