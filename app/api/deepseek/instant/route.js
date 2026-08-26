@@ -14,7 +14,7 @@
  * @param {string} body.prompt - Pesan/pertanyaan Anda.
  * @param {string} [body.chatID] - ID sesi (dari respons sebelumnya) untuk melanjutkan percakapan. Kosongkan untuk chat baru.
  * @param {string|number} [body.parentID] - Wajib bila chatID diisi: message_id jawaban terakhir (dari respons sebelumnya).
- * @param {boolean|string} [body.stream] - true untuk streaming SSE (default false). Terima boolean atau string "true"/"false".
+ * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
  * @response stream
  * @example Chat baru (non-streaming)
  * fetch('https://puruboy-api.vercel.app/api/deepseek/instant', {
@@ -56,14 +56,24 @@ export async function POST(req) {
     return NextResponse.json({ success: false, error: 'Body JSON tidak valid' }, { status: 400 });
   }
 
+  let stream = body.stream;
+  if (typeof stream === 'string') {
+    const trimmed = stream.trim().toLowerCase();
+    if (trimmed === 'true') stream = true;
+    else if (trimmed === 'false') stream = false;
+    else return NextResponse.json({ success: false, error: 'Parameter stream harus bernilai boolean (true/false)' }, { status: 400 });
+  } else if (stream !== undefined && typeof stream !== 'boolean') {
+    return NextResponse.json({ success: false, error: 'Parameter stream harus bernilai boolean (true/false)' }, { status: 400 });
+  }
+
   try {
     const result = await askDeepSeek({
       token: typeof body.userID === 'string' ? body.userID.trim() : '',
-      prompt: body.prompt,
-      chatId: body.chatID,
+      prompt: typeof body.prompt === 'string' ? body.prompt.trim() : body.prompt,
+      chatId: typeof body.chatID === 'string' ? body.chatID.trim() : body.chatID,
       parentId: body.parentID,
       thinking: false,
-      stream: body.stream,
+      stream: stream,
     });
     return result; // JSON object atau Response SSE
   } catch (error) {

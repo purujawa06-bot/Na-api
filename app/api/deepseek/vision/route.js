@@ -15,10 +15,10 @@
  * @param {string} body.userID - Bearer token akun chat.deepseek.com (nilai "value" dari localStorage "userToken").
  * @param {string} body.image - URL publik gambar (http/https; png/jpg/webp).
  * @param {string} body.prompt - Pertanyaan tentang gambar.
- * @param {boolean|string} [body.thinking] - Aktifkan mode thinking (default false). Terima boolean atau string.
+ * @param {boolean} [body.thinking] - Aktifkan mode thinking (default false). Terima boolean.
  * @param {string} [body.chatID] - ID sesi untuk melanjutkan percakapan. Kosongkan untuk chat baru.
  * @param {string|number} [body.parentID] - Wajib bila chatID diisi: message_id jawaban terakhir.
- * @param {boolean|string} [body.stream] - true untuk streaming SSE (default false).
+ * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
  * @response stream
  * @example Tanya isi gambar
  * fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {
@@ -60,15 +60,32 @@ export async function POST(req) {
     return NextResponse.json({ success: false, error: 'Parameter image wajib diisi' }, { status: 400 });
   }
 
+  let stream = body.stream;
+  if (typeof stream === 'string') {
+    const trimmed = stream.trim().toLowerCase();
+    if (trimmed === 'true') stream = true;
+    else if (trimmed === 'false') stream = false;
+    else return NextResponse.json({ success: false, error: 'Parameter stream harus bernilai boolean (true/false)' }, { status: 400 });
+  } else if (stream !== undefined && typeof stream !== 'boolean') {
+    return NextResponse.json({ success: false, error: 'Parameter stream harus bernilai boolean (true/false)' }, { status: 400 });
+  }
+
+  let thinking = body.thinking;
+  if (typeof thinking === 'string') {
+    const trimmed = thinking.trim().toLowerCase();
+    if (trimmed === 'true') thinking = true;
+    else if (trimmed === 'false') thinking = false;
+  }
+
   try {
     const result = await askDeepSeek({
       token: typeof body.userID === 'string' ? body.userID.trim() : '',
-      prompt: body.prompt,
-      chatId: body.chatID,
+      prompt: typeof body.prompt === 'string' ? body.prompt.trim() : body.prompt,
+      chatId: typeof body.chatID === 'string' ? body.chatID.trim() : body.chatID,
       parentId: body.parentID,
-      thinking: body.thinking,
-      imageUrl: body.image,
-      stream: body.stream,
+      thinking: thinking,
+      imageUrl: typeof body.image === 'string' ? body.image.trim() : body.image,
+      stream: stream,
     });
     return result;
   } catch (error) {
