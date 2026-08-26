@@ -136,12 +136,12 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                     try {
                         const trimmed = typeof value === 'string' ? value.trim() : value;
                         if (param.type && param.type.toLowerCase() === 'boolean') {
-                            if (trimmed === 'true') bodyParams[param.name] = true;
-                            else if (trimmed === 'false') bodyParams[param.name] = false;
+                            if (trimmed === 'true' || trimmed === true) bodyParams[param.name] = true;
+                            else if (trimmed === 'false' || trimmed === false) bodyParams[param.name] = false;
                             else bodyParams[param.name] = value;
-                        } else if (trimmed === 'true' && (value === 'true' || value === 'false')) {
+                        } else if (trimmed === 'true' || value === 'true' || value === true) {
                             bodyParams[param.name] = true;
-                        } else if (trimmed === 'false' && (value === 'true' || value === 'false')) {
+                        } else if (trimmed === 'false' || value === 'false' || value === false) {
                             bodyParams[param.name] = false;
                         } else if (typeof trimmed === 'string' && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
                             (trimmed.startsWith('[') && trimmed.endsWith(']')))) {
@@ -290,7 +290,15 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                 if (val !== undefined && val !== '') {
                     try {
                         const trimmed = typeof val === 'string' ? val.trim() : val;
-                        if (typeof trimmed === 'string' && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']')))) {
+                        if (param.type && param.type.toLowerCase() === 'boolean') {
+                            if (trimmed === 'true' || trimmed === true) bodyParams[param.name] = true;
+                            else if (trimmed === 'false' || trimmed === false) bodyParams[param.name] = false;
+                            else bodyParams[param.name] = val;
+                        } else if (trimmed === 'true' || val === true) {
+                            bodyParams[param.name] = true;
+                        } else if (trimmed === 'false' || val === false) {
+                            bodyParams[param.name] = false;
+                        } else if (typeof trimmed === 'string' && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']')))) {
                             bodyParams[param.name] = JSON.parse(trimmed);
                         } else {
                             bodyParams[param.name] = val;
@@ -307,7 +315,10 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
         if (Object.keys(bodyParams).length === 0 && endpoint.example && ['POST', 'PUT', 'PATCH'].includes(endpoint.method)) {
             Object.keys(defaultValues).forEach(k => {
                 if (!queryParams.has(k) && !path.includes(k) && !isMultipart) {
-                    bodyParams[k] = defaultValues[k];
+                    let val = defaultValues[k];
+                    if (val === 'true' || val === true) val = true;
+                    else if (val === 'false' || val === false) val = false;
+                    bodyParams[k] = val;
                 }
             });
         }
@@ -504,7 +515,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                     <div className="relative">
                                                                         <select
                                                                             name={param.name}
-                                                                            value={formValues[param.name] || ''}
+                                                                            value={formValues[param.name] !== undefined ? String(formValues[param.name]) : ''}
                                                                             onChange={handleInputChange}
                                                                             className={`w-full appearance-none bg-input border rounded-xl pl-3 pr-9 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 transition-all ${
                                                                                 missingParams.includes(param.name)
@@ -516,8 +527,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                                 {`Pilih ${param.name}...`}
                                                                             </option>
                                                                             {param.choices.map(choice => (
-                                                                                <option key={choice.value} value={choice.value}>
-                                                                                    {choice.value}
+                                                                                <option key={String(choice.value)} value={String(choice.value)}>
+                                                                                    {String(choice.value)}
                                                                                 </option>
                                                                             ))}
                                                                         </select>
