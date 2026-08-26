@@ -3,17 +3,17 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools + body.tool_choice) untuk semua model — tool calls\n              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\n              Qwen3-Coder XML),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\n              Qwen3-Coder XML; body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model deepseek-v4\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-v4',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'gemini-lite',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tool_choice: 'auto',\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model deepseek-v4\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-v4',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'gemini-lite',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
           "in": "body",
           "type": "string",
-          "description": "ID model (default \"auto\": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html).",
+          "description": "ID model (default \"auto\": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html). Daftar lengkap: lib/ai-models.js (docs/panel admin ambil otomatis dari sana).",
           "required": false,
           "choices": [
             {
@@ -27,6 +27,10 @@
             {
               "value": "easemate",
               "label": "easemate"
+            },
+            {
+              "value": "gemini-share",
+              "label": "gemini-share"
             },
             {
               "value": "auto",
@@ -63,13 +67,6 @@
           "in": "body",
           "type": "array",
           "description": "Definisi fungsi format OpenAI [{type:\"function\", function:{name, description, parameters}}].",
-          "required": false
-        },
-        {
-          "name": "tool_choice",
-          "in": "body",
-          "type": "string|object",
-          "description": "\"auto\" | \"none\" | \"required\" | {type:\"function\", function:{name}}.",
           "required": false
         }
       ]
@@ -269,7 +266,7 @@
     {
       "title": "Daftar Model AI",
       "summary": "List model AI yang tersedia (format OpenAI /v1/models).",
-      "description": "Mengembalikan daftar model yang bisa dipakai di endpoint\n              /api/chat/completions, dalam format kompatibel OpenAI.",
+      "description": "Mengembalikan daftar model yang bisa dipakai di endpoint\n              /api/chat/completions, dalam format kompatibel OpenAI.\n              Sumber data: registry tunggal lib/ai-models.js — model baru\n              cukup ditambah di sana, otomatis muncul di sini, di docs,\n              dan di panel admin.",
       "method": "GET",
       "path": "/api/models",
       "responseType": "json",

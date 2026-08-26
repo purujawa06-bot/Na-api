@@ -12,11 +12,7 @@
  * @method POST
  * @path /api/chat/completions
  * @response stream
- * @param {string} [body.model] - ID model (default "auto": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html).
- * @choice gemini-lite
- * @choice deepseek-v4
- * @choice easemate
- * @choice auto
+ * @param {string} [body.model] - ID model (default "auto": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html). Daftar lengkap: lib/ai-models.js (docs/panel admin ambil otomatis dari sana).
  * @param {array} body.messages - Array pesan format OpenAI [{role: "system"|"user"|"assistant"|"tool", content}].
  *                                 Pesan assistant boleh punya tool_calls; role "tool" membawa hasil eksekusi tool.
  * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
@@ -436,7 +432,7 @@ export async function GET() {
     usage: {
       method: 'POST',
       body: {
-        model: 'gemini-lite | deepseek-v4 | easemate | auto (default auto: rantai fallback dinamis dari panel admin; default gemini-lite dulu, fallback deepseek-v4 lalu easemate)',
+        model: `${ALL_MODEL_IDS.join(' | ')} (default auto: rantai fallback dinamis dari panel admin)`,
         messages: '[{role: system|user|assistant|tool, content}]',
         stream: 'boolean (opsional)',
         tools: '[{type:"function", function:{name, description, parameters}}] (opsional)',

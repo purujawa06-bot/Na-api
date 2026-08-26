@@ -610,11 +610,25 @@
         };
 
         /* --- AI CHAIN (urutan fallback model auto) --- */
-        const AI_MODELS = [
+        // Daftar model diambil dari registry lib/ai-models.js lewat /api/models
+        // (hanya model chainable). Array ini hanya fallback offline.
+        let AI_MODELS = [
             { id: 'gemini-lite', label: 'Gemini Flash-Lite' },
             { id: 'deepseek-v4', label: 'DeepSeek V4 (NoteGPT)' },
             { id: 'easemate', label: 'EaseMate AI' },
         ];
+
+        async function loadAiModels() {
+            try {
+                const res = await fetch(`${API_BASE}/models`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const chainable = (data.data || []).filter(m => m.chainable);
+                if (chainable.length) {
+                    AI_MODELS = chainable.map(m => ({ id: m.id, label: m.label || m.description || m.id }));
+                }
+            } catch (e) { console.error(e); }
+        }
 
         let aiChain = [];
 
@@ -651,6 +665,7 @@
         }
 
         async function fetchAiChain() {
+            await loadAiModels();
             try {
                 const res = await fetch(`${API_BASE}/admin/aichain`);
                 if (!res.ok) return;
