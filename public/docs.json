@@ -149,8 +149,8 @@
     },
     {
       "title": "YouTube Downloader",
-      "summary": "Download video/audio YouTube via API vidssave.com.",
-      "description": "Endpoint untuk mengambil link download video atau audio (MP3)\n              YouTube beserta metadata (judul, thumbnail, durasi) dan daftar\n              kualitas yang tersedia. Gunakan param type=audio untuk musik/MP3,\n              atau quality=360P untuk memilih kualitas tertentu. Hanya menerima\n              URL HTTPS dari domain youtube.com / youtu.be.",
+      "summary": "Download video/audio YouTube via yt-dlp di sandbox E2B.",
+      "description": "Endpoint untuk mengambil link download langsung (googlevideo)\n              video atau audio YouTube beserta metadata (judul, thumbnail,\n              durasi) dan daftar kualitas yang tersedia. Gunakan param\n              type=audio untuk musik/MP3, atau quality=360 untuk memilih\n              kualitas tertentu. Hanya menerima URL HTTPS dari domain\n              youtube.com / youtu.be. Backend utama: yt-dlp di E2B sandbox;\n              fallback vidssave.com bila sandbox bermasalah.",
       "method": "GET",
       "path": "/api/downloader/youtube",
       "responseType": "json",
@@ -184,7 +184,7 @@
           "name": "quality",
           "in": "query",
           "type": "string",
-          "description": "Kualitas spesifik, misal \"720P\" atau \"360P\".",
+          "description": "Kualitas spesifik dalam piksel, misal \"720\" atau \"360\".",
           "required": false
         }
       ]
