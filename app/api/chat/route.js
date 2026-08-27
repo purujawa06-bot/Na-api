@@ -1,3 +1,23 @@
+/**
+ * @title Public Chat Board
+ * @summary API untuk sistem chat publik (polling & messaging).
+ * @description Mendukung pengambilan pesan (GET) dengan mode polling untuk efisiensi,
+ *              dan pengiriman pesan (POST) dengan proteksi signature HMAC & anti-spam.
+ * @method GET
+ * @path /api/chat
+ * @param {string} [query.mode] - Mode operasi pengambilan data.
+ *        @choice poll - Hanya cek apakah ada pesan baru (Lightweight)
+ * @param {string} [query.lastDate] - ISO Date terakhir yang dimiliki client (untuk mode poll).
+ * @param {string} [query.after] - Ambil pesan yang dikirim setelah ID/Date tertentu.
+ *
+ * @method POST
+ * @path /api/chat
+ * @header x-signature - HMAC SHA256 signature
+ * @header x-timestamp - Current timestamp (ms)
+ * @header x-device-id - Unique client device ID
+ * @param {string} body.username - Nama pengirim pesan.
+ * @param {string} body.message - Isi pesan teks.
+ */
 import { NextResponse } from 'next/server';
 import chatService from '../../../lib/chatService';
 import CryptoJS from 'crypto-js';

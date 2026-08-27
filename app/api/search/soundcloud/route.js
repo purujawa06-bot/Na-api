@@ -10,12 +10,12 @@
  * @method GET
  * @path /api/search/soundcloud
  * @param {string} query.q - Kata kunci pencarian (wajib).
- * @param {string} [query.type] - Filter jenis hasil.
- *   @choice all - Semua jenis (default)
- *   @choice tracks - Hanya track
- *   @choice playlists - Hanya playlist
- *   @choice albums - Hanya album
- *   @choice users - Hanya user/artis
+ * @param {string} [query.type] - Filter jenis hasil pencarian.
+ *        @choice all - Semua Jenis
+ *        @choice tracks - Musik / Tracks
+ *        @choice playlists - Playlists
+ *        @choice albums - Albums
+ *        @choice users - Artis / Users
  * @param {number} [query.limit] - Jumlah hasil per halaman (1-50, default 20).
  * @param {number} [query.offset] - Offset paginasi (default 0). Pakai nilai
  *   next_offset dari response sebelumnya untuk halaman berikutnya.
