@@ -13,6 +13,19 @@
  * @param {string} body.title - Judul postingan.
  * @param {string} body.content - Isi konten postingan.
  * @param {string} [body.category] - Kategori blog.
+ * @response json
+ * @example
+ * // GET: daftar blog dengan pagination
+ * fetch('https://puruboy-api.vercel.app/api/blogs?page=1&limit=5')
+ *     .then(res => res.json())
+ *     .then(console.log);
+ *
+ * // POST: buat postingan baru (admin only)
+ * fetch('https://puruboy-api.vercel.app/api/blogs', {
+ *     method: 'POST',
+ *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
+ *     body: JSON.stringify({ title: 'Judul Post', content: 'Isi konten', category: 'Berita' })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import blogService from '../../../lib/blogService';

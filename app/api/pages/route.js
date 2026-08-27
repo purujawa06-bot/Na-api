@@ -6,6 +6,11 @@
  * @path /api/pages
  * @param {number} [query.page] - Nomor halaman (default 1).
  * @param {string} [query.search] - Filter pencarian judul/deskripsi.
+ * @response json
+ * @example
+ * fetch('https://puruboy-api.vercel.app/api/pages?page=1&search=')
+ *     .then(res => res.json())
+ *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../lib/errorLogger';

@@ -9,6 +9,19 @@
  * @path /api/admin/aichain
  * @header Authorization - Admin Key
  * @param {string[]} body - Array ID model sesuai urutan prioritas.
+ * @response json
+ * @example
+ * // GET: ambil urutan fallback saat ini
+ * fetch('https://puruboy-api.vercel.app/api/admin/aichain')
+ *     .then(res => res.json())
+ *     .then(console.log);
+ *
+ * // POST: set urutan fallback (admin only)
+ * fetch('https://puruboy-api.vercel.app/api/admin/aichain', {
+ *     method: 'POST',
+ *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
+ *     body: JSON.stringify({ chain: ['gemini-pro', 'deepseek-chat'] })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import settingsService from '../../../../lib/settingsService';

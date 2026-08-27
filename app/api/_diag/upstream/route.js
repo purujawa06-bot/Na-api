@@ -4,6 +4,11 @@
  * @description Melakukan probing ke berbagai API downloader untuk memastikan bypass/scraping masih bekerja.
  * @method GET
  * @path /api/_diag/upstream
+ * @response json
+ * @example
+ * fetch('https://puruboy-api.vercel.app/api/_diag/upstream')
+ *     .then(res => res.json())
+ *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
 

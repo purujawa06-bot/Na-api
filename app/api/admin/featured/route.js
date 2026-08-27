@@ -9,6 +9,19 @@
  * @path /api/admin/featured
  * @header Authorization - Admin Key
  * @param {object} body - Objek konfigurasi settings.
+ * @response json
+ * @example
+ * // GET: ambil konfigurasi featured saat ini
+ * fetch('https://puruboy-api.vercel.app/api/admin/featured')
+ *     .then(res => res.json())
+ *     .then(console.log);
+ *
+ * // POST: set konfigurasi featured (admin only)
+ * fetch('https://puruboy-api.vercel.app/api/admin/featured', {
+ *     method: 'POST',
+ *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
+ *     body: JSON.stringify({ featured: ['chat', 'models'] })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import settingsService from '../../../../lib/settingsService';

@@ -5,6 +5,11 @@
  *              Data akan otomatis dihapus setelah masa berlaku (TTL) habis.
  * @method GET
  * @path /api/temp/{id}
+ * @response json
+ * @example
+ * fetch('https://puruboy-api.vercel.app/api/temp/abc123')
+ *     .then(res => res.json())
+ *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
 import tempService from '../../../../lib/tempService';

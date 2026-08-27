@@ -5,6 +5,13 @@
  * @method POST
  * @path /api/admin/login
  * @param {string} body.password - Password admin.
+ * @response json
+ * @example
+ * fetch('https://puruboy-api.vercel.app/api/admin/login', {
+ *     method: 'POST',
+ *     headers: { 'content-type': 'application/json' },
+ *     body: JSON.stringify({ password: '<PURUBOY_ADMIN_KEY>' })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/errorLogger';

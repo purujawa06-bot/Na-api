@@ -3,11 +3,11 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\n              Qwen3-Coder XML; body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              Qwen3-Coder XML; body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE + model deepseek-v4\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'deepseek-v4',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'gemini-lite',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nFunction calling (tools) — balasan berisi message.tool_calls\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\r         tools: [{\r             type: 'function',\r             function: {\r                 name: 'getWeather',\r                 description: 'Cuaca sebuah kota',\r                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\r             }\r         }]\r     })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
@@ -49,16 +49,16 @@
           "name": "stream",
           "in": "body",
           "type": "boolean",
-          "description": "true untuk streaming SSE (default false).",
+          "description": "Gunakan streaming SSE untuk respons real-time.",
           "required": false,
           "choices": [
             {
               "value": "true",
-              "label": "true"
+              "label": "Ya (Streaming)"
             },
             {
               "value": "false",
-              "label": "false"
+              "label": "Tidak (JSON Default)"
             }
           ]
         },
@@ -112,16 +112,16 @@
           "name": "stream",
           "in": "body",
           "type": "boolean",
-          "description": "true untuk streaming SSE (default false).",
+          "description": "Gunakan streaming SSE untuk respons real-time.",
           "required": false,
           "choices": [
             {
               "value": "true",
-              "label": "true"
+              "label": "Ya (Streaming)"
             },
             {
               "value": "false",
-              "label": "false"
+              "label": "Tidak (JSON Default)"
             }
           ]
         }
@@ -168,16 +168,16 @@
           "name": "stream",
           "in": "body",
           "type": "boolean",
-          "description": "true untuk streaming SSE; delta reasoning tampil sebagai event type \"reasoning\" (default false).",
+          "description": "Gunakan streaming SSE; delta reasoning tampil sebagai event type \"reasoning\".",
           "required": false,
           "choices": [
             {
               "value": "true",
-              "label": "true"
+              "label": "Ya (Streaming)"
             },
             {
               "value": "false",
-              "label": "false"
+              "label": "Tidak (JSON Default)"
             }
           ]
         }
@@ -217,16 +217,16 @@
           "name": "thinking",
           "in": "body",
           "type": "boolean",
-          "description": "Aktifkan mode thinking (default false). Terima boolean.",
+          "description": "Aktifkan mode thinking (proses berpikir AI).",
           "required": false,
           "choices": [
             {
               "value": "true",
-              "label": "true"
+              "label": "Aktif"
             },
             {
               "value": "false",
-              "label": "false"
+              "label": "Nonaktif (Default)"
             }
           ]
         },
@@ -248,16 +248,16 @@
           "name": "stream",
           "in": "body",
           "type": "boolean",
-          "description": "true untuk streaming SSE (default false).",
+          "description": "Gunakan streaming SSE untuk respons real-time.",
           "required": false,
           "choices": [
             {
               "value": "true",
-              "label": "true"
+              "label": "Ya (Streaming)"
             },
             {
               "value": "false",
-              "label": "false"
+              "label": "Tidak (JSON)"
             }
           ]
         }
@@ -274,15 +274,206 @@
       "params": []
     }
   ],
+  "chat": [
+    {
+      "title": "Public Chat Board",
+      "summary": "API untuk sistem chat publik (polling & messaging).",
+      "description": "Mendukung pengambilan pesan (GET) dengan mode polling untuk efisiensi,\r              dan pengiriman pesan (POST) dengan proteksi signature HMAC & anti-spam.",
+      "method": "GET",
+      "path": "/api/chat",
+      "responseType": "json",
+      "example": "// GET: ambil pesan sejak tanggal tertentu\r fetch('https://puruboy-api.vercel.app/api/chat?mode=poll&lastDate=2024-01-01T00%3A00%3A00.000Z')\r     .then(res => res.json())\r     .then(console.log);\r\r // POST: kirim pesan baru (wajib header security)\r fetch('https://puruboy-api.vercel.app/api/chat', {\r     method: 'POST',\r     headers: {\r         'content-type': 'application/json',\r         'x-signature': '<SHA256(deviceId + SECRET_KEY + timestamp)>',\r         'x-timestamp': String(Date.now()),\r         'x-device-id': '<device-id>'\r     },\r     body: JSON.stringify({ username: 'Puru', message: 'Halo semua!' })\r }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "mode",
+          "in": "query",
+          "type": "string",
+          "description": "Mode operasi pengambilan data.",
+          "required": false,
+          "choices": [
+            {
+              "value": "poll",
+              "label": "Hanya cek apakah ada pesan baru (Lightweight)"
+            }
+          ]
+        },
+        {
+          "name": "lastDate",
+          "in": "query",
+          "type": "string",
+          "description": "ISO Date terakhir yang dimiliki client (untuk mode poll).",
+          "required": false
+        },
+        {
+          "name": "after",
+          "in": "query",
+          "type": "string",
+          "description": "Ambil pesan yang dikirim setelah ID/Date tertentu.",
+          "required": false
+        },
+        {
+          "name": "username",
+          "in": "body",
+          "type": "string",
+          "description": "Nama pengirim pesan.",
+          "required": true
+        },
+        {
+          "name": "message",
+          "in": "body",
+          "type": "string",
+          "description": "Isi pesan teks.",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "chess": [
+    {
+      "title": "Maiachess Move Proxy",
+      "summary": "Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.",
+      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\r              dari Maia neural network engine. Mendukung berbagai model Maia (kdd 1200-2200, leela)\r              dan versi Maia (maia1-maia5). Response berisi top_move dalam format UCI,\r              move_delay, dan inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.",
+      "method": "POST",
+      "path": "/api/chess/maia",
+      "responseType": "json",
+      "example": "Default request — Maia KDD 2200\r // NOTE: Endpoint ini menerima array langsung sebagai body.\r fetch('https://puruboy.kozow.com/api/chess/maia', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify([\"f2f3\", \"e7e6\", \"e2e4\"])\r }).then(res => res.json()).then(console.log);\r // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }\n\nModel Maia KDD 1500 — untuk level pemula\r fetch('https://puruboy.kozow.com/api/chess/maia?maia_name=maia_kdd_1500', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify([\"e2e4\", \"e7e5\", \"g1f3\"])\r }).then(res => res.json()).then(console.log);\r // { top_move: \"b8c6\", move_delay: 0, inference_time: null }\n\nCustom clock — 10 menit awal, 5 menit tersisa\r fetch('https://puruboy.kozow.com/api/chess/maia?initial_clock=600&current_clock=300', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify([\"d2d4\", \"d7d5\", \"c2c4\"])\r }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "maia_name",
+          "in": "query",
+          "type": "string",
+          "description": "Nama model Maia yang digunakan (menentukan tingkat kesulitan).",
+          "required": false,
+          "choices": [
+            {
+              "value": "maia_kdd_1100",
+              "label": "Maia 1100 (Sangat Mudah)"
+            },
+            {
+              "value": "maia_kdd_1200",
+              "label": "Maia 1200"
+            },
+            {
+              "value": "maia_kdd_1300",
+              "label": "Maia 1300"
+            },
+            {
+              "value": "maia_kdd_1400",
+              "label": "Maia 1400"
+            },
+            {
+              "value": "maia_kdd_1500",
+              "label": "Maia 1500"
+            },
+            {
+              "value": "maia_kdd_1600",
+              "label": "Maia 1600"
+            },
+            {
+              "value": "maia_kdd_1700",
+              "label": "Maia 1700"
+            },
+            {
+              "value": "maia_kdd_1800",
+              "label": "Maia 1800"
+            },
+            {
+              "value": "maia_kdd_1900",
+              "label": "Maia 1900"
+            },
+            {
+              "value": "maia_kdd_2200",
+              "label": "Maia 2200 (Paling Kuat)"
+            },
+            {
+              "value": "maia_leela",
+              "label": "Maia Leela (Hybrid)"
+            }
+          ]
+        },
+        {
+          "name": "initial_clock",
+          "in": "query",
+          "type": "number",
+          "description": "Waktu jam awal permainan dalam detik.",
+          "required": false,
+          "choices": [
+            {
+              "value": "0",
+              "label": "Unlimited / Blitz"
+            },
+            {
+              "value": "60",
+              "label": "1 Minute (Bullet)"
+            },
+            {
+              "value": "180",
+              "label": "3 Minutes (Blitz)"
+            },
+            {
+              "value": "300",
+              "label": "5 Minutes (Blitz)"
+            },
+            {
+              "value": "600",
+              "label": "10 Minutes (Rapid)"
+            }
+          ]
+        },
+        {
+          "name": "current_clock",
+          "in": "query",
+          "type": "number",
+          "description": "Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.",
+          "required": false
+        },
+        {
+          "name": "maia_version",
+          "in": "query",
+          "type": "string",
+          "description": "Versi Maia engine yang dipakai.",
+          "required": false,
+          "choices": [
+            {
+              "value": "maia1",
+              "label": "Version 1 (Old)"
+            },
+            {
+              "value": "maia2",
+              "label": "Version 2"
+            },
+            {
+              "value": "maia3",
+              "label": "Version 3 (Default)"
+            },
+            {
+              "value": "maia4",
+              "label": "Version 4"
+            },
+            {
+              "value": "maia5",
+              "label": "Version 5 (Latest)"
+            }
+          ]
+        },
+        {
+          "in": "body",
+          "type": "string[]",
+          "description": "Array gerakan dalam format UCI (e.g. [\"e2e4\", \"e7e5\", \"g1f3\"]).",
+          "required": true
+        }
+      ]
+    }
+  ],
   "downloader": [
     {
       "title": "Instagram Downloader",
       "summary": "Download media Instagram (Reels, Post, IGTV) tanpa watermark.",
-      "description": "Mengambil link download video/foto dari URL Instagram publik\n              (https only, tanpa menjalankan browser). Mendukung link /p/, /reel/,\n              /reels/, /tv/, dan /share/. Utama via embed proxy kkinstagram\n              (redirect langsung ke CDN Instagram); fallback instasave.website\n              untuk carousel. Link CDN Instagram kedaluwarsa ±1 jam.",
+      "description": "Mengambil link download video/foto dari URL Instagram publik\r              (https only, tanpa menjalankan browser). Mendukung link /p/, /reel/,\r              /reels/, /tv/, dan /share/. Utama via embed proxy kkinstagram\r              (redirect langsung ke CDN Instagram); fallback instasave.website\r              untuk carousel. Link CDN Instagram kedaluwarsa ±1 jam.",
       "method": "GET",
       "path": "/api/downloader/instagram",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -296,11 +487,11 @@
     {
       "title": "SoundCloud Downloader",
       "summary": "Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.",
-      "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\n              Utama: progressive MP3 tunggal; bila tidak ada, HLS segment MP3 digabung\n              otomatis dengan ?raw=1. Track Go+ (policy SNIP) hanya menghasilkan preview\n              30 detik (ditandai is_preview=true). Link kedaluwarsa ±1 jam.",
+      "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\r              Utama: progressive MP3 tunggal; bila tidak ada, HLS segment MP3 digabung\r              otomatis dengan ?raw=1. Track Go+ (policy SNIP) hanya menghasilkan preview\r              30 detik (ditandai is_preview=true). Link kedaluwarsa ±1 jam.",
       "method": "GET",
       "path": "/api/downloader/soundcloud",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -312,17 +503,17 @@
         {
           "name": "raw",
           "in": "query",
-          "type": "boolean",
-          "description": "Jika \"1\", kirim langsung file audio (bukan JSON).",
+          "type": "string",
+          "description": "Format output yang diinginkan.",
           "required": false,
           "choices": [
             {
               "value": "0",
-              "label": "JSON metadata + link"
+              "label": "JSON Metadata & Link (Default)"
             },
             {
               "value": "1",
-              "label": "File audio langsung"
+              "label": "File Audio Direct (Download)"
             }
           ]
         }
@@ -331,11 +522,11 @@
     {
       "title": "TikTok Downloader",
       "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
-      "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\n              beserta metadata (author, avatar, caption) dan link MP3.\n              Hanya menerima URL HTTPS (http ditolak). Juga mendukung method\n              POST dengan body JSON {\"url\": \"...\"}.",
+      "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\r              beserta metadata (author, avatar, caption) dan link MP3.\r              Hanya menerima URL HTTPS (http ditolak). Juga mendukung method\r              POST dengan body JSON {\"url\": \"...\"}.",
       "method": "GET",
       "path": "/api/downloader/tiktok",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -349,11 +540,11 @@
     {
       "title": "YouTube Downloader",
       "summary": "Download video/audio YouTube via yt-dlp di sandbox E2B.",
-      "description": "Endpoint untuk mengambil link download langsung (googlevideo)\n              video atau audio YouTube beserta metadata (judul, thumbnail,\n              durasi) dan daftar kualitas yang tersedia. Gunakan param\n              type=audio untuk musik/MP3, atau quality=360 untuk memilih\n              kualitas tertentu. Hanya menerima URL HTTPS dari domain\n              youtube.com / youtu.be. Backend utama: yt-dlp di E2B sandbox;\n              fallback vidssave.com bila sandbox bermasalah.",
+      "description": "Endpoint untuk mengambil link download langsung (googlevideo)\r              video atau audio YouTube beserta metadata (judul, thumbnail,\r              durasi) dan daftar kualitas yang tersedia. Gunakan param\r              type=audio untuk musik/MP3, atau quality=360 untuk memilih\r              kualitas tertentu. Hanya menerima URL HTTPS dari domain\r              youtube.com / youtu.be. Backend utama: yt-dlp di E2B sandbox;\r              fallback vidssave.com bila sandbox bermasalah.",
       "method": "GET",
       "path": "/api/downloader/youtube",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -366,12 +557,12 @@
           "name": "type",
           "in": "query",
           "type": "string",
-          "description": "Jenis media: \"video\" (default) atau \"audio\".",
+          "description": "Jenis media yang ingin diunduh.",
           "required": false,
           "choices": [
             {
               "value": "video",
-              "label": "Video (default)"
+              "label": "Video (Default)"
             },
             {
               "value": "audio",
@@ -383,8 +574,34 @@
           "name": "quality",
           "in": "query",
           "type": "string",
-          "description": "Kualitas spesifik dalam piksel, misal \"720\" atau \"360\".",
-          "required": false
+          "description": "Kualitas video (hanya untuk type=video).",
+          "required": false,
+          "choices": [
+            {
+              "value": "144",
+              "label": "144p"
+            },
+            {
+              "value": "240",
+              "label": "240p"
+            },
+            {
+              "value": "360",
+              "label": "360p"
+            },
+            {
+              "value": "480",
+              "label": "480p"
+            },
+            {
+              "value": "720",
+              "label": "720p (HD)"
+            },
+            {
+              "value": "1080",
+              "label": "1080p (Full HD)"
+            }
+          ]
         }
       ]
     },
@@ -411,11 +628,11 @@
     {
       "title": "DramaBox Category",
       "summary": "Daftar drama per kategori + daftar semua kategori dramabox.com.",
-      "description": "Tanpa id: mengembalikan daftar semua kategori. Dengan id:\n              mengembalikan daftar drama dalam kategori tersebut (12 per\n              halaman) beserta pagination. Tanpa browser — cukup HTTPS.",
+      "description": "Tanpa id: mengembalikan daftar semua kategori. Dengan id:\r              mengembalikan daftar drama dalam kategori tersebut (12 per\r              halaman) beserta pagination. Tanpa browser — cukup HTTPS.",
       "method": "GET",
       "path": "/api/dramabox/category",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/category?id=447')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/category?id=447')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "id",
@@ -435,19 +652,73 @@
           "name": "locale",
           "in": "query",
           "type": "string",
-          "description": "Kode bahasa konten (default: \"in\").",
-          "required": false
+          "description": "Kode bahasa konten.",
+          "required": false,
+          "choices": [
+            {
+              "value": "in",
+              "label": "Indonesia (Default)"
+            },
+            {
+              "value": "en",
+              "label": "English"
+            },
+            {
+              "value": "th",
+              "label": "Thai"
+            },
+            {
+              "value": "es",
+              "label": "Spanish"
+            },
+            {
+              "value": "pt",
+              "label": "Portuguese"
+            },
+            {
+              "value": "fr",
+              "label": "French"
+            },
+            {
+              "value": "de",
+              "label": "German"
+            },
+            {
+              "value": "it",
+              "label": "Italian"
+            },
+            {
+              "value": "tr",
+              "label": "Turkish"
+            },
+            {
+              "value": "vi",
+              "label": "Vietnamese"
+            },
+            {
+              "value": "ja",
+              "label": "Japanese"
+            },
+            {
+              "value": "ko",
+              "label": "Korean"
+            },
+            {
+              "value": "zh",
+              "label": "Chinese"
+            }
+          ]
         }
       ]
     },
     {
       "title": "DramaBox Detail",
       "summary": "Detail drama pendek + daftar episode dari dramabox.com.",
-      "description": "Mengambil info lengkap sebuah drama (sinopsis, genre, pemain,\n              episode, drama terkait, bahasa) tanpa menjalankan browser.\n              Episode gratis menyertakan video_url siap putar.",
+      "description": "Mengambil info lengkap sebuah drama (sinopsis, genre, pemain,\r              episode, drama terkait, bahasa) tanpa menjalankan browser.\r              Episode gratis menyertakan video_url siap putar.",
       "method": "GET",
       "path": "/api/dramabox/detail",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/detail?id=41000105764')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/detail?id=41000105764')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "id",
@@ -460,58 +731,132 @@
           "name": "locale",
           "in": "query",
           "type": "string",
-          "description": "Kode bahasa konten (default: \"in\").",
-          "required": false
-        }
-      ]
-    },
-    {
-      "title": "DramaBox Home",
-      "summary": "Daftar drama pendek populer dari dramabox.com.",
-      "description": "Mengambil data halaman beranda dramabox.com (drama unggulan &\n              seksi rekomendasi) tanpa menjalankan browser — cukup HTTPS\n              server-side. Parameter locale opsional (default: \"in\").",
-      "method": "GET",
-      "path": "/api/dramabox/home",
-      "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/home')\n     .then(res => res.json())\n     .then(console.log);",
-      "params": [
-        {
-          "name": "locale",
-          "in": "query",
-          "type": "string",
-          "description": "Kode bahasa konten (default: \"in\").",
+          "description": "Kode bahasa konten.",
           "required": false,
           "choices": [
             {
               "value": "in",
-              "label": "Indonesia"
+              "label": "Indonesia (Default)"
             },
             {
               "value": "en",
               "label": "English"
             },
             {
-              "value": "es",
-              "label": "Español"
-            },
-            {
-              "value": "ko",
-              "label": "한국어"
-            },
-            {
-              "value": "zh",
-              "label": "中文"
-            },
-            {
-              "value": "ja",
-              "label": "日本語"
-            },
-            {
               "value": "th",
-              "label": "ไทย"
+              "label": "Thai"
+            },
+            {
+              "value": "es",
+              "label": "Spanish"
+            },
+            {
+              "value": "pt",
+              "label": "Portuguese"
+            },
+            {
+              "value": "fr",
+              "label": "French"
+            },
+            {
+              "value": "de",
+              "label": "German"
+            },
+            {
+              "value": "it",
+              "label": "Italian"
+            },
+            {
+              "value": "tr",
+              "label": "Turkish"
             },
             {
               "value": "vi",
-              "label": "Tiếng Việt"
+              "label": "Vietnamese"
+            },
+            {
+              "value": "ja",
+              "label": "Japanese"
+            },
+            {
+              "value": "ko",
+              "label": "Korean"
+            },
+            {
+              "value": "zh",
+              "label": "Chinese"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "DramaBox Home",
+      "summary": "Daftar drama pendek populer dari dramabox.com.",
+      "description": "Mengambil data halaman beranda dramabox.com (drama unggulan &\r              seksi rekomendasi) tanpa menjalankan browser — cukup HTTPS\r              server-side. Parameter locale opsional (default: \"in\").",
+      "method": "GET",
+      "path": "/api/dramabox/home",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/home')\r     .then(res => res.json())\r     .then(console.log);",
+      "params": [
+        {
+          "name": "locale",
+          "in": "query",
+          "type": "string",
+          "description": "Kode bahasa konten.",
+          "required": false,
+          "choices": [
+            {
+              "value": "in",
+              "label": "Indonesia (Default)"
+            },
+            {
+              "value": "en",
+              "label": "English"
+            },
+            {
+              "value": "th",
+              "label": "Thai"
+            },
+            {
+              "value": "es",
+              "label": "Spanish"
+            },
+            {
+              "value": "pt",
+              "label": "Portuguese"
+            },
+            {
+              "value": "fr",
+              "label": "French"
+            },
+            {
+              "value": "de",
+              "label": "German"
+            },
+            {
+              "value": "it",
+              "label": "Italian"
+            },
+            {
+              "value": "tr",
+              "label": "Turkish"
+            },
+            {
+              "value": "vi",
+              "label": "Vietnamese"
+            },
+            {
+              "value": "ja",
+              "label": "Japanese"
+            },
+            {
+              "value": "ko",
+              "label": "Korean"
+            },
+            {
+              "value": "zh",
+              "label": "Chinese"
             }
           ]
         }
@@ -520,11 +865,11 @@
     {
       "title": "DramaBox Search",
       "summary": "Cari drama pendek di dramabox.com.",
-      "description": "Mencari drama berdasarkan kata kunci dengan pagination\n              (20 hasil per halaman) plus rekomendasi serupa. Tanpa browser.",
+      "description": "Mencari drama berdasarkan kata kunci dengan pagination\r              (20 hasil per halaman) plus rekomendasi serupa. Tanpa browser.",
       "method": "GET",
       "path": "/api/dramabox/search",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/search?q=cinta')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/search?q=cinta')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -544,19 +889,73 @@
           "name": "locale",
           "in": "query",
           "type": "string",
-          "description": "Kode bahasa konten (default: \"in\").",
-          "required": false
+          "description": "Kode bahasa konten.",
+          "required": false,
+          "choices": [
+            {
+              "value": "in",
+              "label": "Indonesia (Default)"
+            },
+            {
+              "value": "en",
+              "label": "English"
+            },
+            {
+              "value": "th",
+              "label": "Thai"
+            },
+            {
+              "value": "es",
+              "label": "Spanish"
+            },
+            {
+              "value": "pt",
+              "label": "Portuguese"
+            },
+            {
+              "value": "fr",
+              "label": "French"
+            },
+            {
+              "value": "de",
+              "label": "German"
+            },
+            {
+              "value": "it",
+              "label": "Italian"
+            },
+            {
+              "value": "tr",
+              "label": "Turkish"
+            },
+            {
+              "value": "vi",
+              "label": "Vietnamese"
+            },
+            {
+              "value": "ja",
+              "label": "Japanese"
+            },
+            {
+              "value": "ko",
+              "label": "Korean"
+            },
+            {
+              "value": "zh",
+              "label": "Chinese"
+            }
+          ]
         }
       ]
     },
     {
       "title": "DramaBox Stream",
       "summary": "Link video (mp4) episode drama dari dramabox.com.",
-      "description": "Mengambil URL video langsung sebuah episode drama berdasarkan\n              bookId + chapterId. Hanya episode gratis (unlock) yang tersedia;\n              episode berbayar akan ditolak. Tanpa browser — cukup HTTPS.",
+      "description": "Mengambil URL video langsung sebuah episode drama berdasarkan\r              bookId + chapterId. Hanya episode gratis (unlock) yang tersedia;\r              episode berbayar akan ditolak. Tanpa browser — cukup HTTPS.",
       "method": "GET",
       "path": "/api/dramabox/stream",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/stream?id=41000105764&chapter=578668219')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/stream?id=41000105764&chapter=578668219')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "id",
@@ -576,8 +975,62 @@
           "name": "locale",
           "in": "query",
           "type": "string",
-          "description": "Kode bahasa konten (default: \"in\").",
-          "required": false
+          "description": "Kode bahasa konten.",
+          "required": false,
+          "choices": [
+            {
+              "value": "in",
+              "label": "Indonesia (Default)"
+            },
+            {
+              "value": "en",
+              "label": "English"
+            },
+            {
+              "value": "th",
+              "label": "Thai"
+            },
+            {
+              "value": "es",
+              "label": "Spanish"
+            },
+            {
+              "value": "pt",
+              "label": "Portuguese"
+            },
+            {
+              "value": "fr",
+              "label": "French"
+            },
+            {
+              "value": "de",
+              "label": "German"
+            },
+            {
+              "value": "it",
+              "label": "Italian"
+            },
+            {
+              "value": "tr",
+              "label": "Turkish"
+            },
+            {
+              "value": "vi",
+              "label": "Vietnamese"
+            },
+            {
+              "value": "ja",
+              "label": "Japanese"
+            },
+            {
+              "value": "ko",
+              "label": "Korean"
+            },
+            {
+              "value": "zh",
+              "label": "Chinese"
+            }
+          ]
         }
       ]
     }
@@ -586,11 +1039,11 @@
     {
       "title": "SoundCloud Search",
       "summary": "Cari track, playlist, album, dan user di SoundCloud.",
-      "description": "Pencarian via api-v2.soundcloud.com (hasil reverse-engineering,\n              tanpa browser). Hasil berupa daftar item dengan tipe \"track\",\n              \"playlist\", \"album\", atau \"user\". Item track bertanda\n              is_preview=true hanya preview 30 detik (Go+/SNIP).\n              Gunakan parameter type untuk memfilter jenis hasil, dan\n              next_offset dari response untuk mengambil halaman berikutnya.",
+      "description": "Pencarian via api-v2.soundcloud.com (hasil reverse-engineering,\r              tanpa browser). Hasil berupa daftar item dengan tipe \"track\",\r              \"playlist\", \"album\", atau \"user\". Item track bertanda\r              is_preview=true hanya preview 30 detik (Go+/SNIP).\r              Gunakan parameter type untuk memfilter jenis hasil, dan\r              next_offset dari response untuk mengambil halaman berikutnya.",
       "method": "GET",
       "path": "/api/search/soundcloud",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -603,28 +1056,28 @@
           "name": "type",
           "in": "query",
           "type": "string",
-          "description": "Filter jenis hasil.",
+          "description": "Filter jenis hasil pencarian.",
           "required": false,
           "choices": [
             {
               "value": "all",
-              "label": "Semua jenis (default)"
+              "label": "Semua Jenis"
             },
             {
               "value": "tracks",
-              "label": "Hanya track"
+              "label": "Musik / Tracks"
             },
             {
               "value": "playlists",
-              "label": "Hanya playlist"
+              "label": "Playlists"
             },
             {
               "value": "albums",
-              "label": "Hanya album"
+              "label": "Albums"
             },
             {
               "value": "users",
-              "label": "Hanya user/artis"
+              "label": "Artis / Users"
             }
           ]
         },

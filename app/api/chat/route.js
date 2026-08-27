@@ -17,6 +17,24 @@
  * @header x-device-id - Unique client device ID
  * @param {string} body.username - Nama pengirim pesan.
  * @param {string} body.message - Isi pesan teks.
+ * @response json
+ * @example
+ * // GET: ambil pesan sejak tanggal tertentu
+ * fetch('https://puruboy-api.vercel.app/api/chat?mode=poll&lastDate=2024-01-01T00%3A00%3A00.000Z')
+ *     .then(res => res.json())
+ *     .then(console.log);
+ *
+ * // POST: kirim pesan baru (wajib header security)
+ * fetch('https://puruboy-api.vercel.app/api/chat', {
+ *     method: 'POST',
+ *     headers: {
+ *         'content-type': 'application/json',
+ *         'x-signature': '<SHA256(deviceId + SECRET_KEY + timestamp)>',
+ *         'x-timestamp': String(Date.now()),
+ *         'x-device-id': '<device-id>'
+ *     },
+ *     body: JSON.stringify({ username: 'Puru', message: 'Halo semua!' })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import chatService from '../../../lib/chatService';

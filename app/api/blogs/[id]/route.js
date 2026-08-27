@@ -14,6 +14,25 @@
  * @method DELETE
  * @path /api/blogs/{id}
  * @header Authorization - Admin Key
+ * @response json
+ * @example
+ * // GET: ambil detail post
+ * fetch('https://puruboy-api.vercel.app/api/blogs/abc123')
+ *     .then(res => res.json())
+ *     .then(console.log);
+ *
+ * // PUT: perbarui post (admin only)
+ * fetch('https://puruboy-api.vercel.app/api/blogs/abc123', {
+ *     method: 'PUT',
+ *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
+ *     body: JSON.stringify({ title: 'Judul Baru', content: 'Konten baru' })
+ * }).then(res => res.json()).then(console.log);
+ *
+ * // DELETE: hapus post (admin only)
+ * fetch('https://puruboy-api.vercel.app/api/blogs/abc123', {
+ *     method: 'DELETE',
+ *     headers: { 'Authorization': '<PURUBOY_ADMIN_KEY>' }
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import blogService from '../../../../lib/blogService';
