@@ -6,15 +6,20 @@
  *              server-side. Parameter locale opsional (default: "in").
  * @method GET
  * @path /api/dramabox/home
- * @param {string} [query.locale] - Kode bahasa konten (default: "in").
- *   @choice in - Indonesia
- *   @choice en - English
- *   @choice es - Español
- *   @choice ko - 한국어
- *   @choice zh - 中文
- *   @choice ja - 日本語
- *   @choice th - ไทย
- *   @choice vi - Tiếng Việt
+ * @param {string} [query.locale] - Kode bahasa konten.
+ *        @choice in - Indonesia (Default)
+ *        @choice en - English
+ *        @choice th - Thai
+ *        @choice es - Spanish
+ *        @choice pt - Portuguese
+ *        @choice fr - French
+ *        @choice de - German
+ *        @choice it - Italian
+ *        @choice tr - Turkish
+ *        @choice vi - Vietnamese
+ *        @choice ja - Japanese
+ *        @choice ko - Korean
+ *        @choice zh - Chinese
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/dramabox/home')

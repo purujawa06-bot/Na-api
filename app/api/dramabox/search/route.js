@@ -7,7 +7,20 @@
  * @path /api/dramabox/search
  * @param {string} query.q - Kata kunci pencarian (wajib).
  * @param {string} [query.page] - Nomor halaman, mulai dari 1 (default: 1).
- * @param {string} [query.locale] - Kode bahasa konten (default: "in").
+ * @param {string} [query.locale] - Kode bahasa konten.
+ *        @choice in - Indonesia (Default)
+ *        @choice en - English
+ *        @choice th - Thai
+ *        @choice es - Spanish
+ *        @choice pt - Portuguese
+ *        @choice fr - French
+ *        @choice de - German
+ *        @choice it - Italian
+ *        @choice tr - Turkish
+ *        @choice vi - Vietnamese
+ *        @choice ja - Japanese
+ *        @choice ko - Korean
+ *        @choice zh - Chinese
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/dramabox/search?q=cinta')
