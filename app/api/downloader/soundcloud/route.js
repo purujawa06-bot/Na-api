@@ -8,9 +8,9 @@
  * @method GET
  * @path /api/downloader/soundcloud
  * @param {string} query.url - URL track SoundCloud publik (wajib, https only).
- * @param {boolean} [query.raw] - Jika "1", kirim langsung file audio (bukan JSON).
- *   @choice 0 - JSON metadata + link
- *   @choice 1 - File audio langsung
+ * @param {string} [query.raw] - Format output yang diinginkan.
+ *        @choice 0 - JSON Metadata & Link (Default)
+ *        @choice 1 - File Audio Direct (Download)
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')

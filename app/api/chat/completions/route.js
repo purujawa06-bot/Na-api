@@ -15,7 +15,9 @@
  * @param {string} [body.model] - ID model (default "auto": menyusuri rantai fallback; error ATAU stream selesai tanpa tool call & konten kosong memicu pindah provider. Urutan provider diatur dari panel admin /admin.html). Daftar lengkap: lib/ai-models.js (docs/panel admin ambil otomatis dari sana).
  * @param {array} body.messages - Array pesan format OpenAI [{role: "system"|"user"|"assistant"|"tool", content}].
  *                                 Pesan assistant boleh punya tool_calls; role "tool" membawa hasil eksekusi tool.
- * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
+ * @param {boolean} [body.stream] - Gunakan streaming SSE untuk respons real-time.
+ *        @choice true - Ya (Streaming)
+ *        @choice false - Tidak (JSON Default)
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
  *                               Diemulasi via protokol Qwen3-Coder XML (model web tidak punya native function calling).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
