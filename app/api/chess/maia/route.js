@@ -17,13 +17,13 @@ export const maxDuration = 30;
  * @header Content-Type: application/json
  * @header Accept: application/json
  *
- * @param {string} [maia_name=maia_kdd_2200] - Nama model Maia yang digunakan.
+ * @param {string} [query.maia_name] - Nama model Maia yang digunakan.
  *        Opsi: maia_kdd_1200, maia_kdd_1400, maia_kdd_1600, maia_kdd_1900, maia_kdd_2200, maia_leela
- * @param {number} [initial_clock=0] - Waktu jam awal permainan dalam detik. 0 = unlimited/blitz.
- * @param {number} [current_clock=0] - Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.
- * @param {string} [maia_version=maia3] - Versi Maia engine yang dipakai. Opsi: maia1, maia2, maia3, maia4, maia5
+ * @param {number} [query.initial_clock] - Waktu jam awal permainan dalam detik. 0 = unlimited/blitz.
+ * @param {number} [query.current_clock] - Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.
+ * @param {string} [query.maia_version] - Versi Maia engine yang dipakai. Opsi: maia1, maia2, maia3, maia4, maia5
  *
- * @body {string[]} moves - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
+ * @param {string[]} body - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
  *                           Representasi langkah dari awal permainan secara berurutan.
  *                           Format UCI: "kotak_awal + kotak_tujuan" (e.g. e2e4 = pawn e2 ke e4).
  *
@@ -36,6 +36,7 @@ export const maxDuration = 30;
  * @error {string} [error.detail] - Detail error dari upstream Maiachess
  *
  * @example Default request — Maia KDD 2200
+ * // NOTE: Endpoint ini menerima array langsung sebagai body.
  * fetch('https://puruboy.kozow.com/api/chess/maia', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
