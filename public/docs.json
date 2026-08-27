@@ -274,60 +274,6 @@
       "params": []
     }
   ],
-  "chat": [
-    {
-      "title": "Public Chat Board",
-      "summary": "API untuk sistem chat publik (polling & messaging).",
-      "description": "Mendukung pengambilan pesan (GET) dengan mode polling untuk efisiensi,\r              dan pengiriman pesan (POST) dengan proteksi signature HMAC & anti-spam.",
-      "method": "GET",
-      "path": "/api/chat",
-      "responseType": "json",
-      "example": "// GET: ambil pesan sejak tanggal tertentu\r fetch('https://puruboy-api.vercel.app/api/chat?mode=poll&lastDate=2024-01-01T00%3A00%3A00.000Z')\r     .then(res => res.json())\r     .then(console.log);\r\r // POST: kirim pesan baru (wajib header security)\r fetch('https://puruboy-api.vercel.app/api/chat', {\r     method: 'POST',\r     headers: {\r         'content-type': 'application/json',\r         'x-signature': '<SHA256(deviceId + SECRET_KEY + timestamp)>',\r         'x-timestamp': String(Date.now()),\r         'x-device-id': '<device-id>'\r     },\r     body: JSON.stringify({ username: 'Puru', message: 'Halo semua!' })\r }).then(res => res.json()).then(console.log);",
-      "params": [
-        {
-          "name": "mode",
-          "in": "query",
-          "type": "string",
-          "description": "Mode operasi pengambilan data.",
-          "required": false,
-          "choices": [
-            {
-              "value": "poll",
-              "label": "Hanya cek apakah ada pesan baru (Lightweight)"
-            }
-          ]
-        },
-        {
-          "name": "lastDate",
-          "in": "query",
-          "type": "string",
-          "description": "ISO Date terakhir yang dimiliki client (untuk mode poll).",
-          "required": false
-        },
-        {
-          "name": "after",
-          "in": "query",
-          "type": "string",
-          "description": "Ambil pesan yang dikirim setelah ID/Date tertentu.",
-          "required": false
-        },
-        {
-          "name": "username",
-          "in": "body",
-          "type": "string",
-          "description": "Nama pengirim pesan.",
-          "required": true
-        },
-        {
-          "name": "message",
-          "in": "body",
-          "type": "string",
-          "description": "Isi pesan teks.",
-          "required": true
-        }
-      ]
-    }
-  ],
   "chess": [
     {
       "title": "Maiachess Move Proxy",
