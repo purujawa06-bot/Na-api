@@ -457,6 +457,7 @@
           ]
         },
         {
+          "name": "notation",
           "in": "body",
           "type": "string[]",
           "description": "Array gerakan dalam format UCI (e.g. [\"e2e4\", \"e7e5\", \"g1f3\"]).",

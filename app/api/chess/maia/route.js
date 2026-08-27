@@ -43,9 +43,11 @@ export const maxDuration = 30;
  *        @choice maia4 - Version 4
  *        @choice maia5 - Version 5 (Latest)
  *
- * @param {string[]} body - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
+ * @param {string[]} body.notation - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
  *                           Representasi langkah dari awal permainan secara berurutan.
  *                           Format UCI: "kotak_awal + kotak_tujuan" (e.g. e2e4 = pawn e2 ke e4).
+ *                           NOTE: Body adalah array langsung, bukan objek — field ini
+ *                           hanya untuk menampilkan label input "notation" pada docs.
  *
  * @returns {Object} success - Response dari Maiachess
  * @returns {string} success.top_move - Langkah terbaik dalam format UCI (e.g. "d7d5")
