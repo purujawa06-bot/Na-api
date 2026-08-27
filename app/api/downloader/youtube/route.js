@@ -11,10 +11,16 @@
  * @method GET
  * @path /api/downloader/youtube
  * @param {string} query.url - URL video YouTube (wajib, https only).
- * @param {string} [query.type] - Jenis media: "video" (default) atau "audio".
- * @choice video - Video (default)
- * @choice audio - Audio / MP3
- * @param {string} [query.quality] - Kualitas spesifik dalam piksel, misal "720" atau "360".
+ * @param {string} [query.type] - Jenis media yang ingin diunduh.
+ *        @choice video - Video (Default)
+ *        @choice audio - Audio / MP3
+ * @param {string} [query.quality] - Kualitas video (hanya untuk type=video).
+ *        @choice 144 - 144p
+ *        @choice 240 - 240p
+ *        @choice 360 - 360p
+ *        @choice 480 - 480p
+ *        @choice 720 - 720p (HD)
+ *        @choice 1080 - 1080p (Full HD)
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')

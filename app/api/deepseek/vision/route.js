@@ -15,10 +15,14 @@
  * @param {string} body.userID - Bearer token akun chat.deepseek.com (nilai "value" dari localStorage "userToken").
  * @param {string} body.image - URL publik gambar (http/https; png/jpg/webp).
  * @param {string} body.prompt - Pertanyaan tentang gambar.
- * @param {boolean} [body.thinking] - Aktifkan mode thinking (default false). Terima boolean.
+ * @param {boolean} [body.thinking] - Aktifkan mode thinking (proses berpikir AI).
+ *        @choice true - Aktif
+ *        @choice false - Nonaktif (Default)
  * @param {string} [body.chatID] - ID sesi untuk melanjutkan percakapan. Kosongkan untuk chat baru.
  * @param {string|number} [body.parentID] - Wajib bila chatID diisi: message_id jawaban terakhir.
- * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
+ * @param {boolean} [body.stream] - Gunakan streaming SSE untuk respons real-time.
+ *        @choice true - Ya (Streaming)
+ *        @choice false - Tidak (JSON)
  * @response stream
  * @example Tanya isi gambar
  * fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {
