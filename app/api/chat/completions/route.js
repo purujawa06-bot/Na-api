@@ -327,6 +327,18 @@ export async function POST(req) {
         await sendChunk({ role: 'assistant', content: '' });
       };
 
+      let waitCount = 0;
+      let firstPartGot = false;
+      // Keep-alive: selama fallback provider masih menunggu respons, kirim
+      // chunk reasoning palsu "waiting..." tiap 2s agar middleware tidak timeout
+      // sambil mencoba provider satu per satu.
+      const keepAlive = setInterval(() => {
+        if (firstPartGot || closed) { clearInterval(keepAlive); return; }
+        waitCount += 1;
+        const pad = '.'.repeat(Math.min(waitCount, 6));
+        sendChunk({ reasoning_content: `[menunggu respons provider ${pad}]` }).catch(() => {});
+      }, 2000);
+
       try {
         const result = streamText({
           model: lm,
@@ -339,18 +351,26 @@ export async function POST(req) {
         const tcIndex = new Map();
         let lastFinish = 'stop';
 
+        const seenPart = () => {
+          firstPartGot = true;
+          clearInterval(keepAlive);
+        };
+
         for await (const part of result.fullStream) {
           switch (part.type) {
             case 'reasoning-delta':
               // fullStream level SDK memakai field `text` (bukan `delta`)
+              seenPart();
               await ensureRole();
               await sendChunk({ reasoning_content: part.text });
               break;
             case 'text-delta':
+              seenPart();
               await ensureRole();
               await sendChunk({ content: part.text });
               break;
             case 'tool-input-start': {
+              seenPart();
               await ensureRole();
               // buka blok arguments di chunk baru
               const idx = tcIndex.size;
@@ -380,6 +400,7 @@ export async function POST(req) {
         await failChunk(err.message);
         await finishOnce('stop');
       } finally {
+        clearInterval(keepAlive);
         try { await writer.close(); } catch { /* sudah tertutup */ }
       }
     })();
