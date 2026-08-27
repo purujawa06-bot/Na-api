@@ -18,10 +18,20 @@ export const maxDuration = 30;
  * @header Accept: application/json
  *
  * @param {string} [query.maia_name] - Nama model Maia yang digunakan.
- *        Opsi: maia_kdd_1200, maia_kdd_1400, maia_kdd_1600, maia_kdd_1900, maia_kdd_2200, maia_leela
+ *        @choice maia_kdd_1200 - Maia KDD 1200
+ *        @choice maia_kdd_1400 - Maia KDD 1400
+ *        @choice maia_kdd_1600 - Maia KDD 1600
+ *        @choice maia_kdd_1900 - Maia KDD 1900
+ *        @choice maia_kdd_2200 - Maia KDD 2200
+ *        @choice maia_leela - Maia Leela
  * @param {number} [query.initial_clock] - Waktu jam awal permainan dalam detik. 0 = unlimited/blitz.
  * @param {number} [query.current_clock] - Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.
- * @param {string} [query.maia_version] - Versi Maia engine yang dipakai. Opsi: maia1, maia2, maia3, maia4, maia5
+ * @param {string} [query.maia_version] - Versi Maia engine yang dipakai.
+ *        @choice maia1 - Version 1
+ *        @choice maia2 - Version 2
+ *        @choice maia3 - Version 3
+ *        @choice maia4 - Version 4
+ *        @choice maia5 - Version 5
  *
  * @param {string[]} body - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
  *                           Representasi langkah dari awal permainan secara berurutan.
