@@ -72,6 +72,23 @@
       ]
     },
     {
+      "title": "Build Prompt (Debug / Transparency)",
+      "summary": "Endpoint uji untuk mencetak prompt mentah yang akan dikirim ke provider web.",
+      "description": "Menjalankan pipeline pembentukan prompt (splitPrompt -> flattenV4Prompt,\n              termasuk tag <conversation_history>/<latest_user_message>) dan\n              menampilkan hasilnya agar client tahu persis bagaimana prompt dibangun.\n              Tidak memanggil provider. Lihat BUILD_PROMPT.md di direktori yang sama.",
+      "method": "GET",
+      "path": "/api/chat/completions/build-prompt",
+      "responseType": "json",
+      "example": "/api/chat/completions/build-prompt?messages=[{\"role\":\"user\",\"content\":\"halo\"},{\"role\":\"assistant\",\"content\":\"hai\"},{\"role\":\"user\",\"content\":\"siapa presiden?\"}]",
+      "params": [
+        {
+          "in": "messages",
+          "type": "string",
+          "description": "WAJIB. JSON array pesan format OpenAI (sama seperti body.messages).",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "DeepSeek Instant",
       "summary": "Chat DeepSeek V4 web (mode cepat, tanpa thinking) langsung ke chat.deepseek.com.",
       "description": "Klien pure-HTTP ke chat.deepseek.com (reverse-engineered, tanpa browser).\r              Memakai token akun pribadi Anda: ambil nilai \"value\" dari localStorage\r              `userToken` di chat.deepseek.com (DevTools -> Application -> Local Storage)\r              lalu kirim sebagai body.userID.\r              Multi-turn: respons mengembalikan chatID + parentID; untuk lanjutkan\r              percakapan kirim keduanya pada request berikutnya (parentID = message_id\r              jawaban terakhir). chatID kosong = mulai chat baru.",
