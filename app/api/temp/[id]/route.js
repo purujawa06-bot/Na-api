@@ -1,3 +1,11 @@
+/**
+ * @title Temporary Data Store
+ * @summary Ambil data sementara (TTL) berdasarkan ID.
+ * @description Mengambil data yang disimpan sementara di server (misal hasil scrape besar yang di-cache).
+ *              Data akan otomatis dihapus setelah masa berlaku (TTL) habis.
+ * @method GET
+ * @path /api/temp/{id}
+ */
 import { NextResponse } from 'next/server';
 import tempService from '../../../../lib/tempService';
 import { reportError } from '../../../../lib/errorLogger';
