@@ -1,3 +1,15 @@
+/**
+ * @title AI Fallback Chain
+ * @summary Konfigurasi urutan model untuk mode "auto" di /api/chat/completions.
+ * @description Get/Set urutan provider (Gemini, DeepSeek, dll) yang akan dicoba secara berurutan.
+ * @method GET
+ * @path /api/admin/aichain
+ * 
+ * @method POST
+ * @path /api/admin/aichain
+ * @header Authorization - Admin Key
+ * @param {string[]} body - Array ID model sesuai urutan prioritas.
+ */
 import { NextResponse } from 'next/server';
 import settingsService from '../../../../lib/settingsService';
 import { reportError } from '../../../../lib/errorLogger';

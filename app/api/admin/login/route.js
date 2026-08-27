@@ -1,3 +1,11 @@
+/**
+ * @title Admin Login
+ * @summary Validasi kredensial admin.
+ * @description Mengecek apakah password sesuai dengan PURUBOY_ADMIN_KEY.
+ * @method POST
+ * @path /api/admin/login
+ * @param {string} body.password - Password admin.
+ */
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/errorLogger';
 

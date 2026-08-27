@@ -1,3 +1,20 @@
+/**
+ * @title Blog Detail & Management
+ * @summary Ambil, perbarui, atau hapus postingan blog berdasarkan ID.
+ * @description Mendukung pengambilan publik, serta update/delete (admin only).
+ * @method GET
+ * @path /api/blogs/{id}
+ * 
+ * @method PUT
+ * @path /api/blogs/{id}
+ * @header Authorization - Admin Key
+ * @param {string} body.title - Judul baru.
+ * @param {string} body.content - Konten baru.
+ * 
+ * @method DELETE
+ * @path /api/blogs/{id}
+ * @header Authorization - Admin Key
+ */
 import { NextResponse } from 'next/server';
 import blogService from '../../../../lib/blogService';
 import { reportError } from '../../../../lib/errorLogger';

@@ -1,3 +1,10 @@
+/**
+ * @title Upstream Diagnostics
+ * @summary Cek status kesehatan provider pihak ketiga (Instagram, SnapInsta, dll).
+ * @description Melakukan probing ke berbagai API downloader untuk memastikan bypass/scraping masih bekerja.
+ * @method GET
+ * @path /api/_diag/upstream
+ */
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
