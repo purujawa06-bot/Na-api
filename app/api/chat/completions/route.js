@@ -1,7 +1,7 @@
 /**
  * @title Chat Completions (OpenAI Compatible)
  * @summary Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.
- * @description Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.
+ * @description Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
@@ -281,7 +281,7 @@ export async function POST(req) {
   // meta.used diisi adapter auto dengan ID model aktual yang menjawab
   const meta = {};
   // Urutan fallback mode 'auto' dari settings admin (cache 60s; DB opsional ->
-  // tanpa DB dipakai urutan default gemini-lite -> deepseek-v4).
+  // tanpa DB dipakai urutan default gemini-lite -> easemate).
   const autoChain = model === 'auto' ? await settingsService.getAutoChain() : undefined;
   const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
 
