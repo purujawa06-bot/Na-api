@@ -276,134 +276,16 @@
   ],
   "chess": [
     {
-      "title": "Maiachess Move Proxy",
+      "title": "Maia Chess Move Proxy",
       "summary": "Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.",
-      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\r              dari Maia neural network engine. Mendukung berbagai model Maia (kdd 1200-2200, leela)\r              dan versi Maia (maia1-maia5). Response berisi top_move dalam format UCI,\r              move_delay, dan inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.",
+      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\r              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu parameter,\r              yaitu `notasi` (array langkah UCI). Response berisi top_move dalam format UCI,\r              move_delay, dan inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.",
       "method": "POST",
       "path": "/api/chess/maia",
       "responseType": "json",
-      "example": "Default request — Maia KDD 2200\r // NOTE: Endpoint ini menerima array langsung sebagai body.\r fetch('https://puruboy.kozow.com/api/chess/maia', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify([\"f2f3\", \"e7e6\", \"e2e4\"])\r }).then(res => res.json()).then(console.log);\r // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }\n\nModel Maia KDD 1500 — untuk level pemula\r fetch('https://puruboy.kozow.com/api/chess/maia?maia_name=maia_kdd_1500', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify([\"e2e4\", \"e7e5\", \"g1f3\"])\r }).then(res => res.json()).then(console.log);\r // { top_move: \"b8c6\", move_delay: 0, inference_time: null }\n\nCustom clock — 10 menit awal, 5 menit tersisa\r fetch('https://puruboy.kozow.com/api/chess/maia?initial_clock=600&current_clock=300', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify([\"d2d4\", \"d7d5\", \"c2c4\"])\r }).then(res => res.json()).then(console.log);",
+      "example": "Request — Maia KDD 2200\r fetch('https://puruboy.kozow.com/api/chess/maia', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ notasi: [\"f2f3\", \"e7e6\", \"e2e4\"] })\r }).then(res => res.json()).then(console.log);\r // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
       "params": [
         {
-          "name": "maia_name",
-          "in": "query",
-          "type": "string",
-          "description": "Nama model Maia yang digunakan (menentukan tingkat kesulitan).",
-          "required": false,
-          "choices": [
-            {
-              "value": "maia_kdd_1100",
-              "label": "Maia 1100 (Sangat Mudah)"
-            },
-            {
-              "value": "maia_kdd_1200",
-              "label": "Maia 1200"
-            },
-            {
-              "value": "maia_kdd_1300",
-              "label": "Maia 1300"
-            },
-            {
-              "value": "maia_kdd_1400",
-              "label": "Maia 1400"
-            },
-            {
-              "value": "maia_kdd_1500",
-              "label": "Maia 1500"
-            },
-            {
-              "value": "maia_kdd_1600",
-              "label": "Maia 1600"
-            },
-            {
-              "value": "maia_kdd_1700",
-              "label": "Maia 1700"
-            },
-            {
-              "value": "maia_kdd_1800",
-              "label": "Maia 1800"
-            },
-            {
-              "value": "maia_kdd_1900",
-              "label": "Maia 1900"
-            },
-            {
-              "value": "maia_kdd_2200",
-              "label": "Maia 2200 (Paling Kuat)"
-            },
-            {
-              "value": "maia_leela",
-              "label": "Maia Leela (Hybrid)"
-            }
-          ]
-        },
-        {
-          "name": "initial_clock",
-          "in": "query",
-          "type": "number",
-          "description": "Waktu jam awal permainan dalam detik.",
-          "required": false,
-          "choices": [
-            {
-              "value": "0",
-              "label": "Unlimited / Blitz"
-            },
-            {
-              "value": "60",
-              "label": "1 Minute (Bullet)"
-            },
-            {
-              "value": "180",
-              "label": "3 Minutes (Blitz)"
-            },
-            {
-              "value": "300",
-              "label": "5 Minutes (Blitz)"
-            },
-            {
-              "value": "600",
-              "label": "10 Minutes (Rapid)"
-            }
-          ]
-        },
-        {
-          "name": "current_clock",
-          "in": "query",
-          "type": "number",
-          "description": "Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.",
-          "required": false
-        },
-        {
-          "name": "maia_version",
-          "in": "query",
-          "type": "string",
-          "description": "Versi Maia engine yang dipakai.",
-          "required": false,
-          "choices": [
-            {
-              "value": "maia1",
-              "label": "Version 1 (Old)"
-            },
-            {
-              "value": "maia2",
-              "label": "Version 2"
-            },
-            {
-              "value": "maia3",
-              "label": "Version 3 (Default)"
-            },
-            {
-              "value": "maia4",
-              "label": "Version 4"
-            },
-            {
-              "value": "maia5",
-              "label": "Version 5 (Latest)"
-            }
-          ]
-        },
-        {
-          "name": "notation",
+          "name": "notasi",
           "in": "body",
           "type": "string[]",
           "description": "Array gerakan dalam format UCI (e.g. [\"e2e4\", \"e7e5\", \"g1f3\"]).",
