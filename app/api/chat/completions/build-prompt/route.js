@@ -7,7 +7,7 @@
  *              Tidak memanggil provider. Lihat BUILD_PROMPT.md di direktori yang sama.
  * @method GET
  * @path /api/chat/completions/build-prompt
- * @param {string} messages - WAJIB. JSON array pesan format OpenAI (sama seperti body.messages).
+ * @param {string} query.messages - WAJIB. JSON array pesan format OpenAI (sama seperti body.messages).
  * @example
  * /api/chat/completions/build-prompt?messages=[{"role":"user","content":"halo"},{"role":"assistant","content":"hai"},{"role":"user","content":"siapa presiden?"}]
  * @response json
