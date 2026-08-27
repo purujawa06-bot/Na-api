@@ -7,17 +7,56 @@ export const maxDuration = 30;
 
 /**
  * @title Maiachess Move Proxy
- * @summary Proxy request ke Maiachess API untuk dapatkan langkah dari Maia engine
+ * @summary Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.
+ * @description Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur
+ *              dari Maia neural network engine. Mendukung berbagai model Maia (kdd 1200-2200, leela)
+ *              dan versi Maia (maia1-maia5). Response berisi top_move dalam format UCI,
+ *              move_delay, dan inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.
  * @method POST
  * @path /api/chess/maia
- * @param {string} maia_name - Nama model Maia (default: maia_kdd_2200)
- * @param {number} initial_clock - Waktu awal detik (default: 0)
- * @param {number} current_clock - Waktu saat ini detik (default: 0)
- * @param {string} maia_version - Versi Maia (default: maia3)
- * @example
- * POST /api/chess/maia?maia_name=maia_kdd_2200&initial_clock=0&current_clock=0&maia_version=maia3
- * Body: ["f2f3","e7e6","e2e4"]
- * Returns: { move: "g8f6", ... }
+ * @header Content-Type: application/json
+ * @header Accept: application/json
+ *
+ * @param {string} [maia_name=maia_kdd_2200] - Nama model Maia yang digunakan.
+ *        Opsi: maia_kdd_1200, maia_kdd_1400, maia_kdd_1600, maia_kdd_1900, maia_kdd_2200, maia_leela
+ * @param {number} [initial_clock=0] - Waktu jam awal permainan dalam detik. 0 = unlimited/blitz.
+ * @param {number} [current_clock=0] - Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.
+ * @param {string} [maia_version=maia3] - Versi Maia engine yang dipakai. Opsi: maia1, maia2, maia3, maia4, maia5
+ *
+ * @body {string[]} moves - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
+ *                           Representasi langkah dari awal permainan secara berurutan.
+ *                           Format UCI: "kotak_awal + kotak_tujuan" (e.g. e2e4 = pawn e2 ke e4).
+ *
+ * @returns {Object} success - Response dari Maiachess
+ * @returns {string} success.top_move - Langkah terbaik dalam format UCI (e.g. "d7d5")
+ * @returns {number} success.move_delay - Delay gerakan dalam detik (0.0 jika instant)
+ * @returns {number|null} success.inference_time - Waktu inferensi neural network dalam detik (null jika tidak tersedia)
+ *
+ * @error {string} error.error - Deskripsi error
+ * @error {string} [error.detail] - Detail error dari upstream Maiachess
+ *
+ * @example Default request — Maia KDD 2200
+ * fetch('https://puruboy.kozow.com/api/chess/maia', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify(["f2f3", "e7e6", "e2e4"])
+ * }).then(res => res.json()).then(console.log);
+ * // { top_move: "d7d5", move_delay: 0.0, inference_time: null }
+ *
+ * @example Model Maia KDD 1500 — untuk level pemula
+ * fetch('https://puruboy.kozow.com/api/chess/maia?maia_name=maia_kdd_1500', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify(["e2e4", "e7e5", "g1f3"])
+ * }).then(res => res.json()).then(console.log);
+ * // { top_move: "b8c6", move_delay: 0, inference_time: null }
+ *
+ * @example Custom clock — 10 menit awal, 5 menit tersisa
+ * fetch('https://puruboy.kozow.com/api/chess/maia?initial_clock=600&current_clock=300', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify(["d2d4", "d7d5", "c2c4"])
+ * }).then(res => res.json()).then(console.log);
  */
 export async function POST(req) {
     try {
