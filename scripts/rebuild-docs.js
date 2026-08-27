@@ -8,4 +8,7 @@ scanDocs().then(async (spec) => {
     await fse.writeJson(outputPath, spec, { spaces: 2 });
     console.log('✅ docs.json regenerated successfully!');
     console.log('📊 Categories:', Object.keys(spec).length);
-}).catch(e => console.error('❌ Error:', e));
+}).catch((e) => {
+    console.error('❌ Error:', e);
+    process.exit(1);
+});
