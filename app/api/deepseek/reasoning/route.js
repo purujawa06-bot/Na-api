@@ -12,7 +12,9 @@
  * @param {string} body.prompt - Pesan/pertanyaan Anda.
  * @param {string} [body.chatID] - ID sesi untuk melanjutkan percakapan. Kosongkan untuk chat baru.
  * @param {string|number} [body.parentID] - Wajib bila chatID diisi: message_id jawaban terakhir.
- * @param {boolean} [body.stream] - true untuk streaming SSE; delta reasoning tampil sebagai event type "reasoning" (default false).
+ * @param {boolean} [body.stream] - Gunakan streaming SSE; delta reasoning tampil sebagai event type "reasoning".
+ *        @choice true - Ya (Streaming)
+ *        @choice false - Tidak (JSON Default)
  * @response stream
  * @example Reasoning non-streaming
  * fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {

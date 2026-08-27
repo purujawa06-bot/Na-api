@@ -14,7 +14,9 @@
  * @param {string} body.prompt - Pesan/pertanyaan Anda.
  * @param {string} [body.chatID] - ID sesi (dari respons sebelumnya) untuk melanjutkan percakapan. Kosongkan untuk chat baru.
  * @param {string|number} [body.parentID] - Wajib bila chatID diisi: message_id jawaban terakhir (dari respons sebelumnya).
- * @param {boolean} [body.stream] - true untuk streaming SSE (default false).
+ * @param {boolean} [body.stream] - Gunakan streaming SSE untuk respons real-time.
+ *        @choice true - Ya (Streaming)
+ *        @choice false - Tidak (JSON Default)
  * @response stream
  * @example Chat baru (non-streaming)
  * fetch('https://puruboy-api.vercel.app/api/deepseek/instant', {
