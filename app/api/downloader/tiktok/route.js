@@ -14,6 +14,18 @@
  *     .then(res => res.json())
  *     .then(console.log);
  */
+/**
+ * @title TikTok Downloader
+ * @summary Download video TikTok tanpa watermark.
+ * @description Mengambil link download video TikTok (via ssstik.io) beserta metadata.
+ * @method GET
+ * @path /api/downloader/tiktok
+ * @param {string} query.url - URL video TikTok (https only).
+ * 
+ * @method POST
+ * @path /api/downloader/tiktok
+ * @param {string} body.url - URL video TikTok (https only).
+ */
 import { NextResponse } from 'next/server';
 import { downloadTiktok } from '../../../../lib/ssstik.js';
 

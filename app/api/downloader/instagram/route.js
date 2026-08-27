@@ -15,6 +15,18 @@
  *     .then(res => res.json())
  *     .then(console.log);
  */
+/**
+ * @title Instagram Downloader
+ * @summary Download Reels/Post Instagram tanpa watermark.
+ * @description Mengambil link download media Instagram (via kkinstagram/instasave).
+ * @method GET
+ * @path /api/downloader/instagram
+ * @param {string} query.url - URL media Instagram (https only).
+ * 
+ * @method POST
+ * @path /api/downloader/instagram
+ * @param {string} body.url - URL media Instagram (https only).
+ */
 import { NextResponse } from 'next/server';
 import { downloadInstagram } from '../../../../lib/instagram.js';
 

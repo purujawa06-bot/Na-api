@@ -15,6 +15,14 @@
  *     .then(res => res.json())
  *     .then(console.log);
  */
+/**
+ * @title SoundCloud Play (Direct)
+ * @summary Cari dan dapatkan stream URL MP3 SoundCloud.
+ * @description Mencari track di SoundCloud dan mengembalikan metadata beserta link stream MP3 128kbps.
+ * @method GET
+ * @path /api/play/soundcloud
+ * @param {string} query.q - Kata kunci pencarian (Judul/Artis).
+ */
 import { NextResponse } from 'next/server';
 import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';
 
