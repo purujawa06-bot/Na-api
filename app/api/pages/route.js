@@ -1,3 +1,12 @@
+/**
+ * @title Custom Pages
+ * @summary Daftar halaman HTML kustom dari repository GitHub (pageku).
+ * @description Mengambil daftar file PuruPage[...] dari repo purujawa06-bot/pageku dan mengekstrak metadata.
+ * @method GET
+ * @path /api/pages
+ * @param {number} [query.page] - Nomor halaman (default 1).
+ * @param {string} [query.search] - Filter pencarian judul/deskripsi.
+ */
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../lib/errorLogger';
 

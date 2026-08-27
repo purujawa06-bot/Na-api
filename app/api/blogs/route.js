@@ -1,3 +1,19 @@
+/**
+ * @title Blog Posts
+ * @summary Kelola postingan blog (PuruBoy Blog).
+ * @description Mengambil daftar blog dengan pagination atau membuat postingan baru (admin only).
+ * @method GET
+ * @path /api/blogs
+ * @param {number} [query.page] - Nomor halaman (default 1).
+ * @param {number} [query.limit] - Jumlah post per halaman (default 5).
+ *
+ * @method POST
+ * @path /api/blogs
+ * @header Authorization - Admin Key
+ * @param {string} body.title - Judul postingan.
+ * @param {string} body.content - Isi konten postingan.
+ * @param {string} [body.category] - Kategori blog.
+ */
 import { NextResponse } from 'next/server';
 import blogService from '../../../lib/blogService';
 import { reportError } from '../../../lib/errorLogger';

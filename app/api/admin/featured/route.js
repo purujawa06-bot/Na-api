@@ -1,3 +1,15 @@
+/**
+ * @title Featured Settings
+ * @summary Konfigurasi endpoint unggulan untuk UI/Home.
+ * @description Get/Set konfigurasi featured endpoint yang akan dipromosikan di beranda.
+ * @method GET
+ * @path /api/admin/featured
+ *
+ * @method POST
+ * @path /api/admin/featured
+ * @header Authorization - Admin Key
+ * @param {object} body - Objek konfigurasi settings.
+ */
 import { NextResponse } from 'next/server';
 import settingsService from '../../../../lib/settingsService';
 import { reportError } from '../../../../lib/errorLogger';
