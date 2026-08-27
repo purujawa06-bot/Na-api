@@ -17,21 +17,31 @@ export const maxDuration = 30;
  * @header Content-Type: application/json
  * @header Accept: application/json
  *
- * @param {string} [query.maia_name] - Nama model Maia yang digunakan.
- *        @choice maia_kdd_1200 - Maia KDD 1200
- *        @choice maia_kdd_1400 - Maia KDD 1400
- *        @choice maia_kdd_1600 - Maia KDD 1600
- *        @choice maia_kdd_1900 - Maia KDD 1900
- *        @choice maia_kdd_2200 - Maia KDD 2200
- *        @choice maia_leela - Maia Leela
- * @param {number} [query.initial_clock] - Waktu jam awal permainan dalam detik. 0 = unlimited/blitz.
+ * @param {string} [query.maia_name] - Nama model Maia yang digunakan (menentukan tingkat kesulitan).
+ *        @choice maia_kdd_1100 - Maia 1100 (Sangat Mudah)
+ *        @choice maia_kdd_1200 - Maia 1200
+ *        @choice maia_kdd_1300 - Maia 1300
+ *        @choice maia_kdd_1400 - Maia 1400
+ *        @choice maia_kdd_1500 - Maia 1500
+ *        @choice maia_kdd_1600 - Maia 1600
+ *        @choice maia_kdd_1700 - Maia 1700
+ *        @choice maia_kdd_1800 - Maia 1800
+ *        @choice maia_kdd_1900 - Maia 1900
+ *        @choice maia_kdd_2200 - Maia 2200 (Paling Kuat)
+ *        @choice maia_leela - Maia Leela (Hybrid)
+ * @param {number} [query.initial_clock] - Waktu jam awal permainan dalam detik.
+ *        @choice 0 - Unlimited / Blitz
+ *        @choice 60 - 1 Minute (Bullet)
+ *        @choice 180 - 3 Minutes (Blitz)
+ *        @choice 300 - 5 Minutes (Blitz)
+ *        @choice 600 - 10 Minutes (Rapid)
  * @param {number} [query.current_clock] - Waktu jam tersisa pemain saat ini dalam detik. 0 = unlimited.
  * @param {string} [query.maia_version] - Versi Maia engine yang dipakai.
- *        @choice maia1 - Version 1
+ *        @choice maia1 - Version 1 (Old)
  *        @choice maia2 - Version 2
- *        @choice maia3 - Version 3
+ *        @choice maia3 - Version 3 (Default)
  *        @choice maia4 - Version 4
- *        @choice maia5 - Version 5
+ *        @choice maia5 - Version 5 (Latest)
  *
  * @param {string[]} body - Array gerakan dalam format UCI (e.g. ["e2e4", "e7e5", "g1f3"]).
  *                           Representasi langkah dari awal permainan secara berurutan.
