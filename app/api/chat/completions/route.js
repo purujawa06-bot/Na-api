@@ -1,7 +1,7 @@
 /**
  * @title Chat Completions (OpenAI Compatible)
  * @summary Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.
- * @description Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share) via Vercel AI SDK.
+ * @description Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share, Puru) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
