@@ -13,6 +13,7 @@ const BottomNav = () => {
         { name: 'Docs', href: '/docs', icon: 'fa-book-open' },
         { name: 'Chat', href: '/chat', icon: 'fa-comments' },
         { name: 'Blog', href: '/blog', icon: 'fa-newspaper' },
+        { name: 'Scripts', href: '/userscripts', icon: 'fa-cubes' },
     ];
 
     // Sembunyikan navigasi bawah pada halaman chat agar tampilan lebih luas/mirip aplikasi native

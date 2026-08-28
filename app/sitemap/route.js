@@ -9,6 +9,7 @@ const staticPages = [
   { loc: '/blog', changefreq: 'daily', priority: 0.8 },
   { loc: '/chat', changefreq: 'always', priority: 0.7 },
   { loc: '/listpage', changefreq: 'weekly', priority: 0.6 },
+  { loc: '/userscripts', changefreq: 'weekly', priority: 0.6 },
 ];
 
 export async function GET() {
@@ -56,6 +57,7 @@ ${urlset}
   <url><loc>${BASE_URL}/blog</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>${BASE_URL}/chat</loc><changefreq>always</changefreq><priority>0.7</priority></url>
   <url><loc>${BASE_URL}/listpage</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>${BASE_URL}/userscripts</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 </urlset>`;
     
     return new Response(fallbackSitemap, {
