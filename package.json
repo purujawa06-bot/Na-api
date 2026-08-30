@@ -24,6 +24,7 @@
     "axios": "^1.7.2",
     "axios-cookiejar-support": "^5.0.0",
     "cheerio": "^1.0.0-rc.12",
+    "chess.js": "^1.4.0",
     "cloudscraper": "^4.6.0",
     "crypto-js": "^4.2.0",
     "fast-xml-parser": "^4.3.2",

@@ -3,7 +3,7 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini & DeepSeek V4 via NoteGPT) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              Qwen3-Coder XML; body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share, Puru) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              Qwen3-Coder XML; body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
@@ -21,16 +21,16 @@
               "label": "gemini-lite"
             },
             {
-              "value": "deepseek-v4",
-              "label": "deepseek-v4"
-            },
-            {
               "value": "easemate",
               "label": "easemate"
             },
             {
               "value": "gemini-share",
               "label": "gemini-share"
+            },
+            {
+              "value": "puru",
+              "label": "puru"
             },
             {
               "value": "auto",
@@ -296,17 +296,17 @@
     {
       "title": "Maia Chess Move Proxy",
       "summary": "Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.",
-      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\r              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu parameter,\r              yaitu `notasi` (array langkah UCI). Response berisi top_move dalam format UCI,\r              move_delay, dan inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.",
-      "method": "POST",
+      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\n              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu\n              query parameter, yaitu \"fen\" (standar FEN notation). Query parameter selain \"fen\"\n              akan ditolak (400). Riwayat langkah UCI direkonstruksi dari FEN sebelum diteruskan\n              ke Maiachess. Response berisi top_move dalam format UCI, move_delay, dan\n              inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.",
+      "method": "GET",
       "path": "/api/chess/maia",
       "responseType": "json",
-      "example": "Request — Maia KDD 2200\r fetch('https://puruboy.kozow.com/api/chess/maia', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ notasi: [\"f2f3\", \"e7e6\", \"e2e4\"] })\r }).then(res => res.json()).then(console.log);\r // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
+      "example": "Request — Maia KDD 2200\n fetch('https://puruboy-api.vercel.app/api/chess/maia?fen=rnbqkbnr/pppp1ppp/4p3/8/4P3/5N2/PPPP1PPP/RNBQKB1R%20b%20KQkq%20-%201%202')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
       "params": [
         {
-          "name": "notasi",
-          "in": "body",
-          "type": "string[]",
-          "description": "Array gerakan dalam format UCI (e.g. [\"e2e4\", \"e7e5\", \"g1f3\"]).",
+          "name": "fen",
+          "in": "query",
+          "type": "string",
+          "description": "String FEN standar yang merepresentasikan posisi papan catur.",
           "required": true
         }
       ]
