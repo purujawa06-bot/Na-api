@@ -201,6 +201,7 @@
             <button onclick="switchTab('featured')" id="tab-featured" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">Popup Fitur</button>
             <button onclick="switchTab('aichain')" id="tab-aichain" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">Auto Model</button>
             <button onclick="switchTab('pages')" id="tab-pages" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">Custom Pages</button>
+            <button onclick="switchTab('userscripts')" id="tab-userscripts" class="tab-btn flex-none px-6 py-3 text-sm font-bold text-gray-500 uppercase tracking-wider">User Scripts</button>
         </div>
 
         <main class="p-4 space-y-6">
@@ -375,6 +376,67 @@
                 </div>
             </div>
 
+        <!-- VIEW: USER SCRIPTS -->
+            <div id="view-userscripts" class="hidden animate-fade-in">
+                <!-- Manage Scripts Section -->
+                <div id="manage-scripts-section" class="native-card p-5 hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-white">Manage UserScripts</h2>
+                        <button onclick="toggleScriptSection('create')" class="text-xs bg-accent hover:bg-pink-600 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-pink-900/20 font-bold transition-all">Create New</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mb-4">Disimpan sebagai file <code class="bg-gray-800 px-1 rounded">userscripts/*.user.js</code> di repo yang sama dengan Custom Pages. Metadata dibaca otomatis dari header <code class="bg-gray-800 px-1 rounded">==UserScript==</code>.</p>
+                    <div id="scripts-list-container" class="space-y-3"></div>
+                </div>
+
+                <!-- Create Script Form -->
+                <div id="create-script-section" class="native-card p-5 hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-white" id="script-form-title">Create UserScript</h2>
+                        <div class="flex gap-2">
+                            <button onclick="toggleScriptSection('manage')" class="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg font-bold transition-all">Manage</button>
+                            <button onclick="resetGithubConfig()" class="text-xs text-red-400 hover:underline px-2 py-1.5">Reset Config</button>
+                        </div>
+                    </div>
+                    <form id="script-form" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Name</label>
+                                <input type="text" id="script-name" placeholder="DeepSeek Token Grabber" required class="input-field text-sm">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Version</label>
+                                <input type="text" id="script-version" placeholder="1.0.0" required class="input-field text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Description</label>
+                            <textarea id="script-desc" rows="2" placeholder="Apa fungsi script ini?" class="input-field text-sm" required></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Author</label>
+                                <input type="text" id="script-author" placeholder="PuruBoy" class="input-field text-sm">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Match URL</label>
+                                <input type="text" id="script-match" placeholder="https://chat.deepseek.com/*" class="input-field text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Icon (Font Awesome, opsional)</label>
+                            <input type="text" id="script-icon" placeholder="fa-key" class="input-field text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 mb-1 block uppercase">Script Body (JS, tanpa header)</label>
+                            <textarea id="script-body" rows="10" placeholder="(function() { 'use strict'; /* kode script-mu */ })();" class="input-field font-mono text-sm" required></textarea>
+                        </div>
+                        <button type="submit" id="script-submit-btn" class="btn-primary w-full shadow-lg shadow-pink-900/20">
+                            <i class="fas fa-upload"></i> Publish Script
+                        </button>
+                    </form>
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -426,7 +488,7 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(`tab-${tabName}`).classList.add('active');
             
-            ['create', 'list', 'featured', 'pages', 'aichain'].forEach(v => {
+            ['create', 'list', 'featured', 'pages', 'aichain', 'userscripts'].forEach(v => {
                 document.getElementById(`view-${v}`).classList.add('hidden');
             });
             
@@ -436,6 +498,7 @@
             if(tabName === 'featured') fetchFeatured();
             if(tabName === 'pages') checkGithubConfig();
             if(tabName === 'aichain') fetchAiChain();
+            if(tabName === 'userscripts') checkScriptsConfig();
         }
 
         function showAdmin() {
@@ -921,6 +984,236 @@
                 if(putRes.ok) {
                     alert(sha ? 'Page berhasil diupdate!' : `Page berhasil dipublish!\nAkan tersedia di /page/${slug} setelah deployment selesai.`);
                     togglePageSection('manage');
+                } else {
+                    const errData = await putRes.json();
+                    alert(`Gagal publish: ${errData.message}`);
+                }
+            } catch (err) {
+                alert('Network error saat berkomunikasi dengan GitHub API.');
+            } finally {
+                btn.innerHTML = originalBtnHtml;
+                btn.disabled = false;
+            }
+        };
+
+        /* --- USER SCRIPTS LOGIC --- */
+        function toggleScriptSection(sec) {
+            if (sec === 'manage') {
+                document.getElementById('create-script-section').classList.add('hidden');
+                document.getElementById('manage-scripts-section').classList.remove('hidden');
+                loadGitHubScripts();
+            } else {
+                document.getElementById('create-script-section').classList.remove('hidden');
+                document.getElementById('manage-scripts-section').classList.add('hidden');
+                resetScriptForm();
+            }
+        }
+
+        function checkScriptsConfig() {
+            const repo = localStorage.getItem(GH_REPO_KEY);
+            const token = localStorage.getItem(GH_TOKEN_KEY);
+            document.getElementById('create-script-section').classList.add('hidden');
+            document.getElementById('manage-scripts-section').classList.remove('hidden');
+            if (repo && token) {
+                loadGitHubScripts();
+            } else {
+                document.getElementById('scripts-list-container').innerHTML =
+                    '<p class="text-sm text-gray-500">Atur konfigurasi GitHub dulu di tab <b>Custom Pages</b> (repo + token), lalu kembali ke tab ini.</p>';
+            }
+        }
+
+        function resetScriptForm() {
+            document.getElementById('script-form').reset();
+            document.getElementById('script-form-title').textContent = 'Create UserScript';
+            document.getElementById('script-submit-btn').innerHTML = '<i class="fas fa-upload"></i> Publish Script';
+            delete document.getElementById('script-form').dataset.sha;
+            delete document.getElementById('script-form').dataset.file;
+        }
+
+        function slugify(name) {
+            return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        }
+
+        function buildUserScriptHeader(data) {
+            return [
+                '// ==UserScript==',
+                '// @name        ' + data.name,
+                '// @namespace   https://puruboy-api.vercel.app',
+                '// @version     ' + data.version,
+                '// @description ' + data.desc,
+                '// @author      ' + (data.author || 'PuruBoy'),
+                (data.icon ? '// @icon        ' + data.icon : ''),
+                '// @match       ' + data.match,
+                '// @run-at      document-idle',
+                '// ==/UserScript==',
+                '',
+            ].filter(Boolean).join('\n');
+        }
+
+        async function loadGitHubScripts() {
+            const container = document.getElementById('scripts-list-container');
+            container.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-accent"></i> Loading...</div>';
+            const repo = localStorage.getItem(GH_REPO_KEY);
+            const token = localStorage.getItem(GH_TOKEN_KEY);
+            try {
+                const res = await fetch(`https://api.github.com/repos/${repo}/contents/userscripts`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if(res.status === 404) {
+                    container.innerHTML = '<p class="text-sm text-gray-500">Belum ada script (folder userscripts belum ada).</p>';
+                    return;
+                }
+                if(!res.ok) throw new Error('Failed to load');
+                const files = await res.json();
+                const scripts = (Array.isArray(files) ? files : []).filter(f => f.name.endsWith('.user.js'));
+
+                if(scripts.length === 0) {
+                    container.innerHTML = '<p class="text-sm text-gray-500">Belum ada script.</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                scripts.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center p-3 bg-gray-900/50 rounded-xl border border-gray-800';
+                    div.innerHTML = `
+                        <div>
+                            <p class="text-sm font-bold text-white">${s.name}</p>
+                            <a href="/userscripts/${s.name}" target="_blank" class="text-[10px] text-blue-400 hover:underline">Open Script</a>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="editGitHubScript('${s.name}', '${s.sha}')" class="w-8 h-8 rounded-lg bg-gray-800 text-gray-400 hover:text-white"><i class="fas fa-edit"></i></button>
+                            <button onclick="deleteGitHubScript('${s.name}', '${s.sha}')" class="w-8 h-8 rounded-lg bg-red-900/30 text-red-400 hover:text-red-300"><i class="fas fa-trash"></i></button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) {
+                container.innerHTML = '<p class="text-sm text-red-400">Gagal memuat script dari GitHub.</p>';
+            }
+        }
+
+        async function editGitHubScript(name, sha) {
+            const repo = localStorage.getItem(GH_REPO_KEY);
+            const token = localStorage.getItem(GH_TOKEN_KEY);
+            try {
+                const res = await fetch(`https://api.github.com/repos/${repo}/contents/userscripts/${name}`, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+                if(!res.ok) throw new Error('Failed');
+                const data = await res.json();
+                const decoded = decodeURIComponent(escape(window.atob(data.content)));
+
+                const get = (label) => {
+                    const m = decoded.match(new RegExp(`//\\s*@${label}\\s+(.+)`));
+                    return m ? m[1].trim() : '';
+                };
+                const bodyMatch = decoded.match(/\/\/\s*==\/UserScript==([\s\S]*)/);
+                const body = bodyMatch ? bodyMatch[1].replace(/^\s+/, '') : decoded;
+
+                document.getElementById('script-name').value = get('name');
+                document.getElementById('script-version').value = get('version');
+                document.getElementById('script-desc').value = get('description');
+                document.getElementById('script-author').value = get('author');
+                document.getElementById('script-match').value = get('match');
+                document.getElementById('script-icon').value = get('icon');
+                document.getElementById('script-body').value = body;
+
+                document.getElementById('script-form').dataset.sha = data.sha;
+                document.getElementById('script-form').dataset.file = name;
+                document.getElementById('script-form-title').textContent = 'Edit UserScript';
+                document.getElementById('script-submit-btn').innerHTML = '<i class="fas fa-save"></i> Update Script';
+
+                toggleScriptSection('create');
+            } catch(e) {
+                alert('Error loading script details');
+            }
+        }
+
+        async function deleteGitHubScript(name, sha) {
+            if(!confirm(`Hapus script ${name}?`)) return;
+            const repo = localStorage.getItem(GH_REPO_KEY);
+            const token = localStorage.getItem(GH_TOKEN_KEY);
+            try {
+                const res = await fetch(`https://api.github.com/repos/${repo}/contents/userscripts/${name}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Delete script ${name}`,
+                        sha: sha
+                    })
+                });
+                if(res.ok) {
+                    alert('Script deleted successfully');
+                    loadGitHubScripts();
+                } else {
+                    const errData = await res.json();
+                    alert(`Failed to delete: ${errData.message}`);
+                }
+            } catch(e) {
+                alert('Error deleting script');
+            }
+        }
+
+        document.getElementById('script-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('script-name').value;
+            const version = document.getElementById('script-version').value;
+            const desc = document.getElementById('script-desc').value;
+            const author = document.getElementById('script-author').value;
+            const match = document.getElementById('script-match').value;
+            const icon = document.getElementById('script-icon').value;
+            const body = document.getElementById('script-body').value;
+
+            let file = document.getElementById('script-form').dataset.file;
+            if (!file) {
+                file = slugify(name) + '.user.js';
+            }
+
+            const header = buildUserScriptHeader({ name, version, desc, author, match, icon });
+            const finalScript = header + '\n' + body.trim() + '\n';
+
+            const repo = localStorage.getItem(GH_REPO_KEY);
+            const token = localStorage.getItem(GH_TOKEN_KEY);
+
+            const btn = document.getElementById('script-submit-btn');
+            const originalBtnHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            btn.disabled = true;
+
+            try {
+                let sha = document.getElementById('script-form').dataset.sha;
+                if(!sha) {
+                    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/userscripts/${file}`, {
+                        headers: { 'Authorization': `token ${token}` }
+                    });
+                    if(getRes.ok) {
+                        const getData = await getRes.json();
+                        sha = getData.sha;
+                    }
+                }
+
+                const payload = {
+                    message: sha ? `Update script ${name}` : `Publish script ${name}`,
+                    content: utf8_to_b64(finalScript)
+                };
+                if(sha) payload.sha = sha;
+
+                const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/userscripts/${file}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if(putRes.ok) {
+                    alert(sha ? 'Script berhasil diupdate!' : 'Script berhasil dipublish! Akan tersedia di /userscripts setelah deployment selesai.');
+                    toggleScriptSection('manage');
                 } else {
                     const errData = await putRes.json();
                     alert(`Gagal publish: ${errData.message}`);

@@ -1,6 +1,5 @@
 import React from 'react';
 import UserscriptStoreClient from '../../components/UserscriptStoreClient';
-import { SCRIPTS } from '../../lib/userscripts-store';
 
 export const metadata = {
     title: 'UserScript Store | PuruBoy API',
@@ -16,5 +15,5 @@ export const metadata = {
 };
 
 export default function UserscriptsPage() {
-    return <UserscriptStoreClient scripts={SCRIPTS} />;
+    return <UserscriptStoreClient />;
 }
