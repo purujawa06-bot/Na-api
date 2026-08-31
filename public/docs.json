@@ -296,17 +296,17 @@
     {
       "title": "Maia Chess Move Proxy",
       "summary": "Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.",
-      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\n              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu\n              query parameter, yaitu \"fen\" (standar FEN notation). Query parameter selain \"fen\"\n              akan ditolak (400). Riwayat langkah UCI direkonstruksi dari FEN sebelum diteruskan\n              ke Maiachess. Response berisi top_move dalam format UCI, move_delay, dan\n              inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.",
+      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\n              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu\n              query parameter, yaitu \"pgn\" (Portable Game Notation). Query parameter selain \"pgn\"\n              akan ditolak (400). Langkah UCI diekstrak dari PGN sebelum diteruskan ke Maiachess.\n              Response berisi top_move dalam format UCI, move_delay, dan inference_time.\n              Tidak memerlukan autentikasi, tapi rate limit berlaku.",
       "method": "GET",
       "path": "/api/chess/maia",
       "responseType": "json",
-      "example": "Request — Maia KDD 2200\n fetch('https://puruboy-api.vercel.app/api/chess/maia?fen=rnbqkbnr/pppp1ppp/4p3/8/4P3/5N2/PPPP1PPP/RNBQKB1R%20b%20KQkq%20-%201%202')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
+      "example": "Request — Maia KDD 2200\n fetch('https://puruboy-api.vercel.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
       "params": [
         {
-          "name": "fen",
+          "name": "pgn",
           "in": "query",
           "type": "string",
-          "description": "String FEN standar yang merepresentasikan posisi papan catur.",
+          "description": "String PGN yang merepresentasikan riwayat permainan catur.",
           "required": true
         }
       ]

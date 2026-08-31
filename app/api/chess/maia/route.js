@@ -6,73 +6,10 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-const fenPieces = (fen) => {
-    const rows = fen.split(' ')[0].split('/');
-    const arr = new Array(64).fill('');
-    for (let ri = 0; ri < 8; ri++) {
-        const erank = 7 - ri;
-        let f = 0;
-        for (const ch of rows[ri]) {
-            if (ch >= '0' && ch <= '9') f += parseInt(ch, 10);
-            else { arr[erank * 8 + f] = ch; f++; }
-        }
-    }
-    return arr;
-};
-
-const boardArr = (board) => {
-    const arr = new Array(64).fill('');
-    for (let r = 0; r < 8; r++) {
-        for (let f = 0; f < 8; f++) {
-            const sq = board[r][f];
-            if (sq) arr[(7 - r) * 8 + f] = sq.color === 'w' ? sq.type.toUpperCase() : sq.type;
-        }
-    }
-    return arr;
-};
-
-const compatibleScore = (cur, target) => {
-    let score = 0;
-    for (let i = 0; i < 64; i++) {
-        if (target[i] === '') continue;
-        if (cur[i] === target[i]) score++;
-        else if (cur[i] !== '' && cur[i] !== target[i]) return -1;
-    }
-    return score;
-};
-
-// Rekonstruksi riwayat langkah UCI dari FEN posisi akhir (greedy).
-// Pola nya sama dengan reconstructMoves di userscript maia-chess.
-const reconstructUci = (fen) => {
-    const target = fenPieces(fen);
+const pgnToUci = (pgn) => {
     const chess = new Chess();
-    const uci = [];
-    let guard = 0;
-    while (guard++ < 300) {
-        const cur = boardArr(chess.board());
-        if (cur.every((p, i) => p === target[i])) return uci;
-        const moves = chess.moves({ verbose: true });
-        let bestUci = null;
-        let bestScore = -1;
-        for (const m of moves) {
-            chess.move(m);
-            const sc = compatibleScore(boardArr(chess.board()), target);
-            chess.undo();
-            if (sc < 0) continue;
-            if (sc > bestScore) {
-                bestScore = sc;
-                bestUci = m.from + m.to + (m.promotion ? m.promotion : '');
-            }
-        }
-        if (!bestUci) return null;
-        chess.move({
-            from: bestUci.slice(0, 2),
-            to: bestUci.slice(2, 4),
-            promotion: bestUci.length > 4 ? bestUci[4] : undefined,
-        });
-        uci.push(bestUci);
-    }
-    return null;
+    chess.loadPgn(pgn, { strict: false });
+    return chess.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion ? m.promotion : ''));
 };
 
 /**
@@ -80,16 +17,16 @@ const reconstructUci = (fen) => {
  * @summary Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.
  * @description Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur
  *              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu
- *              query parameter, yaitu "fen" (standar FEN notation). Query parameter selain "fen"
- *              akan ditolak (400). Riwayat langkah UCI direkonstruksi dari FEN sebelum diteruskan
- *              ke Maiachess. Response berisi top_move dalam format UCI, move_delay, dan
- *              inference_time. Tidak memerlukan autentikasi, tapi rate limit berlaku.
+ *              query parameter, yaitu "pgn" (Portable Game Notation). Query parameter selain "pgn"
+ *              akan ditolak (400). Langkah UCI diekstrak dari PGN sebelum diteruskan ke Maiachess.
+ *              Response berisi top_move dalam format UCI, move_delay, dan inference_time.
+ *              Tidak memerlukan autentikasi, tapi rate limit berlaku.
  * @method GET
  * @path /api/chess/maia
  * @header Accept: application/json
  *
- * @param {string} query.fen - String FEN standar yang merepresentasikan posisi papan catur.
- *                             Contoh: "rnbqkbnr/pppp1ppp/4p3/8/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2".
+ * @param {string} query.pgn - String PGN yang merepresentasikan riwayat permainan catur.
+ *                             Contoh: "1. e4 e6 2. Nf3".
  *                             Satu-satunya parameter yang diterima — model yang dipakai tetap
  *                             Maia KDD 2200 (tidak bisa diubah).
  *
@@ -102,47 +39,46 @@ const reconstructUci = (fen) => {
  * @error {string} [error.detail] - Detail error dari upstream Maiachess
  *
  * @example Request — Maia KDD 2200
- * fetch('https://puruboy-api.vercel.app/api/chess/maia?fen=rnbqkbnr/pppp1ppp/4p3/8/4P3/5N2/PPPP1PPP/RNBQKB1R%20b%20KQkq%20-%201%202')
+ * fetch('https://puruboy-api.vercel.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')
  *     .then(res => res.json())
  *     .then(console.log);
  * // { top_move: "d7d5", move_delay: 0.0, inference_time: null }
  */
 export async function GET(req) {
     try {
-        const allowed = ['fen'];
+        const allowed = ['pgn'];
         const params = [...req.nextUrl.searchParams.keys()];
         const unexpected = params.filter((k) => !allowed.includes(k));
 
         if (unexpected.length > 0) {
             return NextResponse.json(
-                { error: `Query parameter "${unexpected[0]}" is not allowed. Only "fen" is accepted.` },
+                { error: `Query parameter "${unexpected[0]}" is not allowed. Only "pgn" is accepted.` },
                 { status: 400 }
             );
         }
 
-        const fen = req.nextUrl.searchParams.get('fen');
+        const pgn = req.nextUrl.searchParams.get('pgn');
 
-        if (!fen) {
+        if (!pgn) {
             return NextResponse.json(
-                { error: 'Query parameter "fen" is required' },
+                { error: 'Query parameter "pgn" is required' },
                 { status: 400 }
             );
         }
 
+        let notasi;
         try {
-            new Chess(fen);
+            notasi = pgnToUci(pgn);
         } catch {
             return NextResponse.json(
-                { error: 'Invalid FEN string' },
+                { error: 'Invalid PGN string' },
                 { status: 400 }
             );
         }
-
-        const notasi = reconstructUci(fen);
 
         if (!notasi || notasi.length === 0) {
             return NextResponse.json(
-                { error: 'Invalid FEN: no moves found' },
+                { error: 'Invalid PGN: no moves found' },
                 { status: 400 }
             );
         }
