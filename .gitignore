@@ -131,5 +131,8 @@ scripts/.ssstik-sniff.json
 scripts/.dramabox-sniff.json
 scripts/.dramabox-flow-sniff.json
 
+# vheer sniff capture
+research/.vheer-sniff.json
+
 .vercel
 .env*
