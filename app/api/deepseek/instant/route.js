@@ -77,7 +77,7 @@ export async function POST(req) {
       thinking: false,
       stream: stream,
     });
-    return result; // JSON object atau Response SSE
+    return result instanceof Response ? result : NextResponse.json(result);
   } catch (error) {
     if (error?.status === 400) return NextResponse.json({ success: false, error: error.message }, { status: 400 });
     reportError(error, { endpoint: '/api/deepseek/instant' }).catch(() => {});

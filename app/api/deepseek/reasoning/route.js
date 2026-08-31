@@ -72,7 +72,7 @@ export async function POST(req) {
       thinking: true,
       stream: stream,
     });
-    return result;
+    return result instanceof Response ? result : NextResponse.json(result);
   } catch (error) {
     if (error?.status === 400) return NextResponse.json({ success: false, error: error.message }, { status: 400 });
     reportError(error, { endpoint: '/api/deepseek/reasoning' }).catch(() => {});
