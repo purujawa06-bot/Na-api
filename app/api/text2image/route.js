@@ -32,14 +32,26 @@
  * fetch('https://puruboy-api.vercel.app/api/text2image', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
- *     body: JSON.stringify({ prompt: 'seekor rubah merah di hutan salju' })
+ *     body: JSON.stringify({
+ *         prompt: 'seekor rubah merah di hutan salju',
+ *         model: 'flux_dev',
+ *         size: '1:1',
+ *         num_images: 1,
+ *         stream: false
+ *     })
  * }).then(res => res.json()).then(console.log);
  *
  * @example Streaming progress (SSE)
  * fetch('https://puruboy-api.vercel.app/api/text2image', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
- *     body: JSON.stringify({ prompt: 'kucing oren berkaca mata hitam', stream: true })
+ *     body: JSON.stringify({
+ *         prompt: 'kucing oren berkaca mata hitam',
+ *         model: 'flux_dev',
+ *         size: '1:1',
+ *         num_images: 1,
+ *         stream: true
+ *     })
  * }).then(res => {
  *     const reader = res.body.getReader();
  *     const dec = new TextDecoder();
