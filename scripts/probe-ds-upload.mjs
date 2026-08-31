@@ -11,9 +11,7 @@ async function download(url) {
 }
 
 const trials = [
-  { url: 'https://httpbin.org/image/png', name: 'a.png', contentType: 'image/png' },
-  { url: 'https://httpbin.org/image/png', name: 'b.jpeg', contentType: 'image/jpeg' },
-  { url: 'https://httpbin.org/image/png', name: 'img', contentType: 'image/png' },
+  { url: 'https://httpbin.org/image/png', name: 'image.png', contentType: 'image/png' },
 ];
 
 for (const t of trials) {
