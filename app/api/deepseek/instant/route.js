@@ -75,6 +75,7 @@ export async function POST(req) {
       chatId: typeof body.chatID === 'string' ? body.chatID.trim() : body.chatID,
       parentId: body.parentID,
       thinking: false,
+      searchEnabled: true,
       stream: stream,
     });
     return result instanceof Response ? result : NextResponse.json(result);

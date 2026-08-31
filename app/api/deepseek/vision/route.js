@@ -89,6 +89,7 @@ export async function POST(req) {
       parentId: body.parentID,
       thinking: thinking,
       imageUrl: typeof body.image === 'string' ? body.image.trim() : body.image,
+      searchEnabled: true,
       stream: stream,
     });
     return result instanceof Response ? result : NextResponse.json(result);
