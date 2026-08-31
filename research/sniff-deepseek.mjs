@@ -84,6 +84,7 @@ function isApi(url) {
     const u = new URL(url);
     if (u.hostname === 'chat.deepseek.com' && u.pathname.startsWith('/api/')) return true;
     if (u.hostname.endsWith('deepseek.com') && u.pathname.includes('completion')) return true;
+    if (u.hostname.endsWith('deepseeksvc.com')) return true;
     return false;
   } catch { return false; }
 }
