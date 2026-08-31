@@ -104,7 +104,7 @@ export async function POST(req) {
   }
 
   let model = typeof body.model === 'string' ? body.model.trim() : 'flux_dev';
-  if (!MODEL_CREDITS[model]) {
+  if (MODEL_CREDITS[model] === undefined) {
     return NextResponse.json({ success: false, error: `Model tidak dikenal: ${model}` }, { status: 400 });
   }
   if (MODEL_CREDITS[model] > 0) {
