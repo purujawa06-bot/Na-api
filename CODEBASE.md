@@ -86,6 +86,16 @@ dengan event `processing` (heartbeat tiap 2s), `uploading`, lalu `done`. JANGAN 
 - Contract `done` NDJSON: `{ event:'done', success, source:'iloveimg', url (link langsung tmpfiles), filename, mimetype }`.
 - Contoh uji lib: `node scripts/test-htmltoimage.mjs` (assert-based, pakai `https://example.com`).
 
+## Model QuillBot AI (09/2026)
+
+`lib/quillbot-web.js` + `research/quillbot.sniff.json` — model id `quillbot` (label "QuillBot AI", gpt-4.1-mini) untuk `/api/chat/completions`.
+
+- Alur: `POST https://quillbot.com/api/ai-chat/chat/conversation/<uuid-v4-acak>` body `{message:{content,prompt:{id:"ai-chat/omnibox",version:1}}, context:{...,userDialect:"en-us",apiVersion:2}, origin:{name:"ai-chat.chat",url:"https://quillbot.com"}}` → respons NDJSON: `{"content":"...","type":"content"}` (teks), `{"type":"usage"}` (model/token).
+- **Penting:** fetch polos (undici) dari Node DIBLOKIR Cloudflare 403 "Just a moment" (deteksi TLS/HTTP2 fingerprint, tak mempan walau pakai cookie+UA browser). Solusi: lib **cloudscraper** (dependency lama yang menganggur) yang mengeksekusi JS challenge CF via `node:vm` — serverless-safe.
+- UUID conversation di-generate acak client-side; server bikin konversi baru otomatis (terverifikasi 2 chat = 2 UUID beda).
+- **Kuota anon terbatas**: beberapa pesan per identitas/IP -> `429 {"statusCode":429,"message":"Sign in to continue"}`. Mitigasi di lib: retry otomatis (maks 4) dengan rotasi identitas (jar cookie baru via `cloudscraper.defaults({jar: cloudscraper.jar()})`) + spoof `X-Forwarded-For` acak (backend quillbot membacanya). Setelah mitigasi, 6/6 sukses beruntun di production.
+- Adaptor buffered penuh (pola `gemini-lite`/`fakeSingleChunkStream`) karena transport cloudscraper tak streaming. Uji: `node scripts/test-quillbot-web.mjs`.
+
 ## Konvensi Diet (AGENTS.md)
 
 - Komunikasi wajib bahasa Indonesia.
