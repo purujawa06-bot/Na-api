@@ -1,29 +1,42 @@
 /**
  * @title Image Upscaler
  * @summary Perbesar (upscale) gambar AI hingga 2x-4x via iloveimg.com.
- * @description Menerima URL publik gambar lalu mengunduh dan memperbesarnya.
- *              Mengembalikan file gambar hasil upscale sebagai binary (image/png).
+ * @description Menerima URL publik gambar, mengunduh, memperbesarnya, lalu
+ *              mengupload hasilnya ke tmpfiles.org dan mengembalikan URL
+ *              gambar langsung. Respon berupa streaming JSON (JSON Lines)
+ *              dengan event `processing` setiap 2 detik hingga selesai.
  * @method POST
  * @path /api/tools-image/upscaler
  * @param {string} body.file - URL publik gambar (http/https; png/jpg/webp) (wajib).
  * @param {number} [body.scale] - Faktor skala (2, 3, atau 4). Default 2.
- * @response binary
+ * @response stream
  * @example
  * fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
- *     body: JSON.stringify({
- *         file: 'https://puruboy-api.vercel.app/example.jpg',
- *         scale: 2
- *     })
- * }).then(res => res.blob()).then(console.log);
+ *     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg', scale: 2 })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { upscaleImage } from '../../../../lib/iloveimg-upscaler.js';
+import { reportError } from '../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
+
+const TMPFILES_UPLOAD = 'https://tmpfiles.org/api/v1/upload';
+
+async function uploadTmpfiles(buffer, filename, mimetype) {
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: mimetype }), filename);
+  const res = await fetch(TMPFILES_UPLOAD, { method: 'POST', body: form });
+  if (!res.ok) throw new Error(`Upload tmpfiles gagal (HTTP ${res.status})`);
+  const { data } = await res.json();
+  // Ubah path "/<id>/x.png" -> "/dl/<id>/x.png" agar langsung serve file.
+  const direct = data.url.replace(/^https:\/\/tmpfiles\.org\/([^/]+)\//, 'https://tmpfiles.org/dl/$1/');
+  return direct;
+}
 
 export async function POST(req) {
   let body;
@@ -51,17 +64,37 @@ export async function POST(req) {
   let scale = parseInt(body.scale || 2, 10);
   if (![2, 3, 4].includes(scale)) scale = 2;
 
-  try {
-    const { buffer, mimetype, filename } = await upscaleImage(url, scale);
-    return new NextResponse(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        'Content-Type': mimetype,
-        'Content-Disposition': `inline; filename="${filename.split('.')[0]}_${scale}x.png"`,
-        'Cache-Control': 'no-store',
-      },
-    });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 502 });
-  }
+  const enc = new TextEncoder();
+  const read = new ReadableStream({
+    async start(controller) {
+      const emit = (obj) => controller.enqueue(enc.encode(JSON.stringify(obj) + '\n'));
+      const heartbeat = setInterval(() => emit({ event: 'processing', status: 'running' }), 2000);
+
+      try {
+        const { buffer, mimetype, filename } = await upscaleImage(url, scale);
+        const dlName = `${filename.split('.')[0]}_${scale}x.png`;
+        emit({ event: 'uploading', status: 'running', message: 'Mengunggah hasil ke tmpfiles.org...' });
+        const resultUrl = await uploadTmpfiles(buffer, dlName, mimetype);
+
+        emit({
+          event: 'done',
+          success: true,
+          status: 'success',
+          source: 'iloveimg',
+          scale,
+          url: resultUrl,
+        });
+      } catch (err) {
+        reportError(err, { endpoint: '/api/tools-image/upscaler' }).catch(() => {});
+        emit({ event: 'done', success: false, status: 'error', error: err.message, httpStatus: 502 });
+      } finally {
+        clearInterval(heartbeat);
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(read, {
+    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+  });
 }

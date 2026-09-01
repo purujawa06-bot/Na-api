@@ -999,11 +999,11 @@
     {
       "title": "Image Upscaler",
       "summary": "Perbesar (upscale) gambar AI hingga 2x-4x via iloveimg.com.",
-      "description": "Menerima URL publik gambar lalu mengunduh dan memperbesarnya.\n              Mengembalikan file gambar hasil upscale sebagai binary (image/png).",
+      "description": "Menerima URL publik gambar, mengunduh, memperbesarnya, lalu\n              mengupload hasilnya ke tmpfiles.org dan mengembalikan URL\n              gambar langsung. Respon berupa streaming JSON (JSON Lines)\n              dengan event `processing` setiap 2 detik hingga selesai.",
       "method": "POST",
       "path": "/api/tools-image/upscaler",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         file: 'https://puruboy-api.vercel.app/example.jpg',\n         scale: 2\n     })\n }).then(res => res.blob()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg', scale: 2 })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
