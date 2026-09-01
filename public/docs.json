@@ -90,6 +90,24 @@
       ]
     },
     {
+      "title": "Maia Chess Move Proxy",
+      "summary": "Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.",
+      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\n              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu\n              query parameter, yaitu \"pgn\" (Portable Game Notation). Query parameter selain \"pgn\"\n              akan ditolak (400). Langkah UCI diekstrak dari PGN sebelum diteruskan ke Maiachess.\n              Response berisi top_move dalam format UCI, move_delay, dan inference_time.\n              Tidak memerlukan autentikasi, tapi rate limit berlaku.",
+      "method": "GET",
+      "path": "/api/chess/maia",
+      "responseType": "json",
+      "example": "Request — Maia KDD 2200\n fetch('https://puruboy-api.vercel.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
+      "params": [
+        {
+          "name": "pgn",
+          "in": "query",
+          "type": "string",
+          "description": "String PGN yang merepresentasikan riwayat permainan catur.",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "DeepSeek Instant",
       "summary": "Chat DeepSeek V4 web (mode cepat, tanpa thinking) langsung ke chat.deepseek.com.",
       "description": "Klien pure-HTTP ke chat.deepseek.com (reverse-engineered, tanpa browser).\r              Memakai token akun pribadi Anda: ambil nilai \"value\" dari localStorage\r              `userToken` di chat.deepseek.com (DevTools -> Application -> Local Storage)\r              lalu kirim sebagai body.userID.\r              Multi-turn: respons mengembalikan chatID + parentID; untuk lanjutkan\r              percakapan kirim keduanya pada request berikutnya (parentID = message_id\r              jawaban terakhir). chatID kosong = mulai chat baru.",
@@ -342,26 +360,6 @@
       ]
     }
   ],
-  "chess": [
-    {
-      "title": "Maia Chess Move Proxy",
-      "summary": "Proxy request ke Maiachess API untuk mendapatkan langkah terbaik dari Maia Chess Engine.",
-      "description": "Endpoint proxy ke Maiachess (www.maiachess.com) untuk mendapatkan saran langkah catur\n              dari Maia neural network engine (model kdd 2200). Endpoint hanya menerima satu\n              query parameter, yaitu \"pgn\" (Portable Game Notation). Query parameter selain \"pgn\"\n              akan ditolak (400). Langkah UCI diekstrak dari PGN sebelum diteruskan ke Maiachess.\n              Response berisi top_move dalam format UCI, move_delay, dan inference_time.\n              Tidak memerlukan autentikasi, tapi rate limit berlaku.",
-      "method": "GET",
-      "path": "/api/chess/maia",
-      "responseType": "json",
-      "example": "Request — Maia KDD 2200\n fetch('https://puruboy-api.vercel.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
-      "params": [
-        {
-          "name": "pgn",
-          "in": "query",
-          "type": "string",
-          "description": "String PGN yang merepresentasikan riwayat permainan catur.",
-          "required": true
-        }
-      ]
-    }
-  ],
   "downloader": [
     {
       "title": "Instagram Downloader",
@@ -521,7 +519,7 @@
       ]
     }
   ],
-  "dramabox": [
+  "nonton/baca": [
     {
       "title": "DramaBox Category",
       "summary": "Daftar drama per kategori + daftar semua kategori dramabox.com.",
@@ -928,6 +926,197 @@
               "label": "Chinese"
             }
           ]
+        }
+      ]
+    },
+    {
+      "title": "Komiku Chapter",
+      "summary": "Reader chapter komik — daftar URL gambar dari komiku.org.",
+      "description": "Mengambil daftar URL gambar satu chapter beserta info (id,\n              series, nomor chapter, jumlah gambar, link series, prev/next\n              chapter). Parameter url = permalink chapter usai domain, mis.\n              \"my-wife-waited-for-me-in-the-wheat-field-chapter-27\".",
+      "method": "GET",
+      "path": "/api/komiku/chapter",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "Permalink chapter (wajib, tanpa domain).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "Komiku Detail",
+      "summary": "Detail komik + daftar chapter + komik serupa dari komiku.org.",
+      "description": "Mengambil info lengkap sebuah komik (judul, judul alternatif,\n              tipe, tema, genre, author, rating, pembaca, sinopsis), daftar\n              chapter terurut, serta komik serupa. Parameter slug = bagian\n              URL setelah /manga/, mis. \"my-wife-waited-for-me-in-the-wheat-field\".",
+      "method": "GET",
+      "path": "/api/komiku/detail",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "slug",
+          "in": "query",
+          "type": "string",
+          "description": "Slug permalink komik (wajib, mis. \"one-piece\").",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "Komiku Genre",
+      "summary": "Daftar komik per genre + daftar semua genre komiku.org.",
+      "description": "Mengambil komik dalam sebuah genre (slug, mis. \"isekai\",\n              \"fantasy\", \"romance\") dengan pagination. Tanpa parameter genre\n              default \"isekai\". Respons juga memuat daftar semua genre yang\n              tersedia. Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/komiku/genre",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/genre?genre=isekai')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "genre",
+          "in": "query",
+          "type": "string",
+          "description": "Slug genre (mis. isekai, fantasy, action).",
+          "required": false
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "type": "string",
+          "description": "Nomor halaman, mulai dari 1 (default: 1).",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "Komiku Home",
+      "summary": "Beranda komiku.org — peringkat, populer, terbaru, baru ditambahkan.",
+      "description": "Mengambil seksi beranda komiku.org: Peringkat Komiku (mingguan\n              & harian), Komik Populer Update, Baca Komik Terbaru, dan Baru\n              Ditambahkan. Informasi tiap komik mencakup judul, cover, tema,\n              dan chapter terbaru. Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/komiku/home",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/home')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
+    },
+    {
+      "title": "Komiku Pustaka",
+      "summary": "Listing perpustakaan komiku.org dengan filter tipe, orderby, genre, status.",
+      "description": "Mengambil daftar komik dari pustaka komiku.org (manga, manhwa,\n              manhua, atau semua). Mendukung pagination serta filter tipe,\n              orderby (modified/date/meta_value_num/rand), genre 1 & 2, dan\n              status (ongoing/end). Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/komiku/pustaka",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/pustaka?tipe=manhwa&page=2')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "tipe",
+          "in": "query",
+          "type": "string",
+          "description": "Jenis komik.",
+          "required": false,
+          "choices": [
+            {
+              "value": "manga",
+              "label": "Manga"
+            },
+            {
+              "value": "manhwa",
+              "label": "Manhwa"
+            },
+            {
+              "value": "manhua",
+              "label": "Manhua"
+            }
+          ]
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "type": "string",
+          "description": "Nomor halaman, mulai dari 1 (default: 1).",
+          "required": false
+        },
+        {
+          "name": "orderby",
+          "in": "query",
+          "type": "string",
+          "description": "Pengurutan.",
+          "required": false,
+          "choices": [
+            {
+              "value": "modified",
+              "label": "Chapter Terbaru (Default)"
+            },
+            {
+              "value": "date",
+              "label": "Komik Terbaru"
+            },
+            {
+              "value": "meta_value_num",
+              "label": "Peringkat"
+            },
+            {
+              "value": "rand",
+              "label": "Acak"
+            }
+          ]
+        },
+        {
+          "name": "genre",
+          "in": "query",
+          "type": "string",
+          "description": "Slug genre (mis. action, fantasy, isekai).",
+          "required": false
+        },
+        {
+          "name": "genre2",
+          "in": "query",
+          "type": "string",
+          "description": "Slug genre kedua.",
+          "required": false
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "type": "string",
+          "description": "Status komik.",
+          "required": false,
+          "choices": [
+            {
+              "value": "ongoing",
+              "label": "Ongoing"
+            },
+            {
+              "value": "end",
+              "label": "Tamat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Komiku Search",
+      "summary": "Cari komik di komiku.org (post_type=manga).",
+      "description": "Mencari komik berdasarkan kata kunci (mis. \"boruto\") dengan\n              pagination. Hasil memuat judul, cover, tipe, genre/tema, dan\n              chapter awal/terbaru. Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/komiku/search",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/search?q=boruto')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian (wajib).",
+          "required": true
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "type": "string",
+          "description": "Nomor halaman, mulai dari 1 (default: 1).",
+          "required": false
         }
       ]
     }

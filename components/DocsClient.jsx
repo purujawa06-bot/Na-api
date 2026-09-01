@@ -14,6 +14,7 @@ const CATEGORY_ICONS = {
     tools: 'fa-wrench',
     search: 'fa-magnifying-glass',
     media: 'fa-photo-film',
+    nonton: 'fa-tv',
     fun: 'fa-face-grin-stars',
     news: 'fa-newspaper',
     stalker: 'fa-user-secret',
