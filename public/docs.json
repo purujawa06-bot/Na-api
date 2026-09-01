@@ -1184,7 +1184,39 @@
       ]
     }
   ],
-  "tools-image": [
+  "tools": [
+    {
+      "title": "HTML to Image",
+      "summary": "Konversi halaman web/URL menjadi gambar (jpg/svg) via iloveimg.com.",
+      "description": "Menerima URL publik halaman web, mengkonversinya menjadi gambar, lalu\n              mengupload hasil ke tmpfiles.org dan mengembalikan URL gambar langsung.\n              Respon berupa streaming JSON (JSON Lines) dengan event `processing`,\n              `uploading` hingga selesai.",
+      "method": "POST",
+      "path": "/api/tools-image/html-to-image",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/html-to-image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://example.com', view_width: 1920, to_format: 'jpg' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "file",
+          "in": "body",
+          "type": "string",
+          "description": "URL publik halaman web (http/https) yang ingin dijadikan gambar (wajib).",
+          "required": true
+        },
+        {
+          "name": "view_width",
+          "in": "body",
+          "type": "number",
+          "description": "Lebar render dalam pixel (default: 1920).",
+          "required": false
+        },
+        {
+          "name": "to_format",
+          "in": "body",
+          "type": "string",
+          "description": "Format output: jpg atau svg (default: jpg).",
+          "required": false
+        }
+      ]
+    },
     {
       "title": "Remove Background",
       "summary": "Hapus latar belakang (background) dari gambar secara otomatis via iloveimg.com.",

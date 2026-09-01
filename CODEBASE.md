@@ -19,6 +19,7 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
   - `app/api/dramabox/` — home, category, detail, search, stream.
   - `app/api/tools-image/upscaler` — perbesar gambar AI (iloveimg) + upload ke tmpfiles.
   - `app/api/tools-image/remove-background` — hapus latar belakang gambar (iloveimg) + upload ke tmpfiles.
+  - `app/api/tools-image/html-to-image` — konversi halaman web/URL jadi gambar (iloveimg) + upload ke tmpfiles.
   - `app/api/temp/[id]` — temp file service.
   - `app/api/admin/` — login, aichain, featured.
 - `lib/` — logika bisnis/scraper client.
@@ -35,11 +36,12 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 
 ## Kategori Dokumentasi (docs.json) — 09/2026
 
-Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `downloader`, `nonton/baca`, `search`, `tools-image`.
+Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `downloader`, `nonton/baca`, `search`, `tools`.
 
 - **AI**: chat/completions, chess/maia, deepseek/*, models, text2image.
+- **tools** (gabungan `tools-image` + folder tools lain): seluruh `tools-image/*` (upscaler, remove-background, html-to-image) di-map ke `tools` via `CATEGORY_OVERRIDES`. Folder default tetap `tools-image`.
 - **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search).
-- Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`.
+- Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench`.
 
 ## Scraper Komiku (09/2026)
 
@@ -71,6 +73,18 @@ dengan event `processing` (heartbeat tiap 2s), `uploading`, lalu `done`. JANGAN 
 - Jika URL sumber tanpa ekstensi gambar (mis. `picsum.photos/600/400`), lib menyisipkan ekstensi sesuai `content-type` agar upload iloveimg tidak ditolak (`InvalidExtension`).
 - Contract `done`: `{ event:'done', success, source:'iloveimg', url (link langsung), filename, mimetype }`.
 - Contoh gambar untuk docs/uji pakai `https://puruboy-api.vercel.app/example.jpg` (sama seperti upscaler & deepseek/vision).
+
+## Catatan Penting: HTML-to-Image (iloveimg) — 09/2026
+
+`app/api/tools-image/html-to-image/route.js` + `lib/iloveimg-html.js` + `research/.iloveimg-htmltoimage-sniff.json`:
+
+- Alur: `getSession()` (token+taskId+`server` dari HTML halaman `html-to-image`) → `POST /v1/upload` (`task` + `cloud_file` = URL web) dapat `server_filename` (`.url`) → `POST /v1/process` (`tool:htmlimage`, `url`, `view_width`, `to_format`, `files[0][server_filename]`, `files[0][filename]=hostname`) → `GET <server>/v1/download/<taskId>` dapat file gambar hasil (retry + delay 1.5s).
+- **Bedanya dari upscaler/removebg:** input berupa URL halaman web (bukan upload file gambar), dan `server` pada halaman html-to-image bernilai domain penuh (`api32.ilovepdf.com`), bukan `api1g`. Lib menormalisasi: jika server mengandung `.` → `https://<server>`, selain itu `https://<server>.iloveimg.com`.
+- **Penting:** `to_format` HANYA `jpg` atau `svg` (dari `<select name="to_format">`); kirim `png` → error 400 `To Format is invalid`. Default `jpg`.
+- Step `/v1/preview` TIDAK diperlukan untuk `process`; memanggilnya justru bisa bikin task error. Skip saja.
+- Param: `file` (URL web, wajib), `view_width` (default 1920), `to_format` (jpg/svg, default jpg).
+- Contract `done` NDJSON: `{ event:'done', success, source:'iloveimg', url (link langsung tmpfiles), filename, mimetype }`.
+- Contoh uji lib: `node scripts/test-htmltoimage.mjs` (assert-based, pakai `https://example.com`).
 
 ## Konvensi Diet (AGENTS.md)
 
