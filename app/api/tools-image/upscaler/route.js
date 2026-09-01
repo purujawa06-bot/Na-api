@@ -6,16 +6,17 @@
  *              sebagai binary (image/png).
  * @method POST
  * @path /api/tools-image/upscaler
- * @param {file} body.file - Gambar yang akan diperbesar (wajib).
- * @param {string} [body.scale] - Faktor skala (2, 3, atau 4). Default 2.
+ * @param {binary} body.file - Gambar yang akan diperbesar (wajib).
+ * @param {number} [body.scale] - Faktor skala (2, 3, atau 4). Default 2.
  * @response binary
  * @example
  * const form = new FormData();
  * form.append('file', gambarFile);
  * form.append('scale', '2');
- * fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', { method: 'POST', body: form })
- *     .then(res => res.blob())
- *     .then(console.log);
+ * fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {
+ *     method: 'POST',
+ *     body: JSON.stringify({ file: '<file>', scale: 2 })
+ * }).then(res => res.blob()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { upscaleImage } from '../../../../lib/iloveimg-upscaler.js';
