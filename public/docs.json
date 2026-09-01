@@ -33,6 +33,10 @@
               "label": "puru"
             },
             {
+              "value": "quillbot",
+              "label": "quillbot"
+            },
+            {
               "value": "auto",
               "label": "auto"
             }
@@ -78,7 +82,7 @@
       "method": "GET",
       "path": "/api/chat/completions/build-prompt",
       "responseType": "json",
-      "example": "fetch('https://nexta-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22hai%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22siapa%20presiden%3F%22%7D%5D')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22hai%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22siapa%20presiden%3F%22%7D%5D')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "messages",

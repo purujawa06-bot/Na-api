@@ -73,7 +73,7 @@ GET /api/chat/completions/build-prompt?messages=<JSON array OpenAI>
 Contoh `curl`:
 
 ```bash
-curl -G https://nexta-api.vercel.app/api/chat/completions/build-prompt \
+curl -G https://puruboy-api.vercel.app/api/chat/completions/build-prompt \
   --data-urlencode 'messages=[{"role":"user","content":"halo"},{"role":"assistant","content":"hai"},{"role":"user","content":"siapa presiden?"}]' \
   -H "Accept: application/json"
 ```

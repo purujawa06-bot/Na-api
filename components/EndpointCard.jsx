@@ -602,12 +602,12 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                             <div className="relative group">
                                                 <pre className="bg-code p-4 rounded-xl overflow-x-auto text-xs border border-default custom-scrollbar shadow-inner">
                                                     <code className="language-javascript font-mono">
-                                                        {endpoint.example ? endpoint.example.replace(/fetch\(['"](.*?)['"]/g, `fetch('${baseUrl}$1'`) : '// Tidak ada contoh tersedia'}
+                                                        {endpoint.example ? endpoint.example.replace(/fetch\(['"](.*?)['"]/g, (m, u) => !/^https?:\/\//i.test(u) ? `fetch('${baseUrl}${u}'` : m) : '// Tidak ada contoh tersedia'}
                                                     </code>
                                                 </pre>
                                                 {endpoint.example && (
                                                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <CopyButton textToCopy={endpoint.example.replace(/fetch\(['"](.*?)['"]/g, `fetch('${baseUrl}$1'`)} />
+                                                        <CopyButton textToCopy={endpoint.example.replace(/fetch\(['"](.*?)['"]/g, (m, u) => !/^https?:\/\//i.test(u) ? `fetch('${baseUrl}${u}'` : m)} />
                                                     </div>
                                                 )}
                                             </div>

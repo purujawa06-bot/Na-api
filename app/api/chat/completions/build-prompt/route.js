@@ -10,7 +10,7 @@
  * @param {string} query.messages - WAJIB. JSON array pesan format OpenAI (sama seperti body.messages).
  * @response json
  * @example
- * fetch('https://nexta-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22hai%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22siapa%20presiden%3F%22%7D%5D')
+ * fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22hai%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22siapa%20presiden%3F%22%7D%5D')
  *     .then(res => res.json())
  *     .then(console.log);
  */
