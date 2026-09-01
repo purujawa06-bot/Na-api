@@ -18,6 +18,7 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
   - `app/api/downloader/` — instagram, soundcloud, tiktok, youtube.
   - `app/api/dramabox/` — home, category, detail, search, stream.
   - `app/api/tools-image/upscaler` — perbesar gambar AI (iloveimg) + upload ke tmpfiles.
+  - `app/api/tools-image/remove-background` — hapus latar belakang gambar (iloveimg) + upload ke tmpfiles.
   - `app/api/temp/[id]` — temp file service.
   - `app/api/admin/` — login, aichain, featured.
 - `lib/` — logika bisnis/scraper client.
@@ -51,12 +52,25 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 ## Catatan Penting: Image Upscaler + tmpfiles (09/2026)
 
 `app/api/tools-image/upscaler/route.js` + `lib/iloveimg-upscaler.js`:
-
 - Alur: ambil session (token+taskId+server) dari halaman iloveimg → unduh gambar → `POST /v1/upload` → `POST /v1/upscale` → dapat buffer PNG.
 - Hasil diupload ke `https://tmpfiles.org/api/v1/upload`.
 - **Bug yang diperbaiki:** `data.url` dari API tmpfiles adalah **halaman viewer HTML**, bukan file gambar langsung. Juga, `https://tmpfiles.org/dl/<id>/<file>` (tanpa segmen numerik) hanya 302-redirect kembali ke halaman viewer.
 - **Solusi:** fetch halaman `data.url`, lalu ekstrak `src` dari elemen `img#img_preview` (regex `src="(https://tmpfiles\.org/dl/[^"]+)"`). URL itu (bentuk `https://tmpfiles.org/dl/<numeric>.<hash>/<id>/<file>`) mengembalikan `Content-Type: image/png` asli.
 - Kontrak respons `done`: `{ event, success, url (link langsung), scale, source: 'iloveimg' }`.
+
+## Catatan Penting: Tools-image (upscaler & remove-background) — WAJIB STREAMING NDJSON
+
+Semua endpoint `app/api/tools-image/*` memakai **streaming NDJSON** (`application/x-ndjson`)
+dengan event `processing` (heartbeat tiap 2s), `uploading`, lalu `done`. JANGAN pakai
+`NextResponse.json()` polos untuk hasil tools-image — konsisten dengan upscaler.
+
+`app/api/tools-image/remove-background/route.js` + `lib/iloveimg-removebg.js`:
+
+- Alur sama dengan upscaler: `getSession()` (token+taskId+server dari HTML) → unduh gambar → `POST /v1/upload` → `POST /v1/removebackground` → langsung dapat buffer PNG transparan (tanpa polling).
+- Nama file hasil `_nobg.png`. Upload ke `https://tmpfiles.org/api/v1/upload` lalu ekstrak URL langsung dari `src` `img#img_preview` (pola `https://tmpfiles.org/dl/<...>`).
+- Jika URL sumber tanpa ekstensi gambar (mis. `picsum.photos/600/400`), lib menyisipkan ekstensi sesuai `content-type` agar upload iloveimg tidak ditolak (`InvalidExtension`).
+- Contract `done`: `{ event:'done', success, source:'iloveimg', url (link langsung), filename, mimetype }`.
+- Contoh gambar untuk docs/uji pakai `https://puruboy-api.vercel.app/example.jpg` (sama seperti upscaler & deepseek/vision).
 
 ## Konvensi Diet (AGENTS.md)
 
