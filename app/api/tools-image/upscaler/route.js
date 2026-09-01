@@ -33,9 +33,16 @@ async function uploadTmpfiles(buffer, filename, mimetype) {
   const res = await fetch(TMPFILES_UPLOAD, { method: 'POST', body: form });
   if (!res.ok) throw new Error(`Upload tmpfiles gagal (HTTP ${res.status})`);
   const { data } = await res.json();
-  // Ubah path "/<id>/x.png" -> "/dl/<id>/x.png" agar langsung serve file.
-  const direct = data.url.replace(/^https:\/\/tmpfiles\.org\/([^/]+)\//, 'https://tmpfiles.org/dl/$1/');
-  return direct;
+
+  // data.url berisi halaman viewer HTML, bukan file mentah. Ambil URL gambar
+  // langsung (img_preview) yang disuntikkan di halaman tersebut.
+  const page = await fetch(data.url, { headers: { 'user-agent': 'Mozilla/5.0' } });
+  if (page.ok) {
+    const html = await page.text();
+    const direct = (html.match(/src="(https:\/\/tmpfiles\.org\/dl\/[^"]+)"/) || [])[1];
+    if (direct) return direct;
+  }
+  throw new Error('Gagal mengambil link gambar langsung dari tmpfiles');
 }
 
 export async function POST(req) {
