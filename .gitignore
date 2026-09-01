@@ -134,5 +134,8 @@ scripts/.dramabox-flow-sniff.json
 # vheer sniff capture
 research/.vheer-sniff.json
 
+# Riset/scraping scripts & capture (berisi sniffing, token, cookies)
+research/
+
 .vercel
 .env*
