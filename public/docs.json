@@ -208,7 +208,7 @@
       "method": "POST",
       "path": "/api/deepseek/vision",
       "responseType": "json",
-      "example": "Tanya isi gambar\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         userID: 'TOKEN_ANDA',\r         image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png',\r         prompt: 'Apa yang ada di gambar ini?',\r         thinking: false,\r         stream: false\r     })\r }).then(res => res.json()).then(console.log);\n\nLanjutkan tanya-jawab tentang gambar yang sama\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })\r }).then(res => res.json()).then(console.log);",
+      "example": "Tanya isi gambar\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         userID: 'TOKEN_ANDA',\r         image: 'https://puruboy-api.vercel.app/example.jpg',\r         prompt: 'Apa yang ada di gambar ini?',\r         thinking: false,\r         stream: false\r     })\r }).then(res => res.json()).then(console.log);\n\nLanjutkan tanya-jawab tentang gambar yang sama\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "userID",
@@ -290,6 +290,56 @@
       "responseType": "json",
       "example": "fetch('https://puruboy-api.vercel.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
+    },
+    {
+      "title": "AI Text-to-Image (Vheer)",
+      "summary": "Generate gambar dari teks (model gratis Flux), tanpa login.",
+      "description": "Membuat gambar dari prompt teks via layanan vheer.com\n              (reverse-engineered, pure-HTTP). Hanya menyediakan model\n              gratis `flux_dev` (tanpa perlu akun/kredit). Menjalankan\n              moderasi konten otomatis. Respon berupa streaming JSON\n              (JSON Lines — satu objek per baris) setiap 2 detik agar\n              koneksi tetap hidup sampai gambar selesai.",
+      "method": "POST",
+      "path": "/api/text2image",
+      "responseType": "json",
+      "example": "Membuat gambar (streaming JSON)\n fetch('https://puruboy-api.vercel.app/api/text2image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         prompt: 'seekor rubah merah di hutan salju',\n         size: '1:1',\n         num_images: 1\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         let buf = '';\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             buf += dec.decode(value);\n             const lines = buf.split('\\n');\n             buf = lines.pop();\n             for (const line of lines) {\n                 if (!line.trim()) continue;\n                 const obj = JSON.parse(line);\n                 console.log(obj.event, obj.status || '', obj.images || '');\n             }\n         }\n     })();\n });",
+      "params": [
+        {
+          "name": "prompt",
+          "in": "body",
+          "type": "string",
+          "description": "Deskripsi gambar yang ingin dibuat (wajib).",
+          "required": true
+        },
+        {
+          "name": "size",
+          "in": "body",
+          "type": "string",
+          "description": "Rasio aspek gambar.",
+          "required": false,
+          "choices": [
+            {
+              "value": "1:1",
+              "label": "Persegi (Default)"
+            },
+            {
+              "value": "16:9",
+              "label": "Landscape"
+            },
+            {
+              "value": "9:16",
+              "label": "Portrait"
+            },
+            {
+              "value": "auto",
+              "label": "Menyesuaikan prompt"
+            }
+          ]
+        },
+        {
+          "name": "num_images",
+          "in": "body",
+          "type": "number",
+          "description": "Jumlah gambar (default 1, maks 4).",
+          "required": false
+        }
+      ]
     }
   ],
   "chess": [
@@ -940,6 +990,33 @@
           "in": "query",
           "type": "number",
           "description": "Offset paginasi (default 0). Pakai nilai",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "tools-image": [
+    {
+      "title": "Image Upscaler",
+      "summary": "Perbesar (upscale) gambar AI hingga 2x-4x via iloveimg.com.",
+      "description": "Menerima URL publik gambar lalu mengunduh dan memperbesarnya.\n              Mengembalikan file gambar hasil upscale sebagai binary (image/png).",
+      "method": "POST",
+      "path": "/api/tools-image/upscaler",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         file: 'https://puruboy-api.vercel.app/example.jpg',\n         scale: 2\n     })\n }).then(res => res.blob()).then(console.log);",
+      "params": [
+        {
+          "name": "file",
+          "in": "body",
+          "type": "string",
+          "description": "URL publik gambar (http/https; png/jpg/webp) (wajib).",
+          "required": true
+        },
+        {
+          "name": "scale",
+          "in": "body",
+          "type": "number",
+          "description": "Faktor skala (2, 3, atau 4). Default 2.",
           "required": false
         }
       ]

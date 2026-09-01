@@ -30,7 +30,7 @@
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
  *         userID: 'TOKEN_ANDA',
- *         image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png',
+ *         image: 'https://puruboy-api.vercel.app/example.jpg',
  *         prompt: 'Apa yang ada di gambar ini?',
  *         thinking: false,
  *         stream: false
