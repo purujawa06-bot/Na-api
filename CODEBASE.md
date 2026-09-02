@@ -51,6 +51,15 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Endpoints: `/api/komiku/home`, `/pustaka?tipe=&orderby=&genre=&genre2=&status=&page=`, `/detail?slug=`, `/chapter?url=<permalink>`, `/genre?genre=&page=`, `/search?q=&page=`.
 - Catatan penting: objek `mangaData`/`chapterData` memakai **key polos + string single-quote** (bukan JSON valid). `parseFlatJsObject()` mengurai literal objek JS datar via regex. Gambar chapter diambil dari `#Baca_Komik img` (filter iklan `komiku-promosi.webp`). Daftar genre diambil dari `<select name="genre">` di halaman `/pustaka/`.
 
+## Model Puru AI (09/2026)
+
+`lib/puru-web.js` + `lib/ai-provider-web.js` — model id `puru` (label "Puru AI") untuk `/api/chat/completions`.
+
+- Upstream: Koyeb endpoint (`https://productive-alyson-nue-api-e6b8b676.koyeb.app/v1`) dengan model name `puru`.
+- Konfigurasi env: `PURUBOY_PURU_BASE_URL` (default ke Koyeb) & `PURUBOY_PURU_API_KEY` (opsional).
+- Streaming real (SSE) — pola sama dengan EaseMate.
+- Buffering penuh untuk non-streaming (`fakeSingleChunkStream` atau loop `streamPuru`).
+
 ## Catatan Penting: Image Upscaler + tmpfiles (09/2026)
 
 `app/api/tools-image/upscaler/route.js` + `lib/iloveimg-upscaler.js`:
