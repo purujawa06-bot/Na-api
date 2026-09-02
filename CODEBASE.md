@@ -95,6 +95,21 @@ dengan event `processing` (heartbeat tiap 2s), `uploading`, lalu `done`. JANGAN 
 - Contract `done` NDJSON: `{ event:'done', success, source:'iloveimg', url (link langsung tmpfiles), filename, mimetype }`.
 - Contoh uji lib: `node scripts/test-htmltoimage.mjs` (assert-based, pakai `https://example.com`).
 
+## Cookie Jar Gemini via Firebase RTDB (09/2026)
+
+`lib/firebase-cookie-jar.js` — cookie guest/anonymous Gemini disimpan & di-refresh
+di Firebase RTDB public (`https://puru-69425-default-rtdb.firebaseio.com/`, rules
+`.read/.write=true`, hardcode, tanpa auth/env). Serialisasi pakai `tough-cookie`
+(lewat `toJSON()`/`Cookie.fromJSON`), key path RTDB = nama model.
+
+- `getCookieHeader(model)` → string `Cookie` utk request berikutnya dari jar.
+- `saveCookies(model, res)` → baca `res.headers.getSetCookie()`, refresh jar, lalu PUT balik.
+- Gemini web (`lib/gemini-web.js`) & share (`lib/gemini-share-web.js`) kini membaca
+  cookie dr RTDB sebelum request, kirim sbg header `Cookie`, lalu simpan Set-Cookie
+  respons kembali (refresh). ID jar: `gemini-lite` & `gemini-share` (pisah per model).
+- `saveCookies` error PUT dibungkus `.catch` (non-fatal; request tetap jalan).
+- Uji: `node scripts/test-firebase-cookie.mjs` (simulasi jar) + node gemini jalan di local.
+
 ## Model QuillBot AI (09/2026)
 
 `lib/quillbot-web.js` + `research/quillbot.sniff.json` — model id `quillbot` (label "QuillBot AI", gpt-4.1-mini) untuk `/api/chat/completions`.
