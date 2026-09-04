@@ -60,6 +60,21 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Streaming real (SSE) — pola sama dengan EaseMate.
 - Buffering penuh untuk non-streaming (`fakeSingleChunkStream` atau loop `streamPuru`).
 
+### Native multi-role (09/2026)
+
+Puru satu-satunya provider yang menuju endpoint **OpenAI-compatible** (`/v1/chat/completions`),
+jadi memakai **native `messages[]` multi-role** (system/user/assistant) alih-alih flat string.
+- `lib/ai-provider-web.js` → `toOpenAiMessages(v4Prompt)` mengonversi `LanguageModelV4Prompt`
+  (array content parts) menjadi `{system?, messages[]}` OpenAI. Morph middleware sudah
+  mengubah tool-call/tool-result jadi **teks XML**, jadi fungsi cukup ekstrak `text` dari parts
+  & petakan role.
+- `lib/puru-web.js` → `streamPuru({ system, messages })` kirim `messages[]` native ke upstream.
+- **Tools tetap pakai Morph** (`morphXmlToolMiddleware`): definisi tools di-inject ke system
+  prompt, tool call diparse dari teks XML — sama seperti provider lain.
+- Provider lain (gemini-web, gemini-share-web, easemate-web, quillbot-web) **tetap flat string**
+  via `flattenV4Prompt` karena endpoint-nya tak mendukung native multi-role (satu field teks,
+  tanpa role). Hanya tambah native bila endpoint OpenAI-compatible baru muncul.
+
 ## Catatan Penting: Image Upscaler + tmpfiles (09/2026)
 
 `app/api/tools-image/upscaler/route.js` + `lib/iloveimg-upscaler.js`:

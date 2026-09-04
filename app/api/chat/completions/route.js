@@ -20,15 +20,13 @@
  *        @choice false - Tidak (JSON Default)
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
  *                               Diemulasi via protokol XML murni (morph) (model web tidak punya native function calling).
- * @param {boolean} [body.debug] - Mode debug: echo prompt tanpa pemrosesan (untuk pipeline testing).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
  *         model: 'auto',
- *         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }],
- *         debug: false
+ *         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]
  *     })
  * }).then(res => res.json()).then(console.log);
  *

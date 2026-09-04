@@ -7,7 +7,7 @@
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }],\r         debug: false\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nFunction calling (tools) — balasan berisi message.tool_calls\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\r         tools: [{\r             type: 'function',\r             function: {\r                 name: 'getWeather',\r                 description: 'Cuaca sebuah kota',\r                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\r             }\r         }]\r     })\r }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r                 messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nFunction calling (tools) — balasan berisi message.tool_calls\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\r         tools: [{\r             type: 'function',\r             function: {\r                 name: 'getWeather',\r                 description: 'Cuaca sebuah kota',\r                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\r             }\r         }]\r     })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
@@ -35,10 +35,6 @@
             {
               "value": "quillbot",
               "label": "quillbot"
-            },
-            {
-              "value": "debug",
-              "label": "debug"
             },
             {
               "value": "auto",
@@ -76,23 +72,6 @@
           "type": "array",
           "description": "Definisi fungsi format OpenAI [{type:\"function\", function:{name, description, parameters}}].",
           "required": false
-        },
-        {
-          "name": "debug",
-          "in": "body",
-          "type": "boolean",
-          "description": "Mode debug: echo prompt tanpa pemrosesan (untuk pipeline testing).",
-          "required": false,
-          "choices": [
-            {
-              "value": "true",
-              "label": "true"
-            },
-            {
-              "value": "false",
-              "label": "false"
-            }
-          ]
         }
       ]
     },
