@@ -676,10 +676,11 @@
         // Daftar model diambil dari registry lib/ai-models.js lewat /api/models
         // (semua model; yang non-chainable ditampilkan abu-abu). Fallback offline:
         let AI_MODELS = [
-            { id: 'gemini-lite', label: 'Gemini Flash-Lite', chainable: true },
-            { id: 'deepseek-v4', label: 'DeepSeek V4 (NoteGPT)', chainable: true },
-            { id: 'easemate', label: 'EaseMate AI', chainable: true },
-            { id: 'gemini-share', label: 'Gemini Share', chainable: false },
+            { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', chainable: true },
+            { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', chainable: true },
+            { id: 'gemini', label: 'Gemini', chainable: true },
+            { id: 'claude-opus-4', label: 'Claude Opus 4', chainable: true },
+            { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', chainable: true },
             { id: 'auto', label: 'Auto (Fallback)', chainable: false },
         ];
 

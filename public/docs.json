@@ -3,11 +3,11 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share, Puru) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              XML murni (morph); body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              XML murni (morph); body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r                 messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nFunction calling (tools) — balasan berisi message.tool_calls\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\r         tools: [{\r             type: 'function',\r             function: {\r                 name: 'getWeather',\r                 description: 'Cuaca sebuah kota',\r                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\r             }\r         }]\r     })\r }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nFunction calling (tools) — balasan berisi message.tool_calls\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\r         tools: [{\r             type: 'function',\r             function: {\r                 name: 'getWeather',\r                 description: 'Cuaca sebuah kota',\r                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\r             }\r         }]\r     })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
@@ -17,24 +17,24 @@
           "required": false,
           "choices": [
             {
-              "value": "gemini-lite",
-              "label": "gemini-lite"
+              "value": "gemini-3.6-flash",
+              "label": "gemini-3.6-flash"
             },
             {
-              "value": "easemate",
-              "label": "easemate"
+              "value": "gemini",
+              "label": "gemini"
             },
             {
-              "value": "gemini-share",
-              "label": "gemini-share"
+              "value": "gemini-1.5-flash",
+              "label": "gemini-1.5-flash"
             },
             {
-              "value": "puru",
-              "label": "puru"
+              "value": "claude-opus-4",
+              "label": "claude-opus-4"
             },
             {
-              "value": "quillbot",
-              "label": "quillbot"
+              "value": "gpt-4.1-mini",
+              "label": "gpt-4.1-mini"
             },
             {
               "value": "auto",

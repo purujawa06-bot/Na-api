@@ -51,9 +51,32 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Endpoints: `/api/komiku/home`, `/pustaka?tipe=&orderby=&genre=&genre2=&status=&page=`, `/detail?slug=`, `/chapter?url=<permalink>`, `/genre?genre=&page=`, `/search?q=&page=`.
 - Catatan penting: objek `mangaData`/`chapterData` memakai **key polos + string single-quote** (bukan JSON valid). `parseFlatJsObject()` mengurai literal objek JS datar via regex. Gambar chapter diambil dari `#Baca_Komik img` (filter iklan `komiku-promosi.webp`). Daftar genre diambil dari `<select name="genre">` di halaman `/pustaka/`.
 
+## Pemetaan ID Model (09/2026)
+
+ID publik di `lib/ai-models.js` kini merujuk ke **identitas model asli** (di-probe via
+prompt "kamu model AI apa" lewat `puruboy-api.vercel.app/api/chat/completions`).
+
+| ID lama | ID baru | label | identitas |
+|---|---|---|---|
+| gemini-lite | gemini-3.6-flash | Gemini 3.6 Flash | Gemini 3.6 Flash |
+| gemini-share | gemini | Gemini | Gemini (inkonsisten versi) |
+| easemate | gemini-1.5-flash | Gemini 1.5 Flash | gemini-1.5-flash |
+| puru | claude-opus-4 | Claude Opus 4 | claude-opus-4-20250514 |
+| quillbot | gpt-4.1-mini | GPT-4.1 Mini | gpt-4.1-mini |
+| auto | auto | Auto (Fallback) | — |
+
+- **Breaking change**: id `gemini-lite`/`easemate`/`gemini-share`/`puru`/`quillbot`
+  TIDAK lagi valid di `/api/chat/completions` (`createWebModel` throw "Model tidak dikenal").
+- `ownedBy`/`provider` internal (gemini-web, gemini-share, easemate-web, puru-openai,
+  quillbot-web) & nama file provider TIDAK berubah — hanya id publik.
+- `settingsService`/`docsService` turun otomatis dari `ai-models.js`; chain lama di DB
+  yang memakai id lama dibuang `sanitizeAutoChain` → fallback ke `AUTO_CHAIN_DEFAULT`.
+- `AUTO_CHAIN_DEFAULT = ['gemini-3.6-flash', 'gemini-1.5-flash']`.
+
 ## Model Puru AI (09/2026)
 
-`lib/puru-web.js` + `lib/ai-provider-web.js` — model id `puru` (label "Puru AI") untuk `/api/chat/completions`.
+`lib/puru-web.js` + `lib/ai-provider-web.js` — model id publik `claude-opus-4` (label "Claude Opus 4") untuk `/api/chat/completions`.
+Upstream Koyeb dikirimi `model: "puru"` (alias endpoint); probe identitas: **claude-opus-4-20250514**.
 
 - Upstream: Koyeb endpoint (`https://productive-alyson-nue-api-e6b8b676.koyeb.app/v1`) dengan model name `puru`.
 - Konfigurasi env: `PURUBOY_PURU_BASE_URL` (default ke Koyeb) & `PURUBOY_PURU_API_KEY` (opsional).
@@ -121,19 +144,19 @@ di Firebase RTDB public (`https://puru-69425-default-rtdb.firebaseio.com/`, rule
 - `saveCookies(model, res)` → baca `res.headers.getSetCookie()`, refresh jar, lalu PUT balik.
 - Gemini web (`lib/gemini-web.js`) & share (`lib/gemini-share-web.js`) kini membaca
   cookie dr RTDB sebelum request, kirim sbg header `Cookie`, lalu simpan Set-Cookie
-  respons kembali (refresh). ID jar: `gemini-lite` & `gemini-share` (pisah per model).
+  respons kembali (refresh). ID jar: `gemini-3.6-flash` & `gemini` (pisah per model).
 - `saveCookies` error PUT dibungkus `.catch` (non-fatal; request tetap jalan).
 - Uji: `node scripts/test-firebase-cookie.mjs` (simulasi jar) + node gemini jalan di local.
 
 ## Model QuillBot AI (09/2026)
 
-`lib/quillbot-web.js` + `research/quillbot.sniff.json` — model id `quillbot` (label "QuillBot AI", gpt-4.1-mini) untuk `/api/chat/completions`.
+`lib/quillbot-web.js` + `research/quillbot.sniff.json` — model id publik `gpt-4.1-mini` (label "GPT-4.1 Mini", upstream gpt-4.1-mini) untuk `/api/chat/completions`.
 
 - Alur: `POST https://quillbot.com/api/ai-chat/chat/conversation/<uuid-v4-acak>` body `{message:{content,prompt:{id:"ai-chat/omnibox",version:1}}, context:{...,userDialect:"en-us",apiVersion:2}, origin:{name:"ai-chat.chat",url:"https://quillbot.com"}}` → respons NDJSON: `{"content":"...","type":"content"}` (teks), `{"type":"usage"}` (model/token).
 - **Penting:** fetch polos (undici) dari Node DIBLOKIR Cloudflare 403 "Just a moment" (deteksi TLS/HTTP2 fingerprint, tak mempan walau pakai cookie+UA browser). Solusi: lib **cloudscraper** (dependency lama yang menganggur) yang mengeksekusi JS challenge CF via `node:vm` — serverless-safe.
 - UUID conversation di-generate acak client-side; server bikin konversi baru otomatis (terverifikasi 2 chat = 2 UUID beda).
 - **Kuota anon terbatas**: beberapa pesan per identitas/IP -> `429 {"statusCode":429,"message":"Sign in to continue"}`. Mitigasi di lib: retry otomatis (maks 4) dengan rotasi identitas (jar cookie baru via `cloudscraper.defaults({jar: cloudscraper.jar()})`) + spoof `X-Forwarded-For` acak (backend quillbot membacanya). Setelah mitigasi, 6/6 sukses beruntun di production.
-- Adaptor buffered penuh (pola `gemini-lite`/`fakeSingleChunkStream`) karena transport cloudscraper tak streaming. Uji: `node scripts/test-quillbot-web.mjs`.
+- Adaptor buffered penuh (pola `gemini-3.6-flash`/`fakeSingleChunkStream`) karena transport cloudscraper tak streaming. Uji: `node scripts/test-quillbot-web.mjs`.
 
 ## Konvensi Diet (AGENTS.md)
 
