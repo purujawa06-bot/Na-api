@@ -88,11 +88,11 @@ Upstream Koyeb dikirimi `model: "puru"` (alias endpoint); probe identitas: **cla
 Puru satu-satunya provider yang menuju endpoint **OpenAI-compatible** (`/v1/chat/completions`),
 jadi memakai **native `messages[]` multi-role** (system/user/assistant) alih-alih flat string.
 - `lib/ai-provider-web.js` → `toOpenAiMessages(v4Prompt)` mengonversi `LanguageModelV4Prompt`
-  (array content parts) menjadi `{system?, messages[]}` OpenAI. Morph middleware sudah
+  (array content parts) menjadi `{system?, messages[]}` OpenAI. Qwen middleware sudah
   mengubah tool-call/tool-result jadi **teks XML**, jadi fungsi cukup ekstrak `text` dari parts
   & petakan role.
 - `lib/puru-web.js` → `streamPuru({ system, messages })` kirim `messages[]` native ke upstream.
-- **Tools tetap pakai Morph** (`morphXmlToolMiddleware`): definisi tools di-inject ke system
+- **Tools pakai Qwen3-Coder** (`qwen3CoderToolMiddleware`): definisi tools di-inject ke system
   prompt, tool call diparse dari teks XML — sama seperti provider lain.
 - Provider lain (gemini-web, gemini-share-web, easemate-web, quillbot-web) **tetap flat string**
   via `flattenV4Prompt` karena endpoint-nya tak mendukung native multi-role (satu field teks,

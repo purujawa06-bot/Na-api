@@ -3,7 +3,7 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              XML murni (morph); body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              Qwen3-Coder XML; body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
