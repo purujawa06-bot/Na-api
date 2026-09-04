@@ -8,12 +8,39 @@
  * @method GET
  * @path /api/chat/completions/build-prompt
  * @param {string} query.messages - WAJIB. JSON array pesan format OpenAI (sama seperti body.messages).
+ *   Setiap pesan punya `role` dan `content`. Role yang didukung:
+ *   - `"system"` / `"developer"` → dijadikan instruksi system
+ *   - `"user"` → pesan dari user
+ *   - `"assistant"` → balasan model, boleh punya `tool_calls` (array)
+ *   - `"tool"` → hasil eksekusi tool, wajib punya `tool_call_id` dan `name`
  * @param {string} [query.tools] - OPSIONAL. JSON array definisi tool format OpenAI.
- * @response json
- * @example
- * fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22halo%22%7D%5D&tools=%5B%7B%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22description%22%3A%22Cuaca%22%2C%22parameters%22%3A%7B%22type%22%3A%22object%22%2C%22properties%22%3A%7B%22city%22%3A%7B%22type%22%3A%22string%22%7D%7D%7D%7D%7D%5D')
- *     .then(res => res.json())
- *     .then(console.log);
+ *   Format: `[{type:"function", function:{name, description, parameters}}]`
+ *   Akan diinjeksi sebagai tool system prompt (protokol morphXml).
+ * @response {string} 200 text/plain — prompt mentah persis seperti yang dikirim ke provider.
+ * @header {string} X-Tools-Count - Jumlah tool yang diinjeksi.
+ * @header {string} X-Message-Count - Jumlah model messages (user/assistant/tool).
+ *
+ * @example User biasa (tanpa tools)
+ * GET /api/chat/completions/build-prompt?messages=[{"role":"user","content":"Halo"}]
+ *
+ * @example Multi-turn dengan system
+ * GET /api/chat/completions/build-prompt?messages=[
+ *   {"role":"system","content":"Jawab singkat."},
+ *   {"role":"user","content":"Halo"},
+ *   {"role":"assistant","content":"Hai!"},
+ *   {"role":"user","content":"Siapa presiden?"}
+ * ]
+ *
+ * @example Dengan tools (function calling)
+ * GET /api/chat/completions/build-prompt?messages=[{"role":"user","content":"Cuaca Jakarta?"}]&tools=[{"type":"function","function":{"name":"getWeather","description":"Cuaca kota","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
+ *
+ * @example Multi-turn dengan tool_calls dan tool result
+ * GET /api/chat/completions/build-prompt?messages=[
+ *   {"role":"user","content":"Cuaca Jakarta?"},
+ *   {"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"getWeather","arguments":"{\"city\":\"Jakarta\"}"}}]},
+ *   {"role":"tool","tool_call_id":"call_1","name":"getWeather","content":"{\"city\":\"Jakarta\",\"temp\":32,\"condition\":\"sunny\"}"},
+ *   {"role":"user","content":"Besok hujan tidak?"}
+ * ]&tools=[{"type":"function","function":{"name":"getWeather","description":"Cuaca kota","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
  */
 import { NextResponse } from 'next/server';
 import { morphXmlSystemPromptTemplate } from '@ai-sdk-tool/parser';
