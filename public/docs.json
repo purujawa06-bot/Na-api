@@ -3,7 +3,7 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share, Puru) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              Qwen3-Coder XML; body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, EaseMate, Gemini Share, Puru) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\r              XML murni (morph); body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
@@ -78,11 +78,11 @@
     {
       "title": "Build Prompt (Debug / Transparency)",
       "summary": "Endpoint uji untuk mencetak prompt mentah yang akan dikirim ke provider web.",
-      "description": "Menjalankan pipeline pembentukan prompt (splitPrompt -> flattenV4Prompt,\n              termasuk tag <conversation_history>/<latest_user_message>) dan\n              menampilkan hasilnya agar client tahu persis bagaimana prompt dibangun.\n              Tidak memanggil provider. Lihat BUILD_PROMPT.md di direktori yang sama.",
+      "description": "Menjalankan pipeline pembentukan prompt (splitPrompt -> flattenV4Prompt,\n              termasuk tag <conversation_history>/<latest_user_message>) DAN injeksi\n              tool system prompt dari middleware morphXml (@ai-sdk-tool/parser).\n              Tidak memanggil provider. Lihat BUILD_PROMPT.md di direktori yang sama.",
       "method": "GET",
       "path": "/api/chat/completions/build-prompt",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22hai%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22siapa%20presiden%3F%22%7D%5D')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "User biasa (tanpa tools)\n fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Halo%22%7D%5D')\n     .then(res => res.text())\n     .then(console.log);\n\nMulti-turn dengan system\n fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22system%22%2C%22content%22%3A%22Jawab%20singkat.%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22Hai!%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Siapa%20presiden%3F%22%7D%5D')\n     .then(res => res.text())\n     .then(console.log);\n\nDengan tools (function calling)\n fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Cuaca%20Jakarta%3F%22%7D%5D&tools=%5B%7B%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22description%22%3A%22Cuaca%20kota%22%2C%22parameters%22%3A%7B%22type%22%3A%22object%22%2C%22properties%22%3A%7B%22city%22%3A%7B%22type%22%3A%22string%22%7D%7D%2C%22required%22%3A%5B%22city%22%5D%7D%7D%7D%5D')\n     .then(res => res.text())\n     .then(console.log);\n\nMulti-turn dengan tool_calls dan tool result\n fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Cuaca%20Jakarta%3F%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3Anull%2C%22tool_calls%22%3A%5B%7B%22id%22%3A%22call_1%22%2C%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22arguments%22%3A%22%7B%5C%22city%5C%22%3A%5C%22Jakarta%5C%22%7D%22%7D%7D%5D%7D%2C%7B%22role%22%3A%22tool%22%2C%22tool_call_id%22%3A%22call_1%22%2C%22name%22%3A%22getWeather%22%2C%22content%22%3A%22%7B%5C%22city%5C%22%3A%5C%22Jakarta%5C%22%2C%5C%22temp%5C%22%3A32%2C%5C%22condition%5C%22%3A%5C%22sunny%5C%22%7D%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Besok%20hujan%20tidak%3F%22%7D%5D&tools=%5B%7B%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22description%22%3A%22Cuaca%20kota%22%2C%22parameters%22%3A%7B%22type%22%3A%22object%22%2C%22properties%22%3A%7B%22city%22%3A%7B%22type%22%3A%22string%22%7D%7D%2C%22required%22%3A%5B%22city%22%5D%7D%7D%7D%5D')\n     .then(res => res.text())\n     .then(console.log);",
       "params": [
         {
           "name": "messages",
@@ -90,6 +90,13 @@
           "type": "string",
           "description": "WAJIB. JSON array pesan format OpenAI (sama seperti body.messages).",
           "required": true
+        },
+        {
+          "name": "tools",
+          "in": "query",
+          "type": "string",
+          "description": "OPSIONAL. JSON array definisi tool format OpenAI.",
+          "required": false
         }
       ]
     },
@@ -1186,17 +1193,49 @@
           "required": false
         }
       ]
+    },
+    {
+      "title": "Yahoo Search",
+      "summary": "Cari di Yahoo (id.search.yahoo.com) dengan cookie jar & retry 5x.",
+      "description": "Mencari di mesin pencari Yahoo tanpa browser. Memakai cookie\n              jar sesi + retry hingga 5x agar lolos challenge anti-bot,\n              lalu mengembalikan judul, URL, dan snippet. Respons berupa\n              streaming JSON (JSON Lines — satu objek per baris) dengan\n              event 'processing' tiap ~2 detik sebagai keep-alive saat\n              pencarian berlangsung, diakhiri event 'done'.",
+      "method": "GET",
+      "path": "/api/search/yahoo",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/search/yahoo?q=nodejs+tutorial&limit=5')\n     .then(res => {\n         const reader = res.body.getReader();\n         const dec = new TextDecoder();\n         let buf = '';\n         (async () => {\n             while (true) {\n                 const { done, value } = await reader.read();\n                 if (done) break;\n                 buf += dec.decode(value);\n                 const lines = buf.split('\\n');\n                 buf = lines.pop();\n                 for (const line of lines) {\n                     if (!line.trim()) continue;\n                     console.log(JSON.parse(line));\n                 }\n             }\n         })();\n     });",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian (wajib).",
+          "required": true
+        },
+        {
+          "name": "page",
+          "in": "query",
+          "type": "number",
+          "description": "Nomor halaman (default 1, 10 hasil/halaman).",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "description": "Jumlah hasil maks (default 10, maks 20).",
+          "required": false
+        }
+      ]
     }
   ],
   "tools": [
     {
       "title": "HTML to Image",
       "summary": "Konversi halaman web/URL menjadi gambar (jpg/svg) via iloveimg.com.",
-      "description": "Menerima URL publik halaman web, mengkonversinya menjadi gambar, lalu\n              mengupload hasil ke tmpfiles.org dan mengembalikan URL gambar langsung.\n              Respon berupa streaming JSON (JSON Lines) dengan event `processing`,\n              `uploading` hingga selesai.",
+      "description": "Menerima URL publik halaman web, mengkonversinya menjadi gambar, lalu\r              mengupload hasil ke tmpfiles.org dan mengembalikan URL gambar langsung.\r              Respon berupa streaming JSON (JSON Lines) dengan event `processing`,\r              `uploading` hingga selesai.",
       "method": "POST",
       "path": "/api/tools-image/html-to-image",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/html-to-image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://example.com', view_width: 1920, to_format: 'jpg' })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/html-to-image', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://example.com', view_width: 1920, to_format: 'jpg' })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
@@ -1224,11 +1263,11 @@
     {
       "title": "Remove Background",
       "summary": "Hapus latar belakang (background) dari gambar secara otomatis via iloveimg.com.",
-      "description": "Menerima URL publik gambar, menghapus latar belakangnya (hasil PNG\n              transparan), lalu mengupload hasilnya ke tmpfiles.org dan\n              mengembalikan URL gambar langsung. Respon berupa streaming JSON\n              (JSON Lines) dengan event `processing`, `uploading` hingga selesai.",
+      "description": "Menerima URL publik gambar, menghapus latar belakangnya (hasil PNG\r              transparan), lalu mengupload hasilnya ke tmpfiles.org dan\r              mengembalikan URL gambar langsung. Respon berupa streaming JSON\r              (JSON Lines) dengan event `processing`, `uploading` hingga selesai.",
       "method": "POST",
       "path": "/api/tools-image/remove-background",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/remove-background', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg' })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/remove-background', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg' })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
@@ -1242,11 +1281,11 @@
     {
       "title": "Image Upscaler",
       "summary": "Perbesar (upscale) gambar AI hingga 2x-4x via iloveimg.com.",
-      "description": "Menerima URL publik gambar, mengunduh, memperbesarnya, lalu\n              mengupload hasilnya ke tmpfiles.org dan mengembalikan URL\n              gambar langsung. Respon berupa streaming JSON (JSON Lines)\n              dengan event `processing` setiap 2 detik hingga selesai.",
+      "description": "Menerima URL publik gambar, mengunduh, memperbesarnya, lalu\r              mengupload hasilnya ke tmpfiles.org dan mengembalikan URL\r              gambar langsung. Respon berupa streaming JSON (JSON Lines)\r              dengan event `processing` setiap 2 detik hingga selesai.",
       "method": "POST",
       "path": "/api/tools-image/upscaler",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg', scale: 2 })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg', scale: 2 })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",

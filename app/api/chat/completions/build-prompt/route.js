@@ -21,26 +21,24 @@
  * @header {string} X-Message-Count - Jumlah model messages (user/assistant/tool).
  *
  * @example User biasa (tanpa tools)
- * GET /api/chat/completions/build-prompt?messages=[{"role":"user","content":"Halo"}]
+ * fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Halo%22%7D%5D')
+ *     .then(res => res.text())
+ *     .then(console.log);
  *
  * @example Multi-turn dengan system
- * GET /api/chat/completions/build-prompt?messages=[
- *   {"role":"system","content":"Jawab singkat."},
- *   {"role":"user","content":"Halo"},
- *   {"role":"assistant","content":"Hai!"},
- *   {"role":"user","content":"Siapa presiden?"}
- * ]
+ * fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22system%22%2C%22content%22%3A%22Jawab%20singkat.%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Halo%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3A%22Hai!%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Siapa%20presiden%3F%22%7D%5D')
+ *     .then(res => res.text())
+ *     .then(console.log);
  *
  * @example Dengan tools (function calling)
- * GET /api/chat/completions/build-prompt?messages=[{"role":"user","content":"Cuaca Jakarta?"}]&tools=[{"type":"function","function":{"name":"getWeather","description":"Cuaca kota","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
+ * fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Cuaca%20Jakarta%3F%22%7D%5D&tools=%5B%7B%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22description%22%3A%22Cuaca%20kota%22%2C%22parameters%22%3A%7B%22type%22%3A%22object%22%2C%22properties%22%3A%7B%22city%22%3A%7B%22type%22%3A%22string%22%7D%7D%2C%22required%22%3A%5B%22city%22%5D%7D%7D%7D%5D')
+ *     .then(res => res.text())
+ *     .then(console.log);
  *
  * @example Multi-turn dengan tool_calls dan tool result
- * GET /api/chat/completions/build-prompt?messages=[
- *   {"role":"user","content":"Cuaca Jakarta?"},
- *   {"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"getWeather","arguments":"{\"city\":\"Jakarta\"}"}}]},
- *   {"role":"tool","tool_call_id":"call_1","name":"getWeather","content":"{\"city\":\"Jakarta\",\"temp\":32,\"condition\":\"sunny\"}"},
- *   {"role":"user","content":"Besok hujan tidak?"}
- * ]&tools=[{"type":"function","function":{"name":"getWeather","description":"Cuaca kota","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
+ * fetch('https://puruboy-api.vercel.app/api/chat/completions/build-prompt?messages=%5B%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Cuaca%20Jakarta%3F%22%7D%2C%7B%22role%22%3A%22assistant%22%2C%22content%22%3Anull%2C%22tool_calls%22%3A%5B%7B%22id%22%3A%22call_1%22%2C%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22arguments%22%3A%22%7B%5C%22city%5C%22%3A%5C%22Jakarta%5C%22%7D%22%7D%7D%5D%7D%2C%7B%22role%22%3A%22tool%22%2C%22tool_call_id%22%3A%22call_1%22%2C%22name%22%3A%22getWeather%22%2C%22content%22%3A%22%7B%5C%22city%5C%22%3A%5C%22Jakarta%5C%22%2C%5C%22temp%5C%22%3A32%2C%5C%22condition%5C%22%3A%5C%22sunny%5C%22%7D%22%7D%2C%7B%22role%22%3A%22user%22%2C%22content%22%3A%22Besok%20hujan%20tidak%3F%22%7D%5D&tools=%5B%7B%22type%22%3A%22function%22%2C%22function%22%3A%7B%22name%22%3A%22getWeather%22%2C%22description%22%3A%22Cuaca%20kota%22%2C%22parameters%22%3A%7B%22type%22%3A%22object%22%2C%22properties%22%3A%7B%22city%22%3A%7B%22type%22%3A%22string%22%7D%7D%2C%22required%22%3A%5B%22city%22%5D%7D%7D%7D%5D')
+ *     .then(res => res.text())
+ *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { morphXmlSystemPromptTemplate } from '@ai-sdk-tool/parser';
