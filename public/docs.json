@@ -37,6 +37,10 @@
               "label": "quillbot"
             },
             {
+              "value": "debug",
+              "label": "debug"
+            },
+            {
               "value": "auto",
               "label": "auto"
             }
@@ -67,10 +71,17 @@
           ]
         },
         {
+          "name": "tools",
+          "in": "body",
+          "type": "array",
+          "description": "Definisi fungsi format OpenAI [{type:\"function\", function:{name, description, parameters}}].",
+          "required": false
+        },
+        {
           "name": "debug",
           "in": "body",
           "type": "boolean",
-          "description": "Jika true, kembalikan prompt yang sudah dibangun (instructions + messages + tools) sebagai teks, tanpa mengirim ke provider.",
+          "description": "Mode debug: echo prompt tanpa pemrosesan (untuk pipeline testing).",
           "required": false,
           "choices": [
             {
@@ -82,13 +93,6 @@
               "label": "false"
             }
           ]
-        },
-        {
-          "name": "tools",
-          "in": "body",
-          "type": "array",
-          "description": "Definisi fungsi format OpenAI [{type:\"function\", function:{name, description, parameters}}].",
-          "required": false
         }
       ]
     },
