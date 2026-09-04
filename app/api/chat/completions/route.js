@@ -5,7 +5,7 @@
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
- *              Qwen3-Coder XML; body.tool_choice diabaikan),
+ *              UI-TARS XML; body.tool_choice diabaikan),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
  *              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:
  *              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api
@@ -19,7 +19,7 @@
  *        @choice true - Ya (Streaming)
  *        @choice false - Tidak (JSON Default)
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
- *                               Diemulasi via protokol Qwen3-Coder XML (model web tidak punya native function calling).
+ *                               Diemulasi via protokol UI-TARS XML (model web tidak punya native function calling).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
@@ -75,7 +75,7 @@
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { generateText, streamText, wrapLanguageModel, stepCountIs } from 'ai';
-import { qwen3CoderToolMiddleware } from '@ai-sdk-tool/parser';
+import { uiTarsToolMiddleware } from '@ai-sdk-tool/parser/community';
 import { jsonSchema } from '@ai-sdk/provider-utils';
 import { createDsmlSanitizerMiddleware } from '../../../../lib/dsml-sanitizer.js';
 import { uiArtifactSanitizerMiddleware } from '../../../../lib/ui-artifact-sanitizer.js';
@@ -97,7 +97,7 @@ function genId() {
 
 /**
  * Pesan assistant OpenAI dengan tool_calls -> parts teks + tool-call.
- * Middleware Qwen3-Coder XML mengubah keduanya jadi teks sebelum sampai adapter.
+ * Middleware UI-TARS XML mengubah keduanya jadi teks sebelum sampai adapter.
  */
 function assistantToolCallParts(toolCalls = []) {
   return toolCalls.map((tc) => ({
@@ -196,10 +196,10 @@ function buildModel(modelId, { tools, meta, chain }) {
   // semua provider — dipasang tanpa syarat karena mode auto bisa jatuh ke mana pun.
   const clean = wrapLanguageModel({ model: base, middleware: uiArtifactSanitizerMiddleware });
   if (!tools || !Object.keys(tools).length) return clean;
-  // Lapisan dalam: konversi bocoran format DSML DeepSeek -> Qwen3-Coder XML.
+  // Lapisan dalam: konversi bocoran format DSML DeepSeek -> UI-TARS XML.
   return wrapLanguageModel({
     model: wrapLanguageModel({ model: clean, middleware: createDsmlSanitizerMiddleware({ target: 'qwen' }) }),
-    middleware: qwen3CoderToolMiddleware,
+    middleware: uiTarsToolMiddleware,
   });
 }
 
@@ -276,7 +276,7 @@ export async function POST(req) {
 
   const aiTools = toAiTools(body.tools ?? []);
   // body.tool_choice sengaja diabaikan: format & pemaksaan murni lewat
-  // injeksi bawaan middleware parser (@ai-sdk-tool/parser).
+  // injeksi bawaan middleware parser (@ai-sdk-tool/parser, UI-TARS).
   const { instructions, messages: modelMessages } = splitPrompt(messages);
   // meta.used diisi adapter auto dengan ID model aktual yang menjawab
   const meta = {};
@@ -451,7 +451,7 @@ export async function GET() {
     endpoint: '/api/chat/completions',
     compatible: 'OpenAI Chat Completions API',
     models: ALL_MODEL_IDS,
-    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (qwen3-coder xml emulation)'],
+    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (ui-tars xml emulation)'],
     usage: {
       method: 'POST',
       body: {
@@ -463,6 +463,6 @@ export async function GET() {
       },
       curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
-    note: 'Function calling diemulasi via prompt injection (protokol Qwen3-Coder XML) karena model web tidak punya native tools.',
+    note: 'Function calling diemulasi via prompt injection (protokol UI-TARS XML) karena model web tidak punya native tools.',
   });
 }
