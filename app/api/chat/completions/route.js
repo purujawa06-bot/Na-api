@@ -27,7 +27,8 @@
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
  *         model: 'auto',
- *         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]
+ *         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }],
+ *         debug: false
  *     })
  * }).then(res => res.json()).then(console.log);
  *
