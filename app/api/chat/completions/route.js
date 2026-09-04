@@ -289,25 +289,35 @@ export async function POST(req) {
   const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
 
   // ---------- DEBUG MODE ----------
+  // Jalankan pipeline terjemahan morph yang sama seperti mode normal (buildModel
+  // membungkus model dgn morphXmlToolMiddleware), lalu tampilkan prompt FINAL
+  // yang sebenarnya akan dikirim ke provider — bukan dump mentah.
   if (debug) {
-    const toolDefs = Object.keys(aiTools).length
-      ? '\n\n=== TOOLS ===\n' + JSON.stringify(
-          Object.entries(aiTools).map(([name, t]) => ({
+    const debugPrompt = await morphXmlToolMiddleware
+      .transformParams({
+        params: {
+          model,
+          prompt: modelMessages,
+          tools: Object.entries(aiTools).map(([name, t]) => ({
+            type: 'function',
             name,
             description: t.description,
             inputSchema: t.inputSchema?.jsonSchema ?? t.inputSchema,
           })),
-          null, 2
-        )
-      : '';
-    const debugText = [
-      '=== INSTRUCTIONS ===',
-      instructions || '(none)',
-      '',
-      '=== MESSAGES ===',
-      JSON.stringify(modelMessages, null, 2),
-      toolDefs,
-    ].join('\n');
+        },
+      })
+      .then((r) => r.prompt)
+      .catch(() => modelMessages); // fallback: tampilkan mentah jika morph gagal
+
+    // Karena `instructions` disuntik SDK AI sebagai pesan system, gabungkan manual.
+    const finalMessages = instructions
+      ? [{ role: 'system', content: instructions }, ...debugPrompt]
+      : debugPrompt;
+
+    const debugText = finalMessages
+      .map((m) => `<<<${m.role}>>>\n${typeof m.content === 'string' ? m.content : JSON.stringify(m.content, null, 2)}`)
+      .join('\n\n');
+
     if (stream) {
       const id = genId();
       const encoded = new TextEncoder().encode(
