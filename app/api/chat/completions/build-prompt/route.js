@@ -102,7 +102,7 @@ export async function GET(req) {
     ok: true,
     notes: [
       'Prompt mentah persis seperti yang dikirim ke provider web (setelah flatten + tagging).',
-      'Definisi tool (body.tools) diinjeksi oleh middleware qwen3coder TIDAK dicetak di sini.',
+      'Definisi tool (body.tools) diinjeksi oleh middleware XML DIinjeksi TIDAK dicetak di sini.',
       'Penjelasan lengkap: app/api/chat/completions/BUILD_PROMPT.md',
     ],
     stages: {
