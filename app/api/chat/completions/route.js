@@ -293,21 +293,26 @@ export async function POST(req) {
   // membungkus model dgn morphXmlToolMiddleware), lalu tampilkan prompt FINAL
   // yang sebenarnya akan dikirim ke provider — bukan dump mentah.
   if (debug) {
-    const debugPrompt = await morphXmlToolMiddleware
-      .transformParams({
-        params: {
-          model,
-          prompt: modelMessages,
-          tools: Object.entries(aiTools).map(([name, t]) => ({
-            type: 'function',
-            name,
-            description: t.description,
-            inputSchema: t.inputSchema?.jsonSchema ?? t.inputSchema,
-          })),
-        },
-      })
-      .then((r) => r.prompt)
-      .catch(() => modelMessages); // fallback: tampilkan mentah jika morph gagal
+    const hasTools = Object.keys(aiTools).length > 0;
+    // Morf hanya dibungkus saat ada tools (sama seperti buildModel). Tanpa tools,
+    // prompt final = instructions + modelMessages apa adanya.
+    const debugPrompt = hasTools
+      ? await morphXmlToolMiddleware
+          .transformParams({
+            params: {
+              model,
+              prompt: modelMessages,
+              tools: Object.entries(aiTools).map(([name, t]) => ({
+                type: 'function',
+                name,
+                description: t.description,
+                inputSchema: t.inputSchema?.jsonSchema ?? t.inputSchema,
+              })),
+            },
+          })
+          .then((r) => r.prompt)
+          .catch(() => modelMessages) // fallback: tampilkan mentah jika morph gagal
+      : modelMessages;
 
     // Karena `instructions` disuntik SDK AI sebagai pesan system, gabungkan manual.
     const finalMessages = instructions
