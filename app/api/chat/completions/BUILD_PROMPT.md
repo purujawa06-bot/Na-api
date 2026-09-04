@@ -57,9 +57,8 @@ Label peran: `Human:` untuk user, `AI:` untuk assistant. Pesan tool menjadi
 
 ## Catatan
 
-- Definisi **tools (`body.tools`)** tidak terlihat di prompt datar: ia diinjeksi oleh
-  middleware `@ai-sdk-tool/parser` (protokol Qwen3-Coder XML) sebagai teks tambahan,
-  dan balasan `<tool_call>` diparsing kembali jadi `message.tool_calls`.
+- Definisi **tools (`body.tools`)** kini disertakan dalam output: tool system prompt
+  diinjeksi oleh `morphXmlSystemPromptTemplate` (@ai-sdk-tool/parser, protokol XML morph).
 - `tool_choice` diabaikan (emulasi tools sepenuhnya via prompt injection).
 
 ## Uji / cetak prompt mentah
@@ -67,10 +66,10 @@ Label peran: `Human:` untuk user, `AI:` untuk assistant. Pesan tool menjadi
 Gunakan endpoint debug (tanpa memanggil provider):
 
 ```
-GET /api/chat/completions/build-prompt?messages=<JSON array OpenAI>
+GET /api/chat/completions/build-prompt?messages=<JSON>&tools=<JSON>
 ```
 
-Contoh `curl`:
+**Tanpa tools:**
 
 ```bash
 curl -G https://puruboy-api.vercel.app/api/chat/completions/build-prompt \
@@ -78,10 +77,17 @@ curl -G https://puruboy-api.vercel.app/api/chat/completions/build-prompt \
   -H "Accept: application/json"
 ```
 
+**Dengan tools (function calling):**
+
+```bash
+curl -G "https://puruboy-api.vercel.app/api/chat/completions/build-prompt" \
+  --data-urlencode 'messages=[{"role":"user","content":"Bagaimana cuaca di Jakarta?"}]' \
+  --data-urlencode 'tools=[{"type":"function","function":{"name":"getWeather","description":"Cuaca sebuah kota","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]' \
+  -H "Accept: application/json"
+```
+
 Respons `{ prompt, stats, stages }` berisi:
 
-- `prompt` — string prompt mentah persis yang dikirim ke provider.
+- `prompt` — string prompt mentah persis yang dikirim ke provider (termasuk tool system prompt bila ada).
 - `stats` — panjang karakter & jumlah baris.
-- `stages` — informasi `instructionSystem`, jumlah pesan, dan role pesan terakhir.
-
-> Definisi tool tidak dicetak di sini (lihat bagian **Catatan** di atas).
+- `stages` — informasi `toolSystemPrompt`, `instructionSystem`, jumlah tools, jumlah pesan, dan role pesan terakhir.
