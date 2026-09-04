@@ -18,6 +18,7 @@
  * @param {boolean} [body.stream] - Gunakan streaming SSE untuk respons real-time.
  *        @choice true - Ya (Streaming)
  *        @choice false - Tidak (JSON Default)
+ * @param {boolean} [body.debug] - Jika true, kembalikan prompt yang sudah dibangun (instructions + messages + tools) sebagai teks, tanpa mengirim ke provider.
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
  *                               Diemulasi via protokol XML murni (morph) (model web tidak punya native function calling).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
@@ -265,6 +266,7 @@ export async function POST(req) {
 
   let { model = 'auto', messages } = body;
   const stream = body.stream === true || body.stream === 'true' || body.stream === 1 || body.stream === '1';
+  const debug = body.debug === true || body.debug === 'true' || body.debug === 1 || body.debug === '1';
 
   if (!Array.isArray(messages) || !messages.length) {
     return NextResponse.json(
@@ -284,6 +286,38 @@ export async function POST(req) {
   // tanpa DB dipakai urutan default gemini-lite -> easemate).
   const autoChain = model === 'auto' ? await settingsService.getAutoChain() : undefined;
   const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
+
+  // ---------- DEBUG MODE ----------
+  if (debug) {
+    const toolDefs = Object.keys(aiTools).length
+      ? '\n\n=== TOOLS ===\n' + JSON.stringify(
+          Object.entries(aiTools).map(([name, t]) => ({
+            name,
+            description: t.description,
+            inputSchema: t.inputSchema?.jsonSchema ?? t.inputSchema,
+          })),
+          null, 2
+        )
+      : '';
+    const debugText = [
+      '=== INSTRUCTIONS ===',
+      instructions || '(none)',
+      '',
+      '=== MESSAGES ===',
+      JSON.stringify(modelMessages, null, 2),
+      toolDefs,
+    ].join('\n');
+    if (stream) {
+      const id = genId();
+      const encoded = new TextEncoder().encode(
+        `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: CREATED, model, choices: [{ index: 0, delta: { role: 'assistant', content: debugText }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`
+      );
+      return new Response(new ReadableStream({ start(c) { c.enqueue(encoded); c.close(); } }), {
+        headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+      });
+    }
+    return new Response(debugText, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
 
   // ---------- STREAMING ----------
   if (stream) {
@@ -460,6 +494,7 @@ export async function GET() {
         stream: 'boolean (opsional)',
         tools: '[{type:"function", function:{name, description, parameters}}] (opsional)',
         tool_choice: 'diabaikan (kompatibilitas OpenAI saja)',
+        debug: 'boolean (opsional, jika true kirim prompt tanpa ke provider)',
       },
       curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
