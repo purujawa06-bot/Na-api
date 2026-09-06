@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Nonaktifkan strict mode untuk menghindari double-invocation pada useEffect di dev (opsional)
+  serverComponentsExternalPackages: ['got-scraping', 'header-generator', 'browserslist'], // got-scraping dibundling rusak (browserslist require dinamis) — require langsung dari node_modules runtime
   images: {
     remotePatterns: [
       {
