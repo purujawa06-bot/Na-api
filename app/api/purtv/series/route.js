@@ -1,9 +1,9 @@
 /**
  * @title PurTV Series
- * @summary Halaman seri donghua — info lengkap + daftar seluruh episode.
- * @description Mengambil halaman seri (`/seri/<slug>/`) dari sumber PurTV
- *              (anichin.cafe): judul, genre, sinopsis, info produksi (status,
- *              studio, tipe, rilis, dll), dan daftar seluruh episode beserta URL-nya.
+ * @summary Halaman seri — gabungan donghua (anichin) + anime (samehadaku).
+ * @description Mengambil halaman seri. URL `/seri/<slug>/` (anichin.cafe) → donghua;
+ *              URL `/anime/<slug>/` (v2.samehadaku.how) → anime. Menyertakan judul,
+ *              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/series
  * @param {string} query.url - URL halaman seri (bisa dari navigation.allEpisodes).

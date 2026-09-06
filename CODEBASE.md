@@ -52,15 +52,21 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Endpoints: `/api/komiku/home`, `/pustaka?tipe=&orderby=&genre=&genre2=&status=&page=`, `/detail?slug=`, `/chapter?url=<permalink>`, `/genre?genre=&page=`, `/search?q=&page=`.
 - Catatan penting: objek `mangaData`/`chapterData` memakai **key polos + string single-quote** (bukan JSON valid). `parseFlatJsObject()` mengurai literal objek JS datar via regex. Gambar chapter diambil dari `#Baca_Komik img` (filter iklan `komiku-promosi.webp`). Daftar genre diambil dari `<select name="genre">` di halaman `/pustaka/`.
 
-## Scraper PurTV (09/2026)
+## Scraper PurTV (09/2026) — DUA SUMBER
 
-`app/api/purtv/*` + `lib/purtv.js` (parsing HTML pakai **cheerio**).
+`app/api/purtv/*` + `lib/purtv.js` (parsing HTML pakai **cheerio**), merge dengan `lib/samehadaku.js` (got-scraping TLS fingerprint utk bypass CF).
 
-- Sumber: anichin.cafe (SSR) — ini sumber data frontend **purtv.vercel.app** (SPA React). Frontend itu men-scrape lewat proxy pihak ketiga (`vercel-api-beta-red.vercel.app/api/scraper-web`) + samehadaku; modul ini mengganti proxy tsb dengan scraping langsung.
+- Sumber 1: anichin.cafe (SSR) — sumber data frontend **purtv.vercel.app** (SPA React). Sumber 2: v2.samehadaku.how (anime sub Indo, eastplay theme).
 - Endpoints: `/api/purtv/home`, `/detail?url=`, `/series?url=`, `/schedule`, `/search?q=&page=`, `/genres`, `/list?genre=&page=`. Semua di-map ke kategori `nonton/baca` via `CATEGORY_OVERRIDES` di `lib/docsService.js`.
-- Selektor penting (markup live): home (`#slidertwo .swiper-slide.item`, `.bixbox:has(.releases.hothome)`, `.listupd.normal article.bs`, `.ongoingseries ul li`, `.series-gen`), episode (`#pembed iframe`, `.mirror option` — nilai **base64** iframe di-decode jadi `src`), seri (`/seri/<slug>/`: `.eplister ul li a`, `.infox .spe span` → `info` key/value, `.infox .genxed a`), filter genre (`/seri/?page=N&genre%5B0%5D=<slug>`), jadwal (`/schedule/` → `.bixbox.schedulepage`).
-- Catatan: halaman detail episode hari ini **tidak** memuat `.eplister`/`.download-eps`/`#server .east_player_option` (selector lama di bundle PurTV sudah usang) — daftar episode ada di halaman `/seri` via `navigation.allEpisodes`. Download links diparse defensif (jika ada).
-- **Cloudflare Managed Challenge:** anichin.cafe di balik CF `cType:'managed'` (turnstile) yang memblokir IP datacenter (Vercel) → 403 "Just a moment" untuk SEMUA path (HTML & wp-json). `cloudscraper` TIDAK bisa menyelesaikan (beda dari quillbot yang challenge-nya klasik). Solusi: `getHtml()` di lib fallback ke proxy transport yang dipakai frontend purtv.vercel.app (`https://vercel-api-beta-red.vercel.app/api/fetch?get=<url>`), lalu parse HTML yang sama dengan cheerio. Terverifikasi jalan di produksi (deploy 09/2026).
+- **Merge dua sumber (pola api.js PurTV):** list & search digabung jadi satu array `results`; tiap item diberi penanda `source` ('anichin'/'samehadaku'); `hasNext` = OR dari dua sumber; halaman 404 anichin → hasil kosong (bukan error).
+  - list: anichin `/seri/?genre[]=<slug>&page=N` + samehadaku `/genre/<slug>/?order=latest` (`article.animpost`, hasNext `.pagination .arrow_pag`).
+  - search: anichin `/page/N/?s=` / `/?s=` + samehadaku `/page/N/?s=` (`article.animpost`, hasNext `.pagination .next`).
+  - home: key donghua datar (featuredSlider, popularToday, latestReleases, ongoing, recommendations) + section baru `anime` ({latestAnime, popularAnime}).
+  - detail/series: route otomatis berdasar host URL (anichin.cafe → donghua, v2.samehadaku.how → anime; URL seri anime `/anime/` wajib via /series).
+  - genres: tetap dari anichin `/seri/` — slug yang sama diteruskan ke two sources (pola PurTV).
+- **`purtv_pagenation`** ({currentPage, hasNext}) ada di SETIAP respon — kontrak navigasi konsisten.
+- Selektor penting: home donghua (`#slidertwo .swiper-slide.item`, `.bixbox:has(.releases.hothome)`, `.listupd.normal article.bs`, `.ongoingseries ul li`, `.series-gen`), episode (`#pembed iframe`, `.mirror option` base64), seri (`/seri/<slug>/`: `.eplister ul li a`, `.infox .spe span`, `.infox .genxed a`), samehadaku home (`.post-show ul li`, `.topten-animesu ul li`), genre/s (`.genre-info a`, `.lstepsiode.listeps`).
+- **Cloudflare:** anichin di balik CF Managed Challenge → `getHtml()` fallback `CF_PROXY` (`vercel-api-beta-red.vercel.app/api/fetch`) pada 403. samehadaku pakai got-scraping (TLS fingerprint) langsung.
 - Uji: `node temp/test-purtv.mjs`.
 
 ## Pemetaan ID Model (09/2026)

@@ -1,8 +1,9 @@
 /**
  * @title PurTV Genres
- * @summary Daftar genre donghua.
- * @description Mengambil daftar genre donghua dari sumber PurTV (anichin.cafe
- *              /seri/) untuk dipakai pada filter /api/purtv/list.
+ * @summary Daftar genre untuk navigasi dua sumber.
+ * @description Mengambil daftar genre dari sumber PurTV (anichin.cafe /seri/).
+ *              Slug yang sama dipakai juga utk navigasi genre anime samehadaku
+ *              pada /api/purtv/list. Menyertakan `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/genres
  * @response json

@@ -1,9 +1,13 @@
 /**
  * @title PurTV List Genre
- * @summary Listing donghua per genre (filter /seri/).
- * @description Menampilkan daftar donghua yang difilter berdasarkan genre dan
- *              halaman. Genre diambil dari /api/purtv/genres. Setara dengan
- *              tampilan "Genre" di purtv.vercel.app.
+ * @summary Listing per genre — gabungan donghua (anichin) + anime (samehadaku).
+ * @description Menampilkan daftar donghua dan anime yang difilter berdasarkan
+ *              genre dan halaman, mengikuti pola PurTV: anichin
+ *              (`/seri/?genre[]=<slug>&page=N`) + samehadaku
+ *              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda
+ *              `source` ('anichin'/'samehadaku'). Halaman di luar daftar
+ *              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan
+ *              `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/list
  * @param {string} [query.genre] - Slug genre (contoh: action, comedy, cultivation).

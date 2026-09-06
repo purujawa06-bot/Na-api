@@ -1,9 +1,10 @@
 /**
  * @title PurTV Home
- * @summary Beranda purtv.vercel.app — slider unggulan, populer, terbaru, ongoing.
- * @description Mengambil data halaman beranda donghua sumber PurTV (anichin.cafe):
- *              featured slider, populer hari ini, rilis terbaru, ongoing sidebar,
- *              dan rekomendasi per genre. Tanpa browser — cukup HTTPS.
+ * @summary Beranda purtv.vercel.app — gabungan donghua + anime.
+ * @description Mengambil data halaman beranda sumber PurTV (anichin.cafe) dan
+ *              anime (samehadaku): featured slider, populer, terbaru, ongoing,
+ *              rekomendasi per genre, plus anime terbaru & populer. Setiap respon
+ *              menyertakan `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/home
  * @response json

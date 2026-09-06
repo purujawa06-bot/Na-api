@@ -1108,8 +1108,8 @@
     },
     {
       "title": "PurTV Detail Episode",
-      "summary": "Detail episode donghua — judul, seri induk, server video, navigasi.",
-      "description": "Mengambil detail halaman episode dari sumber PurTV (anichin.cafe):\n              judul, seri induk, sinopsis, player default, daftar server video\n              (nilai base64 di-decode jadi URL iframe), link download (jika ada),\n              serta navigasi episode sebelumnya/berikutnya.",
+      "summary": "Detail episode — gabungan donghua (anichin) + anime (samehadaku).",
+      "description": "Mengambil detail halaman episode. URL from anichin.cafe → donghua;\n              URL dari v2.samehadaku.how → anime. Mencakup judul, seri induk,\n              sinopsis, player default, daftar server video (base64 di-decode utk\n              donghua), link download (jika ada), navigasi episode, dan\n              `purtv_pagenation`. For anime, server disertakan beserta post/nume/type.",
       "method": "GET",
       "path": "/api/purtv/detail",
       "responseType": "json",
@@ -1126,8 +1126,8 @@
     },
     {
       "title": "PurTV Genres",
-      "summary": "Daftar genre donghua.",
-      "description": "Mengambil daftar genre donghua dari sumber PurTV (anichin.cafe\n              /seri/) untuk dipakai pada filter /api/purtv/list.",
+      "summary": "Daftar genre untuk navigasi dua sumber.",
+      "description": "Mengambil daftar genre dari sumber PurTV (anichin.cafe /seri/).\n              Slug yang sama dipakai juga utk navigasi genre anime samehadaku\n              pada /api/purtv/list. Menyertakan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/genres",
       "responseType": "json",
@@ -1136,8 +1136,8 @@
     },
     {
       "title": "PurTV Home",
-      "summary": "Beranda purtv.vercel.app — slider unggulan, populer, terbaru, ongoing.",
-      "description": "Mengambil data halaman beranda donghua sumber PurTV (anichin.cafe):\n              featured slider, populer hari ini, rilis terbaru, ongoing sidebar,\n              dan rekomendasi per genre. Tanpa browser — cukup HTTPS.",
+      "summary": "Beranda purtv.vercel.app — gabungan donghua + anime.",
+      "description": "Mengambil data halaman beranda sumber PurTV (anichin.cafe) dan\n              anime (samehadaku): featured slider, populer, terbaru, ongoing,\n              rekomendasi per genre, plus anime terbaru & populer. Setiap respon\n              menyertakan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/home",
       "responseType": "json",
@@ -1146,8 +1146,8 @@
     },
     {
       "title": "PurTV List Genre",
-      "summary": "Listing donghua per genre (filter /seri/).",
-      "description": "Menampilkan daftar donghua yang difilter berdasarkan genre dan\n              halaman. Genre diambil dari /api/purtv/genres. Setara dengan\n              tampilan \"Genre\" di purtv.vercel.app.",
+      "summary": "Listing per genre — gabungan donghua (anichin) + anime (samehadaku).",
+      "description": "Menampilkan daftar donghua dan anime yang difilter berdasarkan\n              genre dan halaman, mengikuti pola PurTV: anichin\n              (`/seri/?genre[]=<slug>&page=N`) + samehadaku\n              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda\n              `source` ('anichin'/'samehadaku'). Halaman di luar daftar\n              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan\n              `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/list",
       "responseType": "json",
@@ -1165,7 +1165,7 @@
     {
       "title": "PurTV Jadwal",
       "summary": "Jadwal rilis donghua per hari.",
-      "description": "Mengambil jadwal rilis mingguan donghua dari sumber PurTV\n              (anichin.cafe /schedule/) — dikelompokkan per hari (Senin-Minggu)\n              dengan jam rilis & episode berikutnya.",
+      "description": "Mengambil jadwal rilis mingguan donghua dari sumber PurTV\n              (anichin.cafe /schedule/) — dikelompokkan per hari (Senin-Minggu)\n              dengan jam rilis & episode berikutnya. Menyertakan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/schedule",
       "responseType": "json",
@@ -1174,8 +1174,8 @@
     },
     {
       "title": "PurTV Pencarian",
-      "summary": "Cari donghua di sumber PurTV (anichin.cafe).",
-      "description": "Mencari donghua berdasarkan kata kunci, sama seperti kotak\n              pencarian di purtv.vercel.app. Mendukung paginasi.",
+      "summary": "Cari donghua (anichin) + anime (samehadaku).",
+      "description": "Mencari berdasarkan kata kunci, sama seperti kotak pencarian di\n              purtv.vercel.app — hasil digabung dari dua sumber. Mendukung\n              paginasi, tiap item diberi penanda `source`, dan respon menyertakan\n              `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/search",
       "responseType": "json",
@@ -1185,15 +1185,15 @@
           "name": "q",
           "in": "query",
           "type": "string",
-          "description": "Kata kunci judul donghua. (wajib)",
+          "description": "Kata kunci judul. (wajib)",
           "required": true
         }
       ]
     },
     {
       "title": "PurTV Series",
-      "summary": "Halaman seri donghua — info lengkap + daftar seluruh episode.",
-      "description": "Mengambil halaman seri (`/seri/<slug>/`) dari sumber PurTV\n              (anichin.cafe): judul, genre, sinopsis, info produksi (status,\n              studio, tipe, rilis, dll), dan daftar seluruh episode beserta URL-nya.",
+      "summary": "Halaman seri — gabungan donghua (anichin) + anime (samehadaku).",
+      "description": "Mengambil halaman seri. URL `/seri/<slug>/` (anichin.cafe) → donghua;\n              URL `/anime/<slug>/` (v2.samehadaku.how) → anime. Menyertakan judul,\n              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/series",
       "responseType": "json",

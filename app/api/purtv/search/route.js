@@ -1,11 +1,13 @@
 /**
  * @title PurTV Pencarian
- * @summary Cari donghua di sumber PurTV (anichin.cafe).
- * @description Mencari donghua berdasarkan kata kunci, sama seperti kotak
- *              pencarian di purtv.vercel.app. Mendukung paginasi.
+ * @summary Cari donghua (anichin) + anime (samehadaku).
+ * @description Mencari berdasarkan kata kunci, sama seperti kotak pencarian di
+ *              purtv.vercel.app — hasil digabung dari dua sumber. Mendukung
+ *              paginasi, tiap item diberi penanda `source`, dan respon menyertakan
+ *              `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/search
- * @param {string} query.q - Kata kunci judul donghua. (wajib)
+ * @param {string} query.q - Kata kunci judul. (wajib)
  * @param {number} [query.page=1] - Halaman hasil pencarian.
  * @response json
  * @example

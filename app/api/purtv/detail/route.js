@@ -1,10 +1,11 @@
 /**
  * @title PurTV Detail Episode
- * @summary Detail episode donghua — judul, seri induk, server video, navigasi.
- * @description Mengambil detail halaman episode dari sumber PurTV (anichin.cafe):
- *              judul, seri induk, sinopsis, player default, daftar server video
- *              (nilai base64 di-decode jadi URL iframe), link download (jika ada),
- *              serta navigasi episode sebelumnya/berikutnya.
+ * @summary Detail episode — gabungan donghua (anichin) + anime (samehadaku).
+ * @description Mengambil detail halaman episode. URL from anichin.cafe → donghua;
+ *              URL dari v2.samehadaku.how → anime. Mencakup judul, seri induk,
+ *              sinopsis, player default, daftar server video (base64 di-decode utk
+ *              donghua), link download (jika ada), navigasi episode, dan
+ *              `purtv_pagenation`. For anime, server disertakan beserta post/nume/type.
  * @method GET
  * @path /api/purtv/detail
  * @param {string} query.url - URL halaman episode (diambil dari hasil home/search/list).
