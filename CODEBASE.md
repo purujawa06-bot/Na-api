@@ -40,7 +40,7 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 
 - **AI**: chat/completions, chess/maia, deepseek/*, models, text2image.
 - **tools** (gabungan `tools-image` + folder tools lain): seluruh `tools-image/*` (upscaler, remove-background, html-to-image) di-map ke `tools` via `CATEGORY_OVERRIDES`. Folder default tetap `tools-image`.
-- **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search) + seluruh samehadaku (home, search, detail, episode, player, jadwal, genre, daftar, terbaru).
+- **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search).
 - Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench`.
 
 ## Scraper Komiku (09/2026)
@@ -97,19 +97,6 @@ jadi memakai **native `messages[]` multi-role** (system/user/assistant) alih-ali
 - Provider lain (gemini-web, gemini-share-web, easemate-web, quillbot-web) **tetap flat string**
   via `flattenV4Prompt` karena endpoint-nya tak mendukung native multi-role (satu field teks,
   tanpa role). Hanya tambah native bila endpoint OpenAI-compatible baru muncul.
-
-## Scraper Samehadaku (09/2026)
-
-`app/api/samehadaku/*` + `lib/samehadaku.js` (cheerio HTML scraping + WP REST API).
-
-- Sumber: v2.samehadaku.how (WordPress + Cloudflare)
-- Endpoints: `/api/samehadaku/home` (ep terbaru), `/search?q=`, `/detail?slug=`, `/episode?slug=`, `/player?post=&nume=&type=`, `/jadwal?day=monday`, `/genre?genre=&page=`, `/daftar?page=`, `/terbaru?page=`
-- Search & jadwal pakai WP REST API (`/wp-json/eastheme/search/`, `/wp-json/custom/v1/all-schedule`) — lebih stabil dari HTML scrape
-- Player resolve via AJAX POST ke `/wp-admin/admin-ajax.php` dengan `action=player_ajax`
-- Semua route: `dynamic = 'force-dynamic'`, `runtime = 'nodejs'`, `maxDuration = 60`
-- Kategori docs: `nonton/baca` (via `CATEGORY_OVERRIDES` di `lib/docsService.js`)
-- Kontrak respons: `{ success: true, source: 'v2.samehadaku.how', ...data }`
-- Error: 400 = param kurang/salah, 404 = tidak ditemukan, 502 = upstream gagal
 
 ## Catatan Penting: Image Upscaler + tmpfiles (09/2026)
 
