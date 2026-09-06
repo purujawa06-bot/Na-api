@@ -73,6 +73,10 @@ _test_*
 *.old
 *.orig
 _deleted_drama/
+
+# Temporary files
+temp/
+
 # Local scripts & helpers
 do_*.sh
 push_*.sh
