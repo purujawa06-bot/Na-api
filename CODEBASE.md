@@ -17,6 +17,7 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
   - `app/api/deepseek/` — instant, reasoning, vision via deepseek.
   - `app/api/downloader/` — instagram, soundcloud, tiktok, youtube.
   - `app/api/dramabox/` — home, category, detail, search, stream.
+  - `app/api/purtv/` — home, detail, series, schedule, search, genres, list (sumber anichin.cafe, data frontend purtv.vercel.app).
   - `app/api/tools-image/upscaler` — perbesar gambar AI (iloveimg) + upload ke tmpfiles.
   - `app/api/tools-image/remove-background` — hapus latar belakang gambar (iloveimg) + upload ke tmpfiles.
   - `app/api/tools-image/html-to-image` — konversi halaman web/URL jadi gambar (iloveimg) + upload ke tmpfiles.
@@ -40,7 +41,7 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 
 - **AI**: chat/completions, chess/maia, deepseek/*, models, text2image.
 - **tools** (gabungan `tools-image` + folder tools lain): seluruh `tools-image/*` (upscaler, remove-background, html-to-image) di-map ke `tools` via `CATEGORY_OVERRIDES`. Folder default tetap `tools-image`.
-- **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search).
+- **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search) + seluruh purtv (home, detail, series, schedule, search, genres, list).
 - Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench`.
 
 ## Scraper Komiku (09/2026)
@@ -50,6 +51,17 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Sumber: komiku.org (SSR) untuk home/detail/chapter; api.komiku.org (API internal htmx) untuk listing pustaka/genre/pencarian.
 - Endpoints: `/api/komiku/home`, `/pustaka?tipe=&orderby=&genre=&genre2=&status=&page=`, `/detail?slug=`, `/chapter?url=<permalink>`, `/genre?genre=&page=`, `/search?q=&page=`.
 - Catatan penting: objek `mangaData`/`chapterData` memakai **key polos + string single-quote** (bukan JSON valid). `parseFlatJsObject()` mengurai literal objek JS datar via regex. Gambar chapter diambil dari `#Baca_Komik img` (filter iklan `komiku-promosi.webp`). Daftar genre diambil dari `<select name="genre">` di halaman `/pustaka/`.
+
+## Scraper PurTV (09/2026)
+
+`app/api/purtv/*` + `lib/purtv.js` (parsing HTML pakai **cheerio**).
+
+- Sumber: anichin.cafe (SSR) — ini sumber data frontend **purtv.vercel.app** (SPA React). Frontend itu men-scrape lewat proxy pihak ketiga (`vercel-api-beta-red.vercel.app/api/scraper-web`) + samehadaku; modul ini mengganti proxy tsb dengan scraping langsung.
+- Endpoints: `/api/purtv/home`, `/detail?url=`, `/series?url=`, `/schedule`, `/search?q=&page=`, `/genres`, `/list?genre=&page=`. Semua di-map ke kategori `nonton/baca` via `CATEGORY_OVERRIDES` di `lib/docsService.js`.
+- Selektor penting (markup live): home (`#slidertwo .swiper-slide.item`, `.bixbox:has(.releases.hothome)`, `.listupd.normal article.bs`, `.ongoingseries ul li`, `.series-gen`), episode (`#pembed iframe`, `.mirror option` — nilai **base64** iframe di-decode jadi `src`), seri (`/seri/<slug>/`: `.eplister ul li a`, `.infox .spe span` → `info` key/value, `.infox .genxed a`), filter genre (`/seri/?page=N&genre%5B0%5D=<slug>`), jadwal (`/schedule/` → `.bixbox.schedulepage`).
+- Catatan: halaman detail episode hari ini **tidak** memuat `.eplister`/`.download-eps`/`#server .east_player_option` (selector lama di bundle PurTV sudah usang) — daftar episode ada di halaman `/seri` via `navigation.allEpisodes`. Download links diparse defensif (jika ada).
+- **Cloudflare Managed Challenge:** anichin.cafe di balik CF `cType:'managed'` (turnstile) yang memblokir IP datacenter (Vercel) → 403 "Just a moment" untuk SEMUA path (HTML & wp-json). `cloudscraper` TIDAK bisa menyelesaikan (beda dari quillbot yang challenge-nya klasik). Solusi: `getHtml()` di lib fallback ke proxy transport yang dipakai frontend purtv.vercel.app (`https://vercel-api-beta-red.vercel.app/api/fetch?get=<url>`), lalu parse HTML yang sama dengan cheerio. Terverifikasi jalan di produksi (deploy 09/2026).
+- Uji: `node temp/test-purtv.mjs`.
 
 ## Pemetaan ID Model (09/2026)
 

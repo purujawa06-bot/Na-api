@@ -1105,6 +1105,108 @@
           "required": false
         }
       ]
+    },
+    {
+      "title": "PurTV Detail Episode",
+      "summary": "Detail episode donghua — judul, seri induk, server video, navigasi.",
+      "description": "Mengambil detail halaman episode dari sumber PurTV (anichin.cafe):\n              judul, seri induk, sinopsis, player default, daftar server video\n              (nilai base64 di-decode jadi URL iframe), link download (jika ada),\n              serta navigasi episode sebelumnya/berikutnya.",
+      "method": "GET",
+      "path": "/api/purtv/detail",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/detail?url=https://anichin.cafe/soul-land-episode-1/')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL halaman episode (diambil dari hasil home/search/list).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "PurTV Genres",
+      "summary": "Daftar genre donghua.",
+      "description": "Mengambil daftar genre donghua dari sumber PurTV (anichin.cafe\n              /seri/) untuk dipakai pada filter /api/purtv/list.",
+      "method": "GET",
+      "path": "/api/purtv/genres",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/genres')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
+    },
+    {
+      "title": "PurTV Home",
+      "summary": "Beranda purtv.vercel.app — slider unggulan, populer, terbaru, ongoing.",
+      "description": "Mengambil data halaman beranda donghua sumber PurTV (anichin.cafe):\n              featured slider, populer hari ini, rilis terbaru, ongoing sidebar,\n              dan rekomendasi per genre. Tanpa browser — cukup HTTPS.",
+      "method": "GET",
+      "path": "/api/purtv/home",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/home')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
+    },
+    {
+      "title": "PurTV List Genre",
+      "summary": "Listing donghua per genre (filter /seri/).",
+      "description": "Menampilkan daftar donghua yang difilter berdasarkan genre dan\n              halaman. Genre diambil dari /api/purtv/genres. Setara dengan\n              tampilan \"Genre\" di purtv.vercel.app.",
+      "method": "GET",
+      "path": "/api/purtv/list",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/list?genre=action')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "genre",
+          "in": "query",
+          "type": "string",
+          "description": "Slug genre (contoh: action, comedy, cultivation).",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "PurTV Jadwal",
+      "summary": "Jadwal rilis donghua per hari.",
+      "description": "Mengambil jadwal rilis mingguan donghua dari sumber PurTV\n              (anichin.cafe /schedule/) — dikelompokkan per hari (Senin-Minggu)\n              dengan jam rilis & episode berikutnya.",
+      "method": "GET",
+      "path": "/api/purtv/schedule",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/schedule')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
+    },
+    {
+      "title": "PurTV Pencarian",
+      "summary": "Cari donghua di sumber PurTV (anichin.cafe).",
+      "description": "Mencari donghua berdasarkan kata kunci, sama seperti kotak\n              pencarian di purtv.vercel.app. Mendukung paginasi.",
+      "method": "GET",
+      "path": "/api/purtv/search",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/search?q=soul+land')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci judul donghua. (wajib)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "PurTV Series",
+      "summary": "Halaman seri donghua — info lengkap + daftar seluruh episode.",
+      "description": "Mengambil halaman seri (`/seri/<slug>/`) dari sumber PurTV\n              (anichin.cafe): judul, genre, sinopsis, info produksi (status,\n              studio, tipe, rilis, dll), dan daftar seluruh episode beserta URL-nya.",
+      "method": "GET",
+      "path": "/api/purtv/series",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.cafe/seri/soul-land/')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL halaman seri (bisa dari navigation.allEpisodes).",
+          "required": true
+        }
+      ]
     }
   ],
   "search": [
