@@ -4,9 +4,11 @@
  * @description Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
- *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
- *              UI-TARS XML; body.tool_choice diabaikan),
+ *              diemulasi via Hermes protocol (JSON dalam XML tags, via @ai-sdk-tool/parser;
+ *              body.tool_choice diabaikan),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
+ *              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).
+ *              Bukan untuk tugas coding kompleks.
  *              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:
  *              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api
  * @method POST
@@ -19,7 +21,8 @@
  *        @choice true - Ya (Streaming)
  *        @choice false - Tidak (JSON Default)
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
- *                               Diemulasi via protokol UI-TARS XML (model web tidak punya native function calling).
+ *                               Diemulasi via Hermes protocol (prompt-injection, JSON dalam XML tags).
+ *                               Cocok untuk tugas sederhana (pencarian, fetch, cuaca, translate, dll).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
@@ -139,7 +142,7 @@ export async function POST(req) {
 
   const aiTools = toAiTools(body.tools ?? []);
   // body.tool_choice sengaja diabaikan: format & pemaksaan murni lewat
-  // injeksi bawaan middleware parser (@ai-sdk-tool/parser, UI-TARS).
+  // injeksi bawaan middleware parser (@ai-sdk-tool/parser, Hermes protocol).
   const { instructions, messages: modelMessages } = splitPrompt(messages);
   // meta.used diisi adapter auto dengan ID model aktual yang menjawab
   const meta = {};
@@ -314,7 +317,7 @@ export async function GET() {
     endpoint: '/api/chat/completions',
     compatible: 'OpenAI Chat Completions API',
     models: ALL_MODEL_IDS,
-    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (ui-tars xml emulation)'],
+    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (hermes protocol — cocok untuk tugas sederhana)'],
     usage: {
       method: 'POST',
       body: {
@@ -326,6 +329,6 @@ export async function GET() {
       },
       curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
-    note: 'Function calling diemulasi via prompt injection (protokol UI-TARS XML) karena model web tidak punya native tools.',
+    note: 'Function calling diemulasi via prompt injection (Hermes protocol — JSON dalam XML tags). Cocok untuk tugas sederhana seperti pencarian, fetch, cuaca, translate. Bukan untuk coding kompleks.',
   });
 }
