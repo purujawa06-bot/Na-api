@@ -425,6 +425,12 @@ async function streamChatCompletion({ messages, tools, signal, onDelta }) {
 /** Eksekusi satu tool call via /api/tools/execute. */
 async function executeToolClient(tool) {
   const args = safeParseArgs(tool.arguments);
+
+  // Client-side validation: pastikan parameter required tidak kosong
+  if ((tool.name === 'crawl_web' || tool.name === 'fetch') && (!args.url || typeof args.url !== 'string' || !args.url.trim())) {
+    return JSON.stringify({ error: `Parameter 'url' wajib diisi dengan URL yang valid (contoh: https://example.com atau /api/endpoint)` });
+  }
+
   const res = await fetch(TOOL_EXEC_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
