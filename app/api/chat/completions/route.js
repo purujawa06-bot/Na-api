@@ -1,9 +1,9 @@
-/**
+﻿/**
  * @title Chat Completions (OpenAI Compatible)
  * @summary Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.
  * @description Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
- *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
+ *              FUNCTION CALLING (body.tools) untuk semua model â€” tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
  *              UI-TARS XML; body.tool_choice diabaikan),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
@@ -54,7 +54,7 @@
  *     })();
  * });
  *
- * @example Function calling (tools) — balasan berisi message.tool_calls
+ * @example Function calling (tools) â€” balasan berisi message.tool_calls
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
@@ -88,6 +88,42 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const CREATED = Math.floor(Date.now() / 1000);
+// ---------------- Helper ekspor untuk agentic loop (in-process) ----------------
+// Dipakai /api/puru-ai agar tidak self-fetch HTTP (double cold-start di Vercel).
+// Menjalankan generateText sekali dengan tools, mengembalikan pesan OpenAI-style.
+
+/**
+ * Jalankan satu langkah agent (generateText + tools).
+ * @param {object} opts
+ * @param {string} opts.model - ID model ('auto' dsb.)
+ * @param {Array} opts.messages - pesan OpenAI (system/user/assistant/tool)
+ * @param {Array} opts.tools - definisi tools OpenAI
+ * @param {string[]} [opts.chain] - urutan rantai auto (opsional)
+ * @returns {Promise<{message:object, model:string}>} message OpenAI (mungkin punya tool_calls)
+ */
+export async function runAgenticStep({ model = 'auto', messages, tools, chain } = {}) {
+  const aiTools = toAiTools(tools ?? []);
+  const { instructions, messages: modelMessages } = splitPrompt(messages);
+  const meta = {};
+  const autoChain = model === 'auto' ? chain || (await settingsService.getAutoChain()) : undefined;
+  const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
+
+  const result = await generateText({
+    model: lm,
+    instructions,
+    messages: modelMessages,
+    ...(Object.keys(aiTools).length ? {
+      tools: aiTools,
+      stopWhen: stepCountIs(1), // passthrough: balas tool_calls ke agent, JANGAN auto-eksekusi
+    } : {}),
+  });
+
+  return {
+    message: toOpenAiMessage(result),
+    model: meta.used || model,
+  };
+}
+
 
 function genId() {
   return `chatcmpl-${randomBytes(12).toString('hex')}`;
@@ -126,7 +162,7 @@ function contentToText(content) {
 
 /**
  * OpenAI messages -> { instructions, ModelMessage[] } (format ai v7).
- * ai v7 melarang role system di dalam `messages` — harus lewat opsi `instructions`.
+ * ai v7 melarang role system di dalam `messages` â€” harus lewat opsi `instructions`.
  * Role "tool" dipetakan jadi tool-result message; middleware XML yang merapikan jadi teks.
  */
 function splitPrompt(messages = []) {
@@ -193,7 +229,7 @@ function toAiTools(tools = []) {
 function buildModel(modelId, { tools, meta, chain }) {
   const base = createWebModel(modelId, { meta, chain });
   // Lapisan terdalam: buang markup UI bocoran (<ElicitationsGroup> dll.) dari
-  // semua provider — dipasang tanpa syarat karena mode auto bisa jatuh ke mana pun.
+  // semua provider â€” dipasang tanpa syarat karena mode auto bisa jatuh ke mana pun.
   const clean = wrapLanguageModel({ model: base, middleware: uiArtifactSanitizerMiddleware });
   if (!tools || !Object.keys(tools).length) return clean;
   // Lapisan dalam: konversi bocoran format DSML DeepSeek -> UI-TARS XML.

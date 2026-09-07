@@ -46,14 +46,11 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { searchBing } from '../../../lib/bing-search.js';
+import { runAgenticStep } from '../chat/completions/route.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-
-const API_BASE = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 // ──────────────────── Load Docs ────────────────────
 
@@ -75,10 +72,10 @@ async function loadDocs() {
 // ──────────────────── Tool Definitions ────────────────────
 
 function getToolDefinitions(docs) {
-  const categories = Object.keys(docs).map((c) => `- ${c}: ${docs[c].length} endpoints`).join('\n');
+  const categories = Object.keys(docs).map((c) => `- ${c} (${docs[c].length} endpoints)`).join('\n');
   const catDetails = Object.entries(docs)
     .map(([cat, eps]) => {
-      const list = eps.map((e) => `  • ${e.method} ${e.path} — ${e.title || e.summary || ''}`).join('\n');
+      const list = eps.map((e) => `  • ${e.method} ${e.path} — ${e.title || ''}`).join('\n');
       return `[${cat}]\n${list}`;
     })
     .join('\n\n');
@@ -119,7 +116,7 @@ function getToolDefinitions(docs) {
         type: 'function',
         function: {
           name: 'search_docs',
-          description: `Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Kategori tersedia:\n${categories}\n\nDetail endpoint:\n${catDetails}`,
+          description: `Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Kategori tersedia:\n${categories}\n\nDaftar endpoint:\n${catDetails}\n\nCari berdasarkan kata kunci (judul, path, atau deskripsi).`,
           parameters: {
             type: 'object',
             properties: {
@@ -291,21 +288,6 @@ async function executeTool(toolName, args, docs) {
   }
 }
 
-// ──────────────────── Chat Completions Client ────────────────────
-
-async function callChatCompletions({ model, messages, tools }) {
-  const res = await fetch(`${API_BASE}/api/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, tools }),
-  });
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`Chat completions error ${res.status}: ${err}`);
-  }
-  return res.json();
-}
-
 // ──────────────────── Agentic Loop ────────────────────
 
 async function agenticLoop(userMessages, { model = 'auto', maxSteps = 8 } = {}) {
@@ -342,11 +324,7 @@ You have access to tools that let you search the web, crawl web pages, and query
   let stepsLeft = maxSteps;
 
   while (stepsLeft-- > 0) {
-    const result = await callChatCompletions({ model, messages, tools });
-
-    const choice = result.choices?.[0];
-    if (!choice) throw new Error('No response from model');
-    const msg = choice.message;
+    const { message: msg, model: usedModel } = await runAgenticStep({ model, messages, tools });
 
     // If no tool calls, return final text
     if (!msg.tool_calls || msg.tool_calls.length === 0) {
@@ -354,16 +332,13 @@ You have access to tools that let you search the web, crawl web pages, and query
         type: 'final',
         text: msg.content || '',
         reasoning: msg.reasoning_content || null,
-        model: result.model || model,
+        model: usedModel,
         toolCalls: allToolCalls,
-        finishReason: choice.finish_reason,
+        finishReason: 'stop',
       };
     }
 
     // Has tool calls → execute them
-    const assistantContent = [];
-    if (msg.content) assistantContent.push(msg.content);
-
     messages.push({
       role: 'assistant',
       content: msg.content || null,
@@ -402,15 +377,14 @@ You have access to tools that let you search the web, crawl web pages, and query
   }
 
   // Max steps exceeded — get one final answer
-  const final = await callChatCompletions({ model, messages, tools });
-  const finalChoice = final.choices?.[0];
+  const { message: finalMsg, model: finalModel } = await runAgenticStep({ model, messages, tools });
   return {
     type: 'final',
-    text: finalChoice?.message?.content || 'Maaf, saya membutuhkan lebih banyak langkah untuk menjawab pertanyaan ini.',
-    reasoning: finalChoice?.message?.reasoning_content || null,
-    model: final.model || model,
+    text: finalMsg?.content || 'Maaf, saya membutuhkan lebih banyak langkah untuk menjawab pertanyaan ini.',
+    reasoning: finalMsg?.reasoning_content || null,
+    model: finalModel,
     toolCalls: allToolCalls,
-    finishReason: finalChoice?.finish_reason,
+    finishReason: 'stop',
   };
 }
 
