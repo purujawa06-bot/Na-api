@@ -37,6 +37,7 @@ You have access to tools that let you search the web, crawl web pages, and query
 - For general knowledge questions, use search_web
 - If a user asks about a specific API endpoint, use endpoint_info to get the full specification
 - When showing API examples, include the full fetch() code
+- **The fetch tool runs directly in the user's browser** — no server roundtrip, faster execution
 - Answer in the language the user uses (Indonesian/English)
 - Be concise but thorough
 - Use markdown formatting for readability (code blocks, lists, bold, etc.)
@@ -409,7 +410,10 @@ async function streamChatCompletion({ messages, tools, signal, onDelta }) {
           const idx = tc.index ?? 0;
           if (!toolCalls[idx]) toolCalls[idx] = { id: '', name: '', arguments: '' };
           if (tc.id) toolCalls[idx].id = tc.id;
-          if (tc.function?.name) toolCalls[idx].name += tc.function.name;
+          // Set name sekali saja — jangan append (mencegah "fetchfetch" saat start duplikat)
+          if (tc.function?.name && !toolCalls[idx].name) {
+            toolCalls[idx].name = tc.function.name;
+          }
           if (tc.function?.arguments) toolCalls[idx].arguments += tc.function.arguments;
         }
       }
@@ -428,7 +432,7 @@ async function streamChatCompletion({ messages, tools, signal, onDelta }) {
   };
 }
 
-/** Eksekusi satu tool call via /api/tools/execute. */
+/** Eksekusi satu tool call. fetch = client-side, lainnya via /api/tools/execute. */
 async function executeToolClient(tool) {
   const args = safeParseArgs(tool.arguments);
 
@@ -442,6 +446,12 @@ async function executeToolClient(tool) {
     });
   }
 
+  // ─── fetch: dieksekusi langsung di browser (client-side) ───
+  if (tool.name === 'fetch') {
+    return executeFetchClient(args);
+  }
+
+  // ─── tools lainnya: via server /api/tools/execute ───
   const res = await fetch(TOOL_EXEC_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -453,6 +463,54 @@ async function executeToolClient(tool) {
     return JSON.stringify({ error: j?.error || `Tool ${tool.name} gagal dieksekusi` });
   }
   return j.result;
+}
+
+/**
+ * Eksekusi fetch langsung di browser (client-side).
+ * Menggunakan native fetch() — lebih cepat, tidak ada server roundtrip.
+ */
+async function executeFetchClient({ url, method = 'GET', headers = {}, body }) {
+  if (!url || typeof url !== 'string') {
+    return JSON.stringify({ error: 'URL tidak valid: parameter url wajib berupa string non-kosong' });
+  }
+
+  // Resolve relative URL → absolute (terhadap origin browser)
+  let resolvedUrl;
+  try {
+    resolvedUrl = url.startsWith('http') ? url : new URL(url, window.location.origin).href;
+  } catch {
+    return JSON.stringify({ error: `URL tidak valid: "${url.slice(0, 80)}"` });
+  }
+
+  // Blokir URL internal/local/SSRF
+  try {
+    const u = new URL(resolvedUrl);
+    const host = u.hostname.toLowerCase();
+    const blocked =
+      host === 'localhost' || host === '0.0.0.0' || host === '127.0.0.1' || host === '::1' ||
+      host.endsWith('.local') || host.endsWith('.internal') || host === '169.254.169.254' ||
+      /^10\./.test(host) || /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+    if (blocked) return JSON.stringify({ error: 'URL internal/local dilarang' });
+  } catch {
+    return JSON.stringify({ error: 'URL tidak valid' });
+  }
+
+  try {
+    const opts = { method: String(method || 'GET').toUpperCase(), headers: { ...headers } };
+    if (body && ['POST', 'PUT', 'PATCH'].includes(opts.method)) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+    const res = await fetch(resolvedUrl, { ...opts, signal: AbortSignal.timeout(15000) });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text.slice(0, 5000); }
+    return JSON.stringify({ status: res.status, data }, null, 2);
+  } catch (e) {
+    const msg = e.name === 'TimeoutError' ? 'Request timeout (15 detik)' : e.message || 'Fetch gagal';
+    return JSON.stringify({ error: msg, url: resolvedUrl });
+  }
 }
 
 /* ══════════════════════ Main Page ══════════════════════ */
@@ -633,6 +691,21 @@ export default function PuruAIPage() {
         scheduleUpdate({ content: fullText, reasoning: fullReasoning, streaming: true });
 
         if (!result.toolCalls || result.toolCalls.length === 0) break;
+
+        // ─── Dedupe tool calls (jaga-jaga server masih kirim duplikat) ───
+        const seenIds = new Set();
+        const seenSig = new Set();
+        const uniqueToolCalls = result.toolCalls.filter((tc) => {
+          const sig = `${tc.name}:${tc.arguments}`;
+          if (tc.id && seenIds.has(tc.id)) return false;
+          if (seenSig.has(sig)) return false;
+          if (tc.id) seenIds.add(tc.id);
+          seenSig.add(sig);
+          return true;
+        });
+        // Kalau semua duplikat → hentikan loop biar tidak infinite
+        if (uniqueToolCalls.length === 0) break;
+        result.toolCalls = uniqueToolCalls;
 
         // Tambah assistant message + tool_calls ke API context
         apiMessages.push({

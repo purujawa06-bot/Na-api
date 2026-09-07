@@ -215,6 +215,8 @@ export async function POST(req) {
 
         /** @type {Map<string, number>} toolCallId -> index dalam delta.tool_calls[] */
         const tcIndex = new Map();
+        /** Set toolCallId yang sudah selesai (tool-input-end) — tolak delta/start berikutnya */
+        const tcClosed = new Set();
         let lastFinish = 'stop';
 
         const seenPart = () => {
@@ -238,6 +240,8 @@ export async function POST(req) {
             case 'tool-input-start': {
               seenPart();
               await ensureRole();
+              // Guard: kalau id sudah pernah dibuka ATAU sudah ditutup, jangan emit lagi
+              if (tcIndex.has(part.id) || tcClosed.has(part.id)) break;
               // buka blok arguments di chunk baru
               const idx = tcIndex.size;
               tcIndex.set(part.id, idx);
@@ -245,10 +249,16 @@ export async function POST(req) {
               break;
             }
             case 'tool-input-delta': {
-              const idx = tcIndex.get(part.id) ?? 0;
+              const idx = tcIndex.get(part.id);
+              // Tolak delta untuk id yang belum dibuka atau sudah ditutup
+              if (idx === undefined || tcClosed.has(part.id)) break;
               await sendChunk({ tool_calls: [{ index: idx, function: { arguments: part.delta } }] });
               break;
             }
+            case 'tool-input-end':
+              // Tandai selesai supaya delta/start lanjutan untuk id ini diabaikan
+              if (tcIndex.has(part.id)) tcClosed.add(part.id);
+              break;
             case 'finish':
               lastFinish = openAiFinish(typeof part.finishReason === 'string' ? part.finishReason : part.finishReason?.unified);
               break;
