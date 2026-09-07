@@ -66,7 +66,7 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
   - genres: tetap dari anichin `/seri/` — slug yang sama diteruskan ke two sources (pola PurTV).
 - **`purtv_pagenation`** ({currentPage, hasNext}) ada di SETIAP respon — kontrak navigasi konsisten.
 - Selektor penting: home donghua (`#slidertwo .swiper-slide.item`, `.bixbox:has(.releases.hothome)`, `.listupd.normal article.bs`, `.ongoingseries ul li`, `.series-gen`), episode (`#pembed iframe`, `.mirror option` base64), seri (`/seri/<slug>/`: `.eplister ul li a`, `.infox .spe span`, `.infox .genxed a`), samehadaku home (`.post-show ul li`, `.topten-animesu ul li`), genre/s (`.genre-info a`, `.lstepsiode.listeps`).
-- **Cloudflare:** anichin di balik CF Managed Challenge → `getHtml()` fallback `CF_PROXY` (`vercel-api-beta-red.vercel.app/api/fetch`) pada 403. samehadaku pakai got-scraping (TLS fingerprint) langsung.
+- **Cloudflare:** anichin di balik CF Managed Challenge → `getHtml()` fallback `CF_PROXY` (`vercel-api-beta-red.vercel.app/api/fetch`) pada 403. samehadaku WAJIB via **scraper-web proxy** (`vercel-api-beta-red.vercel.app/api/scraper-web`, POST `{url, output: selector}` — transport resmi utk anime di PurTV): fetch polos/got-scraping kena CF 403, dan got-scraping TIDAK dipakai lagi karena bundling-nya merusak build Next (collect-page-data/chunk runtime).
 - Uji: `node temp/test-purtv.mjs`.
 
 ## Pemetaan ID Model (09/2026)
