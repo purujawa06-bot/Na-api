@@ -1,43 +1,24 @@
 /**
- * @title DuckDuckGo Search
- * @summary Cari di DuckDuckGo (html.duckduckgo.com) tanpa browser.
- * @description Mencari di mesin pencari DuckDuckGo tanpa API key. Memakai
- *              retry hingga 5x agar lolos challenge/rate-limit anti-bot, lalu
- *              mengembalikan judul, URL, dan snippet. Respons berupa streaming
- *              JSON (JSON Lines — satu objek per baris) dengan event
- *              'processing' tiap ~2 detik sebagai keep-alive saat pencarian
- *              berlangsung, diakhiri event 'done'.
+ * @title Web Search (Bing)
+ * @summary Cari di Bing tanpa API key.
+ * @description Mencari di mesin pencari Bing tanpa API key. Menggunakan
+ *              scraping HTML Bing yang reliable dari serverless/Vercel.
+ *              Retry 3x dengan backoff eksponensial jika terkena rate-limit.
+ *              Respons berupa streaming JSON (JSON Lines) dengan event
+ *              'processing' sebagai keep-alive, diakhiri event 'done'.
  * @method GET
  * @path /api/search/duckduckgo
  * @param {string} query.q - Kata kunci pencarian (wajib).
  * @param {number} [query.limit] - Jumlah hasil maks (default 10, maks 20).
  * @response stream
  * @example
- * fetch('https://puruboy-api.vercel.app/api/search/duckduckgo?q=nodejs+tutorial&limit=5')
- *     .then(res => {
- *         const reader = res.body.getReader();
- *         const dec = new TextDecoder();
- *         let buf = '';
- *         (async () => {
- *             while (true) {
- *                 const { done, value } = await reader.read();
- *                 if (done) break;
- *                 buf += dec.decode(value);
- *                 const lines = buf.split('\n');
- *                 buf = lines.pop();
- *                 for (const line of lines) {
- *                     if (!line.trim()) continue;
- *                     console.log(JSON.parse(line));
- *                 }
- *             }
- *         })();
- *     });
+ * fetch('https://nexta-api.vercel.app/api/search/duckduckgo?q=nodejs+tutorial&limit=5')
  */
-import { searchDuckDuckGo } from '../../../../lib/duckduckgo-search.js';
+import { searchBing } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 const KEEPALIVE_MS = 2000;
 
@@ -53,7 +34,7 @@ function parseQuery(searchParams) {
   return { params: { q: q.trim(), limit } };
 }
 
-function stream(emit, task) {
+function stream(task) {
   const enc = new TextEncoder();
   const read = new ReadableStream({
     async start(controller) {
@@ -92,8 +73,8 @@ export async function GET(req) {
     return Response.json(parsed.error, { status: parsed.status });
   }
   const { params } = parsed;
-  return stream((o) => {}, (emit) =>
-    searchDuckDuckGo(params.q, {
+  return stream((emit) =>
+    searchBing(params.q, {
       limit: params.limit,
       onRetry: ({ attempt }) => emit({ attempt, progress: true }),
     })
@@ -115,8 +96,8 @@ export async function POST(req) {
     return Response.json(parsed.error, { status: parsed.status });
   }
   const { params } = parsed;
-  return stream((o) => {}, (emit) =>
-    searchDuckDuckGo(params.q, {
+  return stream((emit) =>
+    searchBing(params.q, {
       limit: params.limit,
       onRetry: ({ attempt }) => emit({ attempt, progress: true }),
     })
