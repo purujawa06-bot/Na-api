@@ -5,7 +5,10 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import EndpointCard from './EndpointCard';
 import InfoModal from './InfoModal';
-import { collectExampleFields } from './docsPayload';
+import { collectExampleFields, buildCurl } from './docsPayload';
+
+const escapeXmlAttr = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const xmlCdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]]]><![CDATA[>')}]]>`;
 
 const CATEGORY_ICONS = {
     ai: 'fa-robot',
@@ -234,6 +237,7 @@ export default function DocsClient({ apiSpec }) {
         setContextErrors([]);
         let output = '';
         const errors = [];
+        const xmlBlocks = [];
 
         const selectedList = [];
         if (apiSpec) {
@@ -256,9 +260,10 @@ export default function DocsClient({ apiSpec }) {
 
                 const requiredParams = ep.params ? ep.params.filter(p => p.required) : [];
                 const needsManualInput = (requiredParams.length > 0 && !ep.example) || ep.path.includes('/imgbb');
+                let userInputs = null;
 
                 if (needsManualInput) {
-                    const userInputs = await requestManualInput(ep);
+                    userInputs = await requestManualInput(ep);
 
                     ep.params.forEach(param => {
                         const val = userInputs[param.name];
@@ -396,9 +401,16 @@ export default function DocsClient({ apiSpec }) {
                     responseData = await res.text();
                 }
 
-                const exampleCodeStr = ep.example ? `Example Code:\n${ep.example}\n` : `Example Code: [Manual Input or Not Available]\n`;
+                const exampleStr = ep.example ? ep.example : (userInputs ? buildCurl(ep, baseUrl, userInputs) : '[Manual Input / Tidak ada contoh JSDoc]');
 
-                output += `--${finalUrl}--\n${exampleCodeStr}Code: ${res.status}\nRespon:\n${responseData}\n--End--\n\n`;
+                const endpointXml =
+                    `    <endpoint method="${escapeXmlAttr(ep.method)}" path="${escapeXmlAttr(finalUrl)}">\n` +
+                    `        <title>${escapeXmlAttr(ep.title)}</title>\n` +
+                    `        <desc>${xmlCdata(ep.description)}</desc>\n` +
+                    `        <example>${xmlCdata(exampleStr)}</example>\n` +
+                    `        <response>${xmlCdata(responseData)}</response>\n` +
+                    `    </endpoint>`;
+                xmlBlocks.push(endpointXml);
 
                 if (!res.ok) {
                     errors.push(`[${ep.path}] Error ${res.status}`);
@@ -408,20 +420,29 @@ export default function DocsClient({ apiSpec }) {
                     errors.push(`[${ep.path}] Dibatalkan oleh user.`);
                 } else {
                     errors.push(`[${ep.path}] Failed: ${e.message}`);
-                    output += `--${baseUrl}${ep.path}--\nCode: Error\nRespon:\n${e.message}\n--End--\n\n`;
+                    xmlBlocks.push(
+                        `    <endpoint method="${escapeXmlAttr(ep.method)}" path="${escapeXmlAttr(baseUrl + ep.path)}">\n` +
+                        `        <title>${escapeXmlAttr(ep.title)}</title>\n` +
+                        `        <desc>${xmlCdata(ep.description)}</desc>\n` +
+                        `        <example>${xmlCdata(ep.example || '[Manual Input / Tidak ada contoh JSDoc]')}</example>\n` +
+                        `        <response>${xmlCdata('Error: ' + e.message)}</response>\n` +
+                        `    </endpoint>`
+                    );
                 }
             }
         }
+
+        output = `<?xml version="1.0" encoding="UTF-8"?>\n<api-context generated="${new Date().toISOString()}">\n${xmlBlocks.join('\n')}\n</api-context>\n`;
 
         if (errors.length > 0) {
             setContextErrors(errors);
         }
 
         if (output.trim()) {
-            const blob = new Blob([output], { type: 'text/plain' });
+            const blob = new Blob([output], { type: 'application/xml' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'konteks.txt';
+            link.download = 'konteks.xml';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
