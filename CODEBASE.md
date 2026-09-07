@@ -183,3 +183,11 @@ di Firebase RTDB public (`https://puru-69425-default-rtdb.firebaseio.com/`, rule
 - Fokus pada tugas; tanpa perombakan di luar cakupan.
 - Verifikasi hasil dengan deploy ke Vercel Production.
 - Dilarang `git commit`/`git push` dan `npm run start`/`dev`/`lint` kecuali diminta eksplisit.
+## Scraper DuckDuckGo Search (09/2026)
+
+`app/api/search/duckduckgo/route.js` + `lib/duckduckgo-search.js`:
+
+- Endpoint: `/api/search/duckduckgo?q=...&limit=...` (GET & POST), kategori `search` di docs.
+- Alur ganda: (1) ambil token `vqd` dari `https://duckduckgo.com/?q=...` lalu `GET https://links.duckduckgo.com/d.js?q=...&vqd=...&o=json` (JSON: field `t`/`u`/`a`); (2) fallback ke `https://html.duckduckgo.com/html/` di-parse via cheerio (`.result a.result__a`, `a.result__snippet`, decode redirect `uddg=`).
+- Respons streaming NDJSON (pola sama dengan yahoo search): event `processing` tiap ~2s, diakhiri `done`.
+- **Catatan:** DDG agresif memblokir IP datacenter (403/506); retry 5x + UA browser. Di lingkungan yang diblokir total, endpoint mengembalikan error `done` dengan `success:false`.
