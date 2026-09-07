@@ -40,8 +40,14 @@ You have access to tools that let you search the web, crawl web pages, and query
 - Answer in the language the user uses (Indonesian/English)
 - Be concise but thorough
 - Use markdown formatting for readability (code blocks, lists, bold, etc.)
-- If a tool fails, explain the error and try an alternative approach
-- You can call multiple tools in sequence to gather all needed information`;
+- If a tool fails, explain the error and try an alternative approach — DO NOT retry the same tool call with the same arguments
+- You can call multiple tools in sequence to gather all needed information
+
+## IMPORTANT: Tool Usage Rules
+- When calling "fetch" tool, you MUST include the "url" parameter as a string. Example: fetch({ url: "https://example.com/api/data" }) or fetch({ url: "/api/endpoint" })
+- When calling "crawl_web" tool, you MUST include the "url" parameter as a string. Example: crawl_web({ url: "https://example.com/article" })
+- NEVER call fetch or crawl_web without the url parameter — it will fail
+- If you don't know the exact URL, use search_docs or endpoint_info first to find it`;
 
 const SUGGESTIONS = [
   { icon: '🔍', text: 'Apa itu PuruBoy API?' },
@@ -426,9 +432,14 @@ async function streamChatCompletion({ messages, tools, signal, onDelta }) {
 async function executeToolClient(tool) {
   const args = safeParseArgs(tool.arguments);
 
-  // Client-side validation: pastikan parameter required tidak kosong
+  // Client-side validation: log untuk debugging + beri hint ke model
   if ((tool.name === 'crawl_web' || tool.name === 'fetch') && (!args.url || typeof args.url !== 'string' || !args.url.trim())) {
-    return JSON.stringify({ error: `Parameter 'url' wajib diisi dengan URL yang valid (contoh: https://example.com atau /api/endpoint)` });
+    console.warn(`[PuruAI] Tool "${tool.name}" dipanggil tanpa parameter 'url'. Args:`, JSON.stringify(args));
+    return JSON.stringify({
+      error: `Tool ${tool.name} memerlukan parameter 'url' dengan nilai string non-kosong.`,
+      hint: `Contoh pemanggilan yang benar: ${tool.name}({ url: "https://example.com" }) atau ${tool.name}({ url: "/api/endpoint" }). JANGAN panggil ${tool.name} tanpa parameter url.`,
+      received_args: args,
+    });
   }
 
   const res = await fetch(TOOL_EXEC_URL, {
