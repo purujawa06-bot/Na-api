@@ -1,9 +1,9 @@
-﻿/**
+/**
  * @title Chat Completions (OpenAI Compatible)
  * @summary Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.
  * @description Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
- *              FUNCTION CALLING (body.tools) untuk semua model â€” tool calls
+ *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
  *              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol
  *              UI-TARS XML; body.tool_choice diabaikan),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
@@ -54,7 +54,7 @@
  *     })();
  * });
  *
- * @example Function calling (tools) â€” balasan berisi message.tool_calls
+ * @example Function calling (tools) — balasan berisi message.tool_calls
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
@@ -74,170 +74,23 @@
  */
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { generateText, streamText, wrapLanguageModel, stepCountIs } from 'ai';
-import { uiTarsToolMiddleware } from '@ai-sdk-tool/parser/community';
-import { jsonSchema } from '@ai-sdk/provider-utils';
-import { createDsmlSanitizerMiddleware } from '../../../../lib/dsml-sanitizer.js';
-import { uiArtifactSanitizerMiddleware } from '../../../../lib/ui-artifact-sanitizer.js';
+import { generateText, streamText, stepCountIs } from 'ai';
 import { reportError } from '../../../../lib/errorLogger';
 import { createWebModel, ALL_MODEL_IDS } from '../../../../lib/ai-provider-web.js';
 import settingsService from '../../../../lib/settingsService';
+import { splitPrompt, toAiTools, buildModel, toOpenAiMessage } from '../../../../lib/agent-step.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const CREATED = Math.floor(Date.now() / 1000);
-// ---------------- Helper ekspor untuk agentic loop (in-process) ----------------
-// Dipakai /api/puru-ai agar tidak self-fetch HTTP (double cold-start di Vercel).
-// Menjalankan generateText sekali dengan tools, mengembalikan pesan OpenAI-style.
-
-/**
- * Jalankan satu langkah agent (generateText + tools).
- * @param {object} opts
- * @param {string} opts.model - ID model ('auto' dsb.)
- * @param {Array} opts.messages - pesan OpenAI (system/user/assistant/tool)
- * @param {Array} opts.tools - definisi tools OpenAI
- * @param {string[]} [opts.chain] - urutan rantai auto (opsional)
- * @returns {Promise<{message:object, model:string}>} message OpenAI (mungkin punya tool_calls)
- */
-export async function runAgenticStep({ model = 'auto', messages, tools, chain } = {}) {
-  const aiTools = toAiTools(tools ?? []);
-  const { instructions, messages: modelMessages } = splitPrompt(messages);
-  const meta = {};
-  const autoChain = model === 'auto' ? chain || (await settingsService.getAutoChain()) : undefined;
-  const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
-
-  const result = await generateText({
-    model: lm,
-    instructions,
-    messages: modelMessages,
-    ...(Object.keys(aiTools).length ? {
-      tools: aiTools,
-      stopWhen: stepCountIs(1), // passthrough: balas tool_calls ke agent, JANGAN auto-eksekusi
-    } : {}),
-  });
-
-  return {
-    message: toOpenAiMessage(result),
-    model: meta.used || model,
-  };
-}
-
 
 function genId() {
   return `chatcmpl-${randomBytes(12).toString('hex')}`;
 }
 
 // ---------------- Konversi OpenAI -> ModelMessage ----------------
-
-/**
- * Pesan assistant OpenAI dengan tool_calls -> parts teks + tool-call.
- * Middleware UI-TARS XML mengubah keduanya jadi teks sebelum sampai adapter.
- */
-function assistantToolCallParts(toolCalls = []) {
-  return toolCalls.map((tc) => ({
-    type: 'tool-call',
-    toolCallId: tc.id ?? genId(),
-    toolName: tc.function?.name ?? 'unknown_tool',
-    input: safeParseJson(tc.function?.arguments),
-  }));
-}
-
-/** Parse string JSON dengan fallback aman. */
-function safeParseJson(str) {
-  if (typeof str !== 'string') return str ?? {};
-  try { return JSON.parse(str); } catch { return {}; }
-}
-
-/** Normalisasi pesan user/system: content bisa string atau array part OpenAI. */
-function contentToText(content) {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    // format OpenAI vision-style: [{type:'text', text}, ...]
-    return content.map((p) => (typeof p === 'string' ? p : p?.text ?? '')).join('');
-  }
-  return String(content ?? '');
-}
-
-/**
- * OpenAI messages -> { instructions, ModelMessage[] } (format ai v7).
- * ai v7 melarang role system di dalam `messages` â€” harus lewat opsi `instructions`.
- * Role "tool" dipetakan jadi tool-result message; middleware XML yang merapikan jadi teks.
- */
-function splitPrompt(messages = []) {
-  const instructions = [];
-  const out = [];
-  for (const msg of messages) {
-    const { role } = msg;
-    if (role === 'system' || role === 'developer') {
-      instructions.push(contentToText(msg.content));
-    } else if (role === 'tool') {
-      out.push({
-        role: 'tool',
-        content: [{
-          type: 'tool-result',
-          toolCallId: msg.tool_call_id ?? 'unknown-id',
-          toolName: msg.name ?? 'unknown_tool',
-          output: { type: 'text', value: contentToText(msg.content) },
-        }],
-      });
-    } else if (role === 'assistant') {
-      const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0;
-      const text = contentToText(msg.content);
-      out.push({
-        role: 'assistant',
-        content: [
-          ...(text ? [{ type: 'text', text }] : []),
-          ...(hasToolCalls ? assistantToolCallParts(msg.tool_calls) : []),
-        ],
-      });
-    } else {
-      out.push({ role: 'user', content: contentToText(msg.content) });
-    }
-  }
-  return {
-    instructions: instructions.join('\n\n') || undefined,
-    messages: out,
-  };
-}
-
-// ---------------- Konversi OpenAI tools -> AI SDK ----------------
-
-/**
- * Definisi tool OpenAI -> Record<name, Tool> untuk ai v7.
- * Schema parameter dibungkus jsonSchema() supaya tanpa validasi ketat (model web bebas bentuk outputnya).
- */
-function toAiTools(tools = []) {
-  const map = {};
-  for (const t of tools) {
-    const fn = t.function ?? t; // dukung juga shorthand {name, description, parameters}
-    if (!fn?.name) continue;
-    map[fn.name] = {
-      description: fn.description ?? '',
-      inputSchema: jsonSchema(fn.parameters ?? { type: 'object', properties: {} }),
-    };
-  }
-  return map;
-}
-
-/**
- * Susun model siap generate: adapter web, dibungkus middleware XML bila ada tools.
- * `meta` diteruskan ke adapter auto agar route tahu model aktual yang dipakai.
- * `chain` = urutan fallback mode 'auto' dari settings admin (diabaikan model lain).
- */
-function buildModel(modelId, { tools, meta, chain }) {
-  const base = createWebModel(modelId, { meta, chain });
-  // Lapisan terdalam: buang markup UI bocoran (<ElicitationsGroup> dll.) dari
-  // semua provider â€” dipasang tanpa syarat karena mode auto bisa jatuh ke mana pun.
-  const clean = wrapLanguageModel({ model: base, middleware: uiArtifactSanitizerMiddleware });
-  if (!tools || !Object.keys(tools).length) return clean;
-  // Lapisan dalam: konversi bocoran format DSML DeepSeek -> UI-TARS XML.
-  return wrapLanguageModel({
-    model: wrapLanguageModel({ model: clean, middleware: createDsmlSanitizerMiddleware({ target: 'qwen' }) }),
-    middleware: uiTarsToolMiddleware,
-  });
-}
 
 // ---------------- Pemetaan hasil -> OpenAI response ----------------
 
@@ -250,32 +103,6 @@ function usageFrom(result) {
     completion_tokens: outTok,
     total_tokens: inTok + outTok,
   };
-}
-
-/** Gabungkan seluruh langkah multi-step jadi satu pesan OpenAI. */
-function toOpenAiMessage(result) {
-  let content = '';
-  let reasoning = '';
-  /** @type {Array<{id:string,type:'function',function:{name:string,arguments:string}}>} */
-  const toolCalls = [];
-  for (const step of result.steps ?? []) {
-    for (const c of step.content ?? []) {
-      if (c.type === 'text') content += c.text;
-      if (c.type === 'reasoning') reasoning += c.text;
-    }
-    for (const tc of step.toolCalls ?? []) {
-      toolCalls.push({
-        id: tc.toolCallId,
-        type: 'function',
-        function: { name: tc.toolName, arguments: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input ?? {}) },
-      });
-    }
-  }
-  const message = { role: 'assistant', content: content || null };
-  if (reasoning) message.reasoning_content = reasoning;
-  if (toolCalls.length) message.tool_calls = toolCalls;
-  if (toolCalls.length && !content) message.content = null;
-  return message;
 }
 
 /** finishReason AI SDK -> finish_reason OpenAI. */

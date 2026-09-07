@@ -46,7 +46,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { searchBing } from '../../../lib/bing-search.js';
-import { runAgenticStep } from '../chat/completions/route.js';
+import { runAgenticStep } from '../../../lib/agent-step.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
