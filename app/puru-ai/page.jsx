@@ -4,23 +4,22 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { buildOpenAITools, getToolMeta } from '../../lib/puru-ai-tools';
+import { pruneMessages, pruneForAPI } from '../../lib/puru-ai-prune';
 
 /* ═══════════════════════════════════════════════════════════════
-   Puru AI — Chat dengan AI + Tools
+   Puru AI — Chat dengan AI + Tools (Client-side Agentic Loop)
    
-   Agentic loop SEPENUHNYA di sisi client:
-   - Panggil /api/chat/completions dengan stream: true + tools
-   - Jika AI meminta tool call → eksekusi via /api/tools/execute
-   - Kirim hasil tool kembali ke AI → ulangi sampai AI berhenti
-     mengirim function calling (maks 50 iterasi)
-   - History dibatasi maks 10 entry chat user agar hemat token
+   - Tool definitions: zod schemas via lib/puru-ai-tools.js
+   - Context pruning: lib/puru-ai-prune.js
+   - Loop: client → /api/chat/completions (SSE) → execute tools → repeat
+   - Max 50 iterasi, history dibatasi 10 user entry
    ═══════════════════════════════════════════════════════════════ */
 
 const API_URL = '/api/chat/completions';
 const TOOL_EXEC_URL = '/api/tools/execute';
 const STORAGE_KEY = 'puru-ai-history';
 const MAX_LOOPS = 50;
-const MAX_USER_HISTORY = 10;
 
 const SYSTEM_PROMPT = `You are Puru AI — an intelligent assistant built on the PuruBoy API platform.
 
@@ -69,7 +68,7 @@ const CodeBlock = React.memo(function CodeBlock({ inline, className, children })
 
   if (inline) {
     return (
-      <code className="bg-[#2a2b30] text-[#e879f9] px-1.5 py-0.5 rounded text-[13px] font-mono">
+      <code className="bg-[#2a2b30] text-[#e879f9] px-1.5 py-0.5 rounded text-[12px] font-mono">
         {children}
       </code>
     );
@@ -79,10 +78,10 @@ const CodeBlock = React.memo(function CodeBlock({ inline, className, children })
     <div className="relative group my-3 rounded-xl overflow-hidden border border-[#2a2b30]">
       {lang && (
         <div className="flex items-center justify-between bg-[#1a1b1f] px-4 py-1.5 border-b border-[#2a2b30]">
-          <span className="text-[11px] text-[#6b7280] font-mono uppercase">{lang}</span>
+          <span className="text-[10px] text-[#6b7280] font-mono uppercase">{lang}</span>
           <button
             onClick={handleCopy}
-            className="text-[11px] text-[#6b7280] hover:text-white flex items-center gap-1 transition-colors"
+            className="text-[10px] text-[#6b7280] hover:text-white flex items-center gap-1 transition-colors"
           >
             <i className={`fas ${copied ? 'fa-check text-green-400' : 'fa-copy'}`} />
             {copied ? 'Copied!' : 'Copy'}
@@ -92,12 +91,12 @@ const CodeBlock = React.memo(function CodeBlock({ inline, className, children })
       {!lang && (
         <button
           onClick={handleCopy}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-[11px] text-[#6b7280] hover:text-white bg-[#1a1b1f] px-2 py-1 rounded transition-all"
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-[10px] text-[#6b7280] hover:text-white bg-[#1a1b1f] px-2 py-1 rounded transition-all"
         >
           <i className={`fas ${copied ? 'fa-check text-green-400' : 'fa-copy'}`} />
         </button>
       )}
-      <pre className="bg-[#0d0e11] p-4 overflow-x-auto text-[13px] leading-relaxed">
+      <pre className="bg-[#0d0e11] p-4 overflow-x-auto text-[12px] leading-relaxed">
         <code className={`font-mono text-[#e4e4e7] ${className || ''}`}>
           {children}
         </code>
@@ -127,21 +126,21 @@ const MarkdownContent = React.memo(function MarkdownContent({ content }) {
           <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>
         ),
         ul: ({ children }) => (
-          <ul className="list-disc list-inside mb-3 space-y-1 text-[#d4d4d8]">{children}</ul>
+          <ul className="list-disc list-outside ml-5 mb-3 space-y-1.5 text-[#d4d4d8]">{children}</ul>
         ),
         ol: ({ children }) => (
-          <ol className="list-decimal list-inside mb-3 space-y-1 text-[#d4d4d8]">{children}</ol>
+          <ol className="list-decimal list-outside ml-5 mb-3 space-y-1.5 text-[#d4d4d8]">{children}</ol>
         ),
-        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-        h1: ({ children }) => <h1 className="text-xl font-bold text-white mb-3 mt-4">{children}</h1>,
-        h2: ({ children }) => <h2 className="text-lg font-bold text-white mb-2 mt-3">{children}</h2>,
-        h3: ({ children }) => <h3 className="text-base font-bold text-white mb-2 mt-3">{children}</h3>,
+        li: ({ children }) => <li className="leading-relaxed pl-1">{children}</li>,
+        h1: ({ children }) => <h1 className="text-lg font-bold text-white mb-3 mt-5">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-base font-bold text-white mb-2 mt-4">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-[15px] font-bold text-white mb-2 mt-3">{children}</h3>,
         blockquote: ({ children }) => (
-          <blockquote className="border-l-4 border-[#a78bfa] pl-4 my-3 text-[#a1a1aa] italic">{children}</blockquote>
+          <blockquote className="border-l-3 border-[#a78bfa] pl-4 my-3 text-[#a1a1aa] italic">{children}</blockquote>
         ),
         table: ({ children }) => (
           <div className="overflow-x-auto my-3 rounded-lg border border-[#2a2b30]">
-            <table className="w-full text-sm">{children}</table>
+            <table className="w-full text-[13px]">{children}</table>
           </div>
         ),
         thead: ({ children }) => <thead className="bg-[#1a1b1f]">{children}</thead>,
@@ -161,17 +160,11 @@ const MarkdownContent = React.memo(function MarkdownContent({ content }) {
   );
 });
 
-/* ══════════════════════ Tool Card (per-item, di dalam section) ══════════════════════ */
+/* ══════════════════════ Tool Card (individual, inside collapsible) ══════════════════════ */
 
 const ToolCard = React.memo(function ToolCard({ tool }) {
   const [open, setOpen] = useState(false);
-  const icon = {
-    search_web: 'fa-search',
-    crawl_web: 'fa-spider',
-    search_docs: 'fa-book',
-    endpoint_info: 'fa-circle-info',
-    fetch: 'fa-plug',
-  }[tool.name] || 'fa-wrench';
+  const meta = getToolMeta(tool.name);
 
   let argsDisplay = '';
   try {
@@ -193,7 +186,7 @@ const ToolCard = React.memo(function ToolCard({ tool }) {
           {tool.status === 'running' ? (
             <i className="fas fa-spinner fa-spin text-[9px] text-[#a78bfa]" />
           ) : (
-            <i className={`fas ${icon} text-[9px] text-[#a78bfa]`} />
+            <i className={`fas ${meta.icon} text-[9px] text-[#a78bfa]`} />
           )}
         </div>
         <span className="text-[11px] text-[#a1a1aa] flex-1 truncate">
@@ -227,7 +220,7 @@ const ToolCard = React.memo(function ToolCard({ tool }) {
   );
 });
 
-/* ══════════════════════ Tool Calls Section (collapsible di akhir respon) ══════════════════════ */
+/* ══════════════════════ Tool Calls Section (ABOVE bubble) ══════════════════════ */
 
 function ToolCallsSection({ toolCalls }) {
   const [open, setOpen] = useState(false);
@@ -238,7 +231,7 @@ function ToolCallsSection({ toolCalls }) {
   const runningCount = toolCalls.filter((t) => t.status === 'running').length;
 
   return (
-    <div className="mt-3">
+    <div className="mb-2">
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#141517] border border-[#2a2b30] hover:border-[#a78bfa]/30 transition-all w-full text-left group"
@@ -276,24 +269,29 @@ const MessageBubble = React.memo(function MessageBubble({ msg }) {
   const isUser = msg.role === 'user';
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group px-4`}>
-      <div className={`max-w-[85%] md:max-w-[72%] ${isUser ? 'order-2' : 'order-1'}`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 group px-4 md:px-6`}>
+      <div className={`max-w-[88%] md:max-w-[78%] ${isUser ? 'order-2' : 'order-1'}`}>
         {/* Assistant label */}
         {!isUser && (
-          <div className="flex items-center gap-2 mb-1.5 ml-1">
-            <div className="w-5 h-5 rounded bg-[#a78bfa] flex items-center justify-center">
-              <i className="fas fa-bolt text-[9px] text-white" />
+          <div className="flex items-center gap-2 mb-2 ml-1">
+            <div className="w-6 h-6 rounded-lg bg-[#a78bfa] flex items-center justify-center">
+              <i className="fas fa-bolt text-[10px] text-white" />
             </div>
-            <span className="text-[11px] font-bold text-[#71717a]">Puru AI</span>
+            <span className="text-[11px] font-semibold text-[#71717a]">Puru AI</span>
           </div>
         )}
 
-        {/* Content */}
+        {/* Tool Calls — ATAS bubble */}
+        {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
+          <ToolCallsSection toolCalls={msg.toolCalls} />
+        )}
+
+        {/* Content bubble */}
         <div
-          className={`rounded-2xl px-4 py-3 text-[14px] leading-relaxed ${
+          className={`px-5 py-4 text-[13.5px] leading-[1.75] ${
             isUser
-              ? 'bg-[#a78bfa] text-white rounded-br-md'
-              : 'bg-[#1a1b1f] text-[#d4d4d8] rounded-bl-md border border-[#2a2b30]'
+              ? 'bg-[#a78bfa] text-white rounded-2xl rounded-br-lg'
+              : 'bg-[#1a1b1f] text-[#d4d4d8] rounded-2xl rounded-bl-lg border border-[#2a2b30]'
           }`}
         >
           {isUser ? (
@@ -302,7 +300,7 @@ const MessageBubble = React.memo(function MessageBubble({ msg }) {
             <>
               {/* Reasoning (collapsible) */}
               {msg.reasoning && (
-                <details className="mb-2 text-[12px] bg-[#141517] border border-[#2a2b30] rounded-lg px-3 py-2">
+                <details className="mb-3 text-[12px] bg-[#141517] border border-[#2a2b30] rounded-lg px-3 py-2">
                   <summary className="cursor-pointer select-none flex items-center gap-2 font-medium text-[#71717a]">
                     <i className="fas fa-brain text-[10px] text-[#a78bfa]" />
                     Thinking
@@ -316,7 +314,7 @@ const MessageBubble = React.memo(function MessageBubble({ msg }) {
                   <MarkdownContent content={msg.content} />
                 </div>
               ) : msg.streaming ? (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2 py-1">
                   <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                   <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                   <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -330,11 +328,6 @@ const MessageBubble = React.memo(function MessageBubble({ msg }) {
             </>
           )}
         </div>
-
-        {/* Tool Calls — tampil sebagai collapsible section */}
-        {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
-          <ToolCallsSection toolCalls={msg.toolCalls} />
-        )}
       </div>
     </div>
   );
@@ -347,17 +340,8 @@ function safeParseArgs(args) {
   try { return JSON.parse(args || '{}'); } catch { return {}; }
 }
 
-/** Batasi history API ke maks MAX_USER_HISTORY entry chat user. */
-function limitUserHistory(msgs) {
-  const userIdx = [];
-  msgs.forEach((m, i) => { if (m.role === 'user') userIdx.push(i); });
-  if (userIdx.length <= MAX_USER_HISTORY) return msgs;
-  return msgs.slice(userIdx[userIdx.length - MAX_USER_HISTORY]);
-}
-
 /**
  * Streaming satu langkah agent via /api/chat/completions (SSE OpenAI).
- * Mengembalikan { text, reasoning, toolCalls, finishReason }.
  */
 async function streamChatCompletion({ messages, tools, signal, onDelta }) {
   const res = await fetch(API_URL, {
@@ -462,10 +446,10 @@ export default function PuruAIPage() {
   const [isExiting, setIsExiting] = useState(false);
   const [docsSummary, setDocsSummary] = useState('');
 
-  // Input dipegang via ref untuk menghindari re-render per keystroke
+  // Input via refs (tidak trigger re-render per keystroke)
   const inputRefEl = useRef(null);
   const inputValueRef = useRef('');
-  const [inputDraft, setInputDraft] = useState(''); // hanya untuk display, di-debounce
+  const [inputDraft, setInputDraft] = useState('');
 
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
@@ -496,14 +480,11 @@ export default function PuruAIPage() {
     }
   }, [flushPatch]);
 
-  // Cleanup rAF on unmount
   useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, []);
 
-  // Ambil ringkasan docs.json agar tool search_docs tahu daftar endpoint
+  // Fetch docs.json untuk search_docs
   useEffect(() => {
     fetch('/docs.json')
       .then((r) => r.json())
@@ -521,94 +502,8 @@ export default function PuruAIPage() {
       .catch(() => {});
   }, []);
 
-  // Tool definitions (search_docs memuat daftar endpoint dari docs.json)
-  const TOOLS = useMemo(() => {
-    const categories = docsSummary
-      .split('\n\n')
-      .map((l) => l.replace(/^\[|\]$/g, ''))
-      .filter(Boolean);
-    const searchDocsDesc = docsSummary
-      ? `Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Kategori tersedia: ${categories.join(', ')}.\n\nDaftar endpoint:\n${docsSummary}\n\nCari berdasarkan kata kunci (judul, path, atau deskripsi).`
-      : 'Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Cari berdasarkan kata kunci (judul, path, atau deskripsi endpoint).';
-
-    return [
-      {
-        type: 'function',
-        function: {
-          name: 'search_web',
-          description: 'Cari informasi di internet via Bing. Gunakan untuk pertanyaan umum, berita, fakta terkini, atau topik yang tidak terkait PuruBoy API.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Kata kunci pencarian' },
-              limit: { type: 'number', description: 'Jumlah hasil (default 5, maks 10)' },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'crawl_web',
-          description: 'Ambil dan ekstrak teks dari sebuah URL. Berguna untuk membaca artikel, dokumentasi, atau halaman web tertentu.',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: { type: 'string', description: 'URL halaman web yang ingin dibaca' },
-              maxChars: { type: 'number', description: 'Maks karakter yang diambil (default 8000)' },
-            },
-            required: ['url'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_docs',
-          description: searchDocsDesc,
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Kata kunci pencarian (judul, path, atau deskripsi endpoint)' },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'endpoint_info',
-          description: 'Ambil informasi lengkap satu endpoint: method, path, params, example. Path harus diawali /api/',
-          parameters: {
-            type: 'object',
-            properties: {
-              path: { type: 'string', description: 'Path endpoint, contoh: /api/search/duckduckgo' },
-            },
-            required: ['path'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'fetch',
-          description: 'Fetch URL apapun dengan method HTTP apapun. Berguna untuk testing API endpoint atau mengambil data dari URL tertentu.',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: { type: 'string', description: 'URL yang akan di-fetch' },
-              method: { type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE). Default GET.' },
-              headers: { type: 'object', description: 'HTTP headers (opsional)' },
-              body: { description: 'Request body untuk POST/PUT (opsional, string atau object)' },
-            },
-            required: ['url'],
-          },
-        },
-      },
-    ];
-  }, [docsSummary]);
+  // Tool definitions — dibangun dari zod schemas via lib/puru-ai-tools.js
+  const TOOLS = useMemo(() => buildOpenAITools(docsSummary || null), [docsSummary]);
 
   // Load history
   useEffect(() => {
@@ -625,7 +520,7 @@ export default function PuruAIPage() {
   const saveHistory = useCallback((msgs) => {
     try {
       const conv = msgs.filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(limitUserHistory(conv)));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pruneMessages(conv, { maxUserMessages: 10 })));
     } catch { /* ignore */ }
   }, []);
 
@@ -636,21 +531,18 @@ export default function PuruAIPage() {
     }
   }, [messages]);
 
-  // Input change handler — update ref + draft di-debounce
+  // Input change handler
   const inputTimeoutRef = useRef(null);
   const handleInputChange = useCallback((e) => {
     const val = e.target.value;
     inputValueRef.current = val;
-    // Auto-resize textarea
     e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
-    // Debounce setState supaya tidak lag
+    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
     if (inputTimeoutRef.current) clearTimeout(inputTimeoutRef.current);
-    inputTimeoutRef.current = setTimeout(() => {
-      setInputDraft(val);
-    }, 80);
+    inputTimeoutRef.current = setTimeout(() => setInputDraft(val), 60);
   }, []);
 
+  // ─── Agentic Loop ───
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || loadingRef.current) return;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
@@ -663,8 +555,7 @@ export default function PuruAIPage() {
       reasoning: '',
     };
 
-    const updated = [...messages, userMsg, assistantMsg];
-    setMessages(updated);
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
     inputValueRef.current = '';
     setInputDraft('');
     if (inputRefEl.current) {
@@ -677,13 +568,16 @@ export default function PuruAIPage() {
     const abort = new AbortController();
     abortRef.current = abort;
 
-    // Konteks API: system prompt + history user/assistant (maks 10 user entry)
+    // Build API messages dengan pruning
     const apiMessages = [
       { role: 'system', content: SYSTEM_PROMPT },
-      ...limitUserHistory(
-        [...messages, userMsg]
-          .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
-          .map((m) => ({ role: m.role, content: m.content })),
+      ...pruneForAPI(
+        pruneMessages(
+          [...messages, userMsg]
+            .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
+            .map((m) => ({ role: m.role, content: m.content })),
+          { maxUserMessages: 10, keepRecent: 3 },
+        ),
       ),
     ];
 
@@ -713,7 +607,6 @@ export default function PuruAIPage() {
           },
         });
 
-        // Akumulasi teks & reasoning dari iterasi ini
         if (iterationText) {
           fullText = fullText ? `${fullText}\n\n${iterationText}` : iterationText;
         }
@@ -722,12 +615,9 @@ export default function PuruAIPage() {
         }
         scheduleUpdate({ content: fullText, reasoning: fullReasoning, streaming: true });
 
-        // Tidak ada function calling → loop selesai
-        if (!result.toolCalls || result.toolCalls.length === 0) {
-          break;
-        }
+        if (!result.toolCalls || result.toolCalls.length === 0) break;
 
-        // Append pesan assistant dengan tool_calls ke konteks API
+        // Tambah assistant message + tool_calls ke API context
         apiMessages.push({
           role: 'assistant',
           content: iterationText || null,
@@ -764,51 +654,37 @@ export default function PuruAIPage() {
         }
       }
 
-      // Force flush any remaining rAF updates
+      // Force flush pending rAF
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
 
-      if (loopCount >= MAX_LOOPS) {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = {
-            ...copy[copy.length - 1],
-            content: `${fullText || ''}\n\n> ⚠️ **Loop mencapai batas maksimal (${MAX_LOOPS} iterasi).** Mungkin pertanyaan terlalu kompleks — coba pecah menjadi lebih spesifik.`,
-            streaming: false,
-          };
-          return copy;
-        });
-      } else {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = {
-            ...copy[copy.length - 1],
-            content: fullText,
-            streaming: false,
-          };
-          return copy;
-        });
-      }
+      const finalContent = loopCount >= MAX_LOOPS
+        ? `${fullText || ''}\n\n> ⚠️ **Loop mencapai batas maksimal (${MAX_LOOPS} iterasi).** Coba pecah pertanyaan menjadi lebih spesifik.`
+        : fullText;
+
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = {
+          ...copy[copy.length - 1],
+          content: finalContent,
+          streaming: false,
+        };
+        return copy;
+      });
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = {
-            ...copy[copy.length - 1],
-            content: `⚠️ Gagal menghubungi server: ${err.message}`,
-            streaming: false,
-          };
-          return copy;
-        });
-      } else {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { ...copy[copy.length - 1], streaming: false };
-          return copy;
-        });
-      }
+      if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+
+      const errMsg = err.name === 'AbortError' ? null : `⚠️ Gagal menghubungi server: ${err.message}`;
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = { ...copy[copy.length - 1] };
+        if (errMsg) last.content = errMsg;
+        last.streaming = false;
+        copy[copy.length - 1] = last;
+        return copy;
+      });
     } finally {
       setMessages((prev) => {
         const copy = [...prev];
@@ -829,31 +705,20 @@ export default function PuruAIPage() {
     sendMessage(inputValueRef.current);
   }, [sendMessage]);
 
-  const handleSuggestion = useCallback((text) => {
-    sendMessage(text);
-  }, [sendMessage]);
-
-  const handleStop = useCallback(() => {
-    abortRef.current?.abort();
-  }, []);
-
+  const handleSuggestion = useCallback((text) => sendMessage(text), [sendMessage]);
+  const handleStop = useCallback(() => abortRef.current?.abort(), []);
   const handleClear = useCallback(() => {
     if (confirm('Hapus semua percakapan?')) {
       setMessages([]);
       localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
-
   const handleBack = useCallback(() => {
     setIsExiting(true);
     setTimeout(() => { window.location.href = '/'; }, 300);
   }, []);
-
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(inputValueRef.current);
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(inputValueRef.current); }
   }, [sendMessage]);
 
   const transitionClass = isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right';
@@ -878,20 +743,12 @@ export default function PuruAIPage() {
         </div>
         <div className="flex items-center gap-2">
           {loading && (
-            <button
-              onClick={handleStop}
-              className="text-[#ef4444] hover:bg-[#1a1b1f] transition-colors p-2 rounded-lg"
-              title="Stop"
-            >
+            <button onClick={handleStop} className="text-[#ef4444] hover:bg-[#1a1b1f] transition-colors p-2 rounded-lg" title="Stop">
               <i className="fas fa-stop text-sm" />
             </button>
           )}
           {messages.length > 0 && (
-            <button
-              onClick={handleClear}
-              className="text-[#52525b] hover:text-[#ef4444] transition-colors p-2 rounded-lg hover:bg-[#1a1b1f]"
-              title="Clear chat"
-            >
+            <button onClick={handleClear} className="text-[#52525b] hover:text-[#ef4444] transition-colors p-2 rounded-lg hover:bg-[#1a1b1f]" title="Clear chat">
               <i className="fas fa-trash-alt text-sm" />
             </button>
           )}
@@ -907,7 +764,7 @@ export default function PuruAIPage() {
               <i className="fas fa-bolt text-3xl text-[#a78bfa]" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-2 text-center">Halo! Saya Puru AI</h2>
-            <p className="text-[#71717a] text-sm text-center max-w-sm mb-8 leading-relaxed">
+            <p className="text-[#71717a] text-[13px] text-center max-w-md mb-8 leading-relaxed">
               Asisten AI yang bisa <span className="text-[#a78bfa] font-medium">search web</span>,{' '}
               <span className="text-[#a78bfa] font-medium">baca halaman web</span>, dan{' '}
               <span className="text-[#a78bfa] font-medium">akses dokumentasi PuruBoy API</span> secara langsung.
@@ -928,7 +785,7 @@ export default function PuruAIPage() {
           </div>
         ) : (
           /* ─── Messages ─── */
-          <div className="max-w-3xl mx-auto py-4">
+          <div className="max-w-4xl mx-auto py-6">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} msg={msg} />
             ))}
@@ -938,7 +795,7 @@ export default function PuruAIPage() {
 
       {/* ─── Input Bar ─── */}
       <div className="shrink-0 border-t border-[#1a1b1f] bg-[#09090b] p-3 md:p-4 z-30">
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="relative bg-[#141517] rounded-2xl border border-[#1a1b1f] focus-within:border-[#a78bfa]/40 transition-colors">
             <textarea
               ref={inputRefEl}
@@ -947,14 +804,14 @@ export default function PuruAIPage() {
               onKeyDown={handleKeyDown}
               placeholder="Tanya apa saja..."
               rows={1}
-              className="w-full bg-transparent text-white placeholder-[#52525b] text-[14px] px-4 py-3 pr-12 resize-none outline-none max-h-32 custom-scrollbar leading-relaxed"
-              style={{ minHeight: '44px' }}
+              className="w-full bg-transparent text-white placeholder-[#52525b] text-[14px] px-5 py-3.5 pr-12 resize-none outline-none max-h-40 custom-scrollbar leading-relaxed"
+              style={{ minHeight: '48px' }}
               disabled={loading}
             />
             <button
               type="submit"
               disabled={loading || !inputDraft.trim()}
-              className={`absolute right-2 bottom-2 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+              className={`absolute right-2.5 bottom-2.5 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
                 inputDraft.trim() && !loading
                   ? 'bg-[#a78bfa] text-white hover:bg-[#9461fb] shadow-lg shadow-[#a78bfa]/20'
                   : 'bg-[#1a1b1f] text-[#3f3f46]'
