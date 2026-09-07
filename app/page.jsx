@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getDocsSpec } from '../lib/docsService';
@@ -11,7 +11,7 @@ export const metadata = {
     keywords: ['PuruBoy API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'PuruBoy'],
     openGraph: {
         title: 'PuruBoy API - REST API Gratis Indonesia',
-        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
+        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools â€” semua gratis!',
         url: 'https://puruboy-api.vercel.app',
         siteName: 'PuruBoy API',
         type: 'website',
@@ -23,7 +23,7 @@ const Hero = () => (
         <div className="mb-4 relative z-20">
             <div className="inline-block relative">
                 <span className="text-[11px] bg-accent/10 text-accent border border-accent/20 px-3 py-1 rounded-full font-bold uppercase tracking-widest">
-                    🚀 Free & Open REST API
+                    ðŸš€ Free & Open REST API
                 </span>
                 <span className="absolute -top-1 -right-2 w-3 h-3 bg-green-400 rounded-full border-2 border-[#09090b] animate-pulse z-10"></span>
             </div>
@@ -92,7 +92,7 @@ const ChannelPromo = () => (
             <div className="absolute bottom-0 left-0 right-0 p-5">
                 <div className="flex items-center gap-2 mb-2">
                     <span className="bg-[#24A1DE] text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                        ✓ Official
+                        âœ“ Official
                     </span>
                     <span className="text-gray-300 text-[10px] font-medium flex items-center gap-1">
                         <i className="fas fa-users"></i> Community Channel
@@ -161,6 +161,7 @@ export default async function HomePage() {
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                     {[
+                        { href: '/puru-ai', icon: 'fa-bolt', label: 'Puru AI', desc: 'Chat AI + Search Web', color: 'from-violet-600 to-purple-700' },
                         { href: '/docs', icon: 'fa-book', label: 'Dokumentasi', desc: 'Lihat semua endpoint', color: 'from-pink-600 to-rose-600' },
                         { href: '/chat', icon: 'fa-comments', label: 'Chat Room', desc: 'Ngobrol realtime', color: 'from-blue-600 to-indigo-600' },
                         { href: '/blog', icon: 'fa-newspaper', label: 'Blog', desc: 'Update & berita', color: 'from-purple-600 to-violet-600' },
@@ -221,7 +222,7 @@ export default async function HomePage() {
                                 {contributor.login}
                             </span>
                             <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-mono border border-accent/20">
-                                {contributor.contributions}✦
+                                {contributor.contributions}âœ¦
                             </span>
                         </a>
                     ))}

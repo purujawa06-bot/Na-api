@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Fira+Code&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Fira+Code&display=swap');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css');
 
@@ -173,3 +173,9 @@ html.nprogress-busy .lightning-loader { opacity: 1; }
 }
 @keyframes flashBolt { 0% { opacity: 0.7; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 15px #fbbf24); } }
 @keyframes spinTrail { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+/* Custom scrollbar for chat */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #2a2b30; border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: #2a2b30 transparent; }
