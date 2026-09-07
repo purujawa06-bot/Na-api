@@ -410,7 +410,10 @@ async function streamChatCompletion({ messages, tools, signal, onDelta }) {
           const idx = tc.index ?? 0;
           if (!toolCalls[idx]) toolCalls[idx] = { id: '', name: '', arguments: '' };
           if (tc.id) toolCalls[idx].id = tc.id;
-          if (tc.function?.name) toolCalls[idx].name += tc.function.name;
+          // Set name sekali saja — jangan append (mencegah "fetchfetch" saat start duplikat)
+          if (tc.function?.name && !toolCalls[idx].name) {
+            toolCalls[idx].name = tc.function.name;
+          }
           if (tc.function?.arguments) toolCalls[idx].arguments += tc.function.arguments;
         }
       }
@@ -688,6 +691,21 @@ export default function PuruAIPage() {
         scheduleUpdate({ content: fullText, reasoning: fullReasoning, streaming: true });
 
         if (!result.toolCalls || result.toolCalls.length === 0) break;
+
+        // ─── Dedupe tool calls (jaga-jaga server masih kirim duplikat) ───
+        const seenIds = new Set();
+        const seenSig = new Set();
+        const uniqueToolCalls = result.toolCalls.filter((tc) => {
+          const sig = `${tc.name}:${tc.arguments}`;
+          if (tc.id && seenIds.has(tc.id)) return false;
+          if (seenSig.has(sig)) return false;
+          if (tc.id) seenIds.add(tc.id);
+          seenSig.add(sig);
+          return true;
+        });
+        // Kalau semua duplikat → hentikan loop biar tidak infinite
+        if (uniqueToolCalls.length === 0) break;
+        result.toolCalls = uniqueToolCalls;
 
         // Tambah assistant message + tool_calls ke API context
         apiMessages.push({
