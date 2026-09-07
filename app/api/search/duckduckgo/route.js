@@ -38,7 +38,7 @@ function stream(task) {
   const enc = new TextEncoder();
   const read = new ReadableStream({
     async start(controller) {
-      const send = (obj) => controller.enqueue(enc.encode(JSON.stringify(obj) + '\n'));
+      const send = (obj) => controller.enqueue(enc.encode('data: ' + JSON.stringify(obj) + '\n\n'));
 
       let last = Date.now();
       const heartbeat = setInterval(() => {
@@ -62,7 +62,7 @@ function stream(task) {
   });
 
   return new Response(read, {
-    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+    headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
   });
 }
 
