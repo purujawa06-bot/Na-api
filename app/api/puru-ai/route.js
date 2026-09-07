@@ -167,6 +167,30 @@ function getToolDefinitions(docs) {
 
 // ──────────────────── Tool Executors ────────────────────
 
+/** Cegah SSRF: blokir akses ke host internal/lokal/metadata cloud. */
+function assertSafeUrl(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error('URL tidak valid');
+  }
+  const host = u.hostname.toLowerCase();
+  const blocked =
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host === '169.254.169.254' || // AWS metadata
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  if (blocked) throw new Error('URL internal/local dilarang');
+  return u;
+}
+
 async function executeSearchWeb({ query, limit = 5 }) {
   const r = await searchBing(query, { limit: Math.min(limit || 5, 10) });
   return JSON.stringify(
@@ -177,7 +201,8 @@ async function executeSearchWeb({ query, limit = 5 }) {
 }
 
 async function executeCrawlWeb({ url, maxChars = 8000 }) {
-  const res = await fetch(url, {
+  const safeUrl = assertSafeUrl(url).toString();
+  const res = await fetch(safeUrl, {
     headers: {
       'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -201,7 +226,7 @@ async function executeCrawlWeb({ url, maxChars = 8000 }) {
     .replace(/\s+/g, ' ')
     .trim();
   const truncated = text.slice(0, maxChars);
-  return JSON.stringify({ url, length: truncated.length, content: truncated });
+  return JSON.stringify({ url: safeUrl, length: truncated.length, content: truncated });
 }
 
 async function executeSearchDocs({ query }, docs) {
@@ -261,12 +286,13 @@ async function executeEndpointInfo({ path }, docs) {
 }
 
 async function executeFetch({ url, method = 'GET', headers = {}, body }) {
+  const safeUrl = assertSafeUrl(url).toString();
   const opts = { method: method.toUpperCase(), headers: { 'user-agent': 'Mozilla/5.0', ...headers } };
   if (body && ['POST', 'PUT', 'PATCH'].includes(opts.method)) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = typeof body === 'string' ? body : JSON.stringify(body);
   }
-  const res = await fetch(url, { ...opts, signal: AbortSignal.timeout(15000) });
+  const res = await fetch(safeUrl, { ...opts, signal: AbortSignal.timeout(15000) });
   const text = await res.text();
   let data;
   try {
