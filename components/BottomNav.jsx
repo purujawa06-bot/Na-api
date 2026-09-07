@@ -11,13 +11,14 @@ const BottomNav = () => {
     const navLinks = [
         { name: 'Home', href: '/', icon: 'fa-home' },
         { name: 'Docs', href: '/docs', icon: 'fa-book-open' },
+        { name: 'Puru AI', href: '/puru-ai', icon: 'fa-bolt' },
         { name: 'Chat', href: '/chat', icon: 'fa-comments' },
         { name: 'Blog', href: '/blog', icon: 'fa-newspaper' },
         { name: 'Scripts', href: '/userscripts', icon: 'fa-cubes' },
     ];
 
     // Sembunyikan navigasi bawah pada halaman chat agar tampilan lebih luas/mirip aplikasi native
-    if (pathname === '/chat') return null;
+    if (pathname === '/chat' || pathname === '/puru-ai') return null;
 
     return (
         <>

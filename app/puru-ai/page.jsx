@@ -1,17 +1,48 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 /* ═══════════════════════════════════════════════════════════════
-   Puru AI — Chat with AI that can search web & know PuruBoy API
+   Puru AI — Chat dengan AI + Tools
+   
+   Agentic loop SEPENUHNYA di sisi client:
+   - Panggil /api/chat/completions dengan stream: true + tools
+   - Jika AI meminta tool call → eksekusi via /api/tools/execute
+   - Kirim hasil tool kembali ke AI → ulangi sampai AI berhenti
+     mengirim function calling (maks 50 iterasi)
+   - History dibatasi maks 10 entry chat user agar hemat token
    ═══════════════════════════════════════════════════════════════ */
 
-const API_URL = '/api/puru-ai';
+const API_URL = '/api/chat/completions';
+const TOOL_EXEC_URL = '/api/tools/execute';
 const STORAGE_KEY = 'puru-ai-history';
-const MAX_HISTORY = 50;
+const MAX_LOOPS = 50;
+const MAX_USER_HISTORY = 10;
+
+const SYSTEM_PROMPT = `You are Puru AI — an intelligent assistant built on the PuruBoy API platform.
+
+You have access to tools that let you search the web, crawl web pages, and query the PuruBoy API documentation.
+
+## Capabilities
+- **search_web**: Search the internet via Bing for general knowledge, news, facts
+- **crawl_web**: Fetch and read content from any URL
+- **search_docs**: Search through PuruBoy API documentation
+- **endpoint_info**: Get detailed info about a specific API endpoint (path must start with /api/)
+- **fetch**: Make HTTP requests to any URL (useful for testing APIs)
+
+## Guidelines
+- For questions about PuruBoy API, always search docs first using search_docs or endpoint_info
+- For general knowledge questions, use search_web
+- If a user asks about a specific API endpoint, use endpoint_info to get the full specification
+- When showing API examples, include the full fetch() code
+- Answer in the language the user uses (Indonesian/English)
+- Be concise but thorough
+- Use markdown formatting for readability (code blocks, lists, bold, etc.)
+- If a tool fails, explain the error and try an alternative approach
+- You can call multiple tools in sequence to gather all needed information`;
 
 const SUGGESTIONS = [
   { icon: '🔍', text: 'Apa itu PuruBoy API?' },
@@ -224,21 +255,36 @@ function MessageBubble({ msg }) {
         >
           {isUser ? (
             <p className="whitespace-pre-wrap">{msg.content}</p>
-          ) : msg.content ? (
-            <div className="prose-dark">
-              <MarkdownContent content={msg.content} />
-            </div>
-          ) : msg.streaming ? (
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          ) : null}
+          ) : (
+            <>
+              {/* Reasoning (collapsible) */}
+              {msg.reasoning && (
+                <details className="mb-2 text-[12px] bg-[#141517] border border-[#2a2b30] rounded-lg px-3 py-2">
+                  <summary className="cursor-pointer select-none flex items-center gap-2 font-medium text-[#71717a]">
+                    <i className="fas fa-brain text-[10px] text-[#a78bfa]" />
+                    Thinking
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap text-[#a1a1aa] leading-relaxed">{msg.reasoning}</p>
+                </details>
+              )}
 
-          {/* Streaming cursor */}
-          {msg.streaming && msg.content && (
-            <span className="inline-block w-0.5 h-4 bg-[#a78bfa] ml-0.5 animate-pulse align-middle" />
+              {msg.content ? (
+                <div className="prose-dark">
+                  <MarkdownContent content={msg.content} />
+                </div>
+              ) : msg.streaming ? (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-[#a78bfa] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              ) : null}
+
+              {/* Streaming cursor */}
+              {msg.streaming && msg.content && (
+                <span className="inline-block w-0.5 h-4 bg-[#a78bfa] ml-0.5 animate-pulse align-middle" />
+              )}
+            </>
           )}
         </div>
 
@@ -255,6 +301,121 @@ function MessageBubble({ msg }) {
   );
 }
 
+/* ══════════════════════ Helpers ══════════════════════ */
+
+function safeParseArgs(args) {
+  if (typeof args === 'object' && args !== null) return args;
+  try { return JSON.parse(args || '{}'); } catch { return {}; }
+}
+
+/** Batasi history API ke maks MAX_USER_HISTORY entry chat user. */
+function limitUserHistory(msgs) {
+  const userIdx = [];
+  msgs.forEach((m, i) => { if (m.role === 'user') userIdx.push(i); });
+  if (userIdx.length <= MAX_USER_HISTORY) return msgs;
+  return msgs.slice(userIdx[userIdx.length - MAX_USER_HISTORY]);
+}
+
+/**
+ * Streaming satu langkah agent via /api/chat/completions (SSE OpenAI).
+ * Mengembalikan { text, reasoning, toolCalls, finishReason }.
+ */
+async function streamChatCompletion({ messages, tools, signal, onDelta }) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'auto', stream: true, messages, tools }),
+    signal,
+  });
+
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      msg = j?.error?.message || msg;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let text = '';
+  let reasoning = '';
+  const toolCalls = [];
+  let finishReason = 'stop';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const parts = buf.split('\n\n');
+    buf = parts.pop();
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let json;
+      try { json = JSON.parse(payload); } catch { continue; }
+      if (json.error) throw new Error(json.error.message || 'Stream error');
+      const choice = json.choices?.[0];
+      if (!choice) continue;
+      if (choice.finish_reason) finishReason = choice.finish_reason;
+      const delta = choice.delta || {};
+
+      if (delta.reasoning_content) {
+        const r = delta.reasoning_content;
+        // Abaikan keep-alive palsu dari server saat fallback provider
+        if (!r.startsWith('[menunggu respons provider')) {
+          reasoning += r;
+          onDelta?.({ type: 'reasoning', content: r });
+        }
+      }
+      if (delta.content) {
+        text += delta.content;
+        onDelta?.({ type: 'text', content: delta.content });
+      }
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          if (!toolCalls[idx]) toolCalls[idx] = { id: '', name: '', arguments: '' };
+          if (tc.id) toolCalls[idx].id = tc.id;
+          if (tc.function?.name) toolCalls[idx].name += tc.function.name;
+          if (tc.function?.arguments) toolCalls[idx].arguments += tc.function.arguments;
+        }
+      }
+    }
+  }
+
+  return {
+    text,
+    reasoning,
+    finishReason,
+    toolCalls: toolCalls.filter(Boolean).map((tc) => ({
+      id: tc.id || `call_${Math.random().toString(36).slice(2)}`,
+      name: tc.name,
+      arguments: tc.arguments,
+    })),
+  };
+}
+
+/** Eksekusi satu tool call via /api/tools/execute. */
+async function executeToolClient(tool) {
+  const args = safeParseArgs(tool.arguments);
+  const res = await fetch(TOOL_EXEC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: tool.name, args }),
+  });
+  let j;
+  try { j = await res.json(); } catch { j = {}; }
+  if (!res.ok || !j.success) {
+    return JSON.stringify({ error: j?.error || `Tool ${tool.name} gagal dieksekusi` });
+  }
+  return j.result;
+}
+
 /* ══════════════════════ Main Page ══════════════════════ */
 
 export default function PuruAIPage() {
@@ -262,9 +423,118 @@ export default function PuruAIPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [docsSummary, setDocsSummary] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
+  const loadingRef = useRef(false);
+
+  // Ambil ringkasan docs.json agar tool search_docs tahu daftar endpoint
+  useEffect(() => {
+    fetch('/docs.json')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && typeof data === 'object') {
+          const lines = Object.entries(data).map(([cat, eps]) => {
+            const list = (Array.isArray(eps) ? eps : [])
+              .map((e) => `  • ${e.method} ${e.path} — ${e.title || ''}`)
+              .join('\n');
+            return `[${cat}]\n${list}`;
+          });
+          setDocsSummary(lines.join('\n\n'));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Tool definitions (search_docs memuat daftar endpoint dari docs.json)
+  const TOOLS = useMemo(() => {
+    const categories = docsSummary
+      .split('\n\n')
+      .map((l) => l.replace(/^\[|\]$/g, ''))
+      .filter(Boolean);
+    const searchDocsDesc = docsSummary
+      ? `Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Kategori tersedia: ${categories.join(', ')}.\n\nDaftar endpoint:\n${docsSummary}\n\nCari berdasarkan kata kunci (judul, path, atau deskripsi).`
+      : 'Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Cari berdasarkan kata kunci (judul, path, atau deskripsi endpoint).';
+
+    return [
+      {
+        type: 'function',
+        function: {
+          name: 'search_web',
+          description: 'Cari informasi di internet via Bing. Gunakan untuk pertanyaan umum, berita, fakta terkini, atau topik yang tidak terkait PuruBoy API.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Kata kunci pencarian' },
+              limit: { type: 'number', description: 'Jumlah hasil (default 5, maks 10)' },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'crawl_web',
+          description: 'Ambil dan ekstrak teks dari sebuah URL. Berguna untuk membaca artikel, dokumentasi, atau halaman web tertentu.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'URL halaman web yang ingin dibaca' },
+              maxChars: { type: 'number', description: 'Maks karakter yang diambil (default 8000)' },
+            },
+            required: ['url'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'search_docs',
+          description: searchDocsDesc,
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Kata kunci pencarian (judul, path, atau deskripsi endpoint)' },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'endpoint_info',
+          description: 'Ambil informasi lengkap satu endpoint: method, path, params, example. Path harus diawali /api/',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Path endpoint, contoh: /api/search/duckduckgo' },
+            },
+            required: ['path'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'fetch',
+          description: 'Fetch URL apapun dengan method HTTP apapun. Berguna untuk testing API endpoint atau mengambil data dari URL tertentu.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'URL yang akan di-fetch' },
+              method: { type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE). Default GET.' },
+              headers: { type: 'object', description: 'HTTP headers (opsional)' },
+              body: { description: 'Request body untuk POST/PUT (opsional, string atau object)' },
+            },
+            required: ['url'],
+          },
+        },
+      },
+    ];
+  }, [docsSummary]);
 
   // Load history
   useEffect(() => {
@@ -277,11 +547,11 @@ export default function PuruAIPage() {
     } catch { /* ignore */ }
   }, []);
 
-  // Save history
+  // Save history (dibatasi 10 user entry)
   const saveHistory = useCallback((msgs) => {
     try {
-      const toSave = msgs.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-MAX_HISTORY * 2);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+      const conv = msgs.filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(limitUserHistory(conv)));
     } catch { /* ignore */ }
   }, []);
 
@@ -293,7 +563,7 @@ export default function PuruAIPage() {
   }, [messages]);
 
   const sendMessage = useCallback(async (text) => {
-    if (!text.trim() || loading) return;
+    if (!text.trim() || loadingRef.current) return;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
     const assistantMsg = {
       role: 'assistant',
@@ -301,124 +571,145 @@ export default function PuruAIPage() {
       id: Date.now() + 1,
       toolCalls: [],
       streaming: true,
-      reasoning: null,
+      reasoning: '',
     };
 
     const updated = [...messages, userMsg, assistantMsg];
     setMessages(updated);
     setInput('');
     setLoading(true);
+    loadingRef.current = true;
 
-    // Build conversation for API (only user/assistant pairs, not internals)
-    const apiMessages = [...messages, userMsg]
-      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
-      .map((m) => ({ role: m.role, content: m.content }));
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    // Konteks API: system prompt + history user/assistant (maks 10 user entry)
+    const apiMessages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...limitUserHistory(
+        [...messages, userMsg]
+          .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
+          .map((m) => ({ role: m.role, content: m.content })),
+      ),
+    ];
+
+    const updateAssistant = (patch) => {
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = { ...copy[copy.length - 1], ...patch };
+        copy[copy.length - 1] = last;
+        return copy;
+      });
+    };
+
+    let loopCount = 0;
+    let fullText = '';
+    let fullReasoning = '';
+    const allToolCalls = [];
 
     try {
-      abortRef.current = new AbortController();
+      while (loopCount < MAX_LOOPS) {
+        loopCount += 1;
+        let iterationText = '';
+        let iterationReasoning = '';
 
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, model: 'auto' }),
-        signal: abortRef.current.signal,
-      });
+        const result = await streamChatCompletion({
+          messages: apiMessages,
+          tools: TOOLS,
+          signal: abort.signal,
+          onDelta: (d) => {
+            if (d.type === 'text') {
+              iterationText += d.content;
+              updateAssistant({ content: fullText + iterationText, streaming: true });
+            } else if (d.type === 'reasoning') {
+              iterationReasoning += d.content;
+              updateAssistant({ reasoning: fullReasoning + iterationReasoning });
+            }
+          },
+        });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = '';
-      let currentText = '';
-      let currentTools = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop();
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let event;
-          try {
-            event = JSON.parse(line);
-          } catch {
-            continue;
-          }
-
-          switch (event.type) {
-            case 'text':
-              currentText += event.content;
-              setMessages((prev) => {
-                const last = { ...prev[prev.length - 1] };
-                last.content = currentText;
-                last.streaming = true;
-                return [...prev.slice(0, -1), last];
-              });
-              break;
-
-            case 'thinking':
-              setMessages((prev) => {
-                const last = { ...prev[prev.length - 1] };
-                last.reasoning = event.content;
-                return [...prev.slice(0, -1), last];
-              });
-              break;
-
-            case 'tools_done':
-              currentTools = event.tools || [];
-              setMessages((prev) => {
-                const last = { ...prev[prev.length - 1] };
-                last.toolCalls = currentTools.map((t) => ({
-                  ...t,
-                  status: 'done',
-                }));
-                return [...prev.slice(0, -1), last];
-              });
-              break;
-
-            case 'error':
-              setMessages((prev) => {
-                const last = { ...prev[prev.length - 1] };
-                last.content = `⚠️ Error: ${event.message}`;
-                last.streaming = false;
-                return [...prev.slice(0, -1), last];
-              });
-              break;
-
-            case 'done':
-              setMessages((prev) => {
-                const last = { ...prev[prev.length - 1] };
-                last.streaming = false;
-                last.model = event.model;
-                return [...prev.slice(0, -1), last];
-              });
-              break;
-          }
+        // Akumulasi teks & reasoning dari iterasi ini
+        if (iterationText) {
+          fullText = fullText ? `${fullText}\n\n${iterationText}` : iterationText;
         }
+        if (iterationReasoning) {
+          fullReasoning = fullReasoning ? `${fullReasoning}\n\n${iterationReasoning}` : iterationReasoning;
+        }
+        updateAssistant({ content: fullText, reasoning: fullReasoning, streaming: true });
+
+        // Tidak ada function calling → loop selesai
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          break;
+        }
+
+        // Append pesan assistant dengan tool_calls ke konteks API
+        apiMessages.push({
+          role: 'assistant',
+          content: iterationText || null,
+          tool_calls: result.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        });
+
+        // Eksekusi semua tool calls
+        for (const tc of result.toolCalls) {
+          const card = { id: tc.id, name: tc.name, args: safeParseArgs(tc.arguments), status: 'running' };
+          allToolCalls.push(card);
+          updateAssistant({ toolCalls: [...allToolCalls] });
+
+          let output;
+          try {
+            output = await executeToolClient(tc);
+          } catch (e) {
+            output = JSON.stringify({ error: e.message || 'Tool execution failed' });
+          }
+
+          card.result = output;
+          card.status = 'done';
+          updateAssistant({ toolCalls: [...allToolCalls] });
+
+          apiMessages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.name,
+            content: output,
+          });
+        }
+      }
+
+      if (loopCount >= MAX_LOOPS) {
+        updateAssistant({
+          content: `${fullText || ''}\n\n> ⚠️ **Loop mencapai batas maksimal (${MAX_LOOPS} iterasi).** Mungkin pertanyaan terlalu kompleks — coba pecah menjadi lebih spesifik.`,
+          streaming: false,
+        });
+      } else {
+        updateAssistant({ content: fullText, streaming: false });
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages((prev) => {
-          const last = { ...prev[prev.length - 1] };
-          last.content = `⚠️ Gagal menghubungi server: ${err.message}`;
-          last.streaming = false;
-          return [...prev.slice(0, -1), last];
+        updateAssistant({
+          content: `⚠️ Gagal menghubungi server: ${err.message}`,
+          streaming: false,
         });
+      } else {
+        updateAssistant({ streaming: false });
       }
     } finally {
       setMessages((prev) => {
-        const last = { ...prev[prev.length - 1] };
-        if (last) last.streaming = false;
-        saveHistory(prev);
-        return prev;
+        const copy = [...prev];
+        const last = { ...copy[copy.length - 1] };
+        last.streaming = false;
+        copy[copy.length - 1] = last;
+        saveHistory(copy);
+        return copy;
       });
       setLoading(false);
+      loadingRef.current = false;
       abortRef.current = null;
     }
-  }, [messages, loading, saveHistory]);
+  }, [messages, saveHistory, TOOLS]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -427,6 +718,10 @@ export default function PuruAIPage() {
 
   const handleSuggestion = (text) => {
     sendMessage(text);
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
   };
 
   const handleClear = () => {
@@ -469,6 +764,15 @@ export default function PuruAIPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {loading && (
+            <button
+              onClick={handleStop}
+              className="text-[#ef4444] hover:bg-[#1a1b1f] transition-colors p-2 rounded-lg"
+              title="Stop"
+            >
+              <i className="fas fa-stop text-sm" />
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               onClick={handleClear}

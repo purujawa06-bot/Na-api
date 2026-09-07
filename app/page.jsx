@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getDocsSpec } from '../lib/docsService';
@@ -23,7 +23,7 @@ const Hero = () => (
         <div className="mb-4 relative z-20">
             <div className="inline-block relative">
                 <span className="text-[11px] bg-accent/10 text-accent border border-accent/20 px-3 py-1 rounded-full font-bold uppercase tracking-widest">
-                    ðŸš€ Free & Open REST API
+                    <i class="fas fa-rocket mr-1.5"></i> Free & Open REST API
                 </span>
                 <span className="absolute -top-1 -right-2 w-3 h-3 bg-green-400 rounded-full border-2 border-[#09090b] animate-pulse z-10"></span>
             </div>
