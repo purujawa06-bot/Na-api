@@ -42,10 +42,8 @@ const SIZES = ['1:1', '16:9', '9:16', 'auto'];
 const JOB_PREFIX = 't2i-';
 
 // Base URL publik untuk memanggil worker (dari sisi proxy HF Space).
-// Default pakai env SERVER_BASE / VERCEL_URL, fallback ke domain produksi.
+// Selalu hardcode production URL — preview deployment diproteksi Vercel Auth.
 function getPublicBase() {
-  if (process.env.SERVER_BASE) return process.env.SERVER_BASE.replace(/\/$/, '');
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return 'https://puruboy-api.vercel.app';
 }
 
