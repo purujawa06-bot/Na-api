@@ -12,8 +12,8 @@
  * @method POST
  * @path /api/text2image
  * @param {string} body.prompt - Deskripsi gambar (wajib).
- * @param {string} [body.size='1:1'] - Rasio aspek (1:1, 16:9, 9:16, auto).
- * @param {number} [body.num_images=1] - Jumlah gambar (1–4).
+ * @param {string} [body.size] - Rasio aspek (1:1, 16:9, 9:16, auto). Default: '1:1'.
+ * @param {number} [body.num_images] - Jumlah gambar (1–4). Default: 1.
  * @response SSE stream
  * @example
  * const res = await fetch('/api/text2image', {
