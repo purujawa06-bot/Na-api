@@ -19,7 +19,7 @@
  * const res = await fetch('/api/text2image', {
  *   method: 'POST',
  *   headers: { 'Content-Type': 'application/json' },
- *   body: JSON.stringify({ prompt: 'fox in snowy forest', size: '1:1' })
+ *   body: JSON.stringify({ prompt: 'fox in snowy forest', size: '1:1', num_images: 1 })
  * });
  * const reader = res.body.getReader();
  * const decoder = new TextDecoder();
