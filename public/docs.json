@@ -3,7 +3,7 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via prompt-injection middleware (@ai-sdk-tool/parser, protokol\n              UI-TARS XML; body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via MorphXML protocol (XML element per tool, via @ai-sdk-tool/parser;\n              body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).\n              Bukan untuk tugas coding kompleks.\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
@@ -323,11 +323,11 @@
     {
       "title": "AI Text-to-Image (Vheer)",
       "summary": "Generate gambar dari teks (model gratis Flux), tanpa login.",
-      "description": "Membuat gambar dari prompt teks via layanan vheer.com\r              (reverse-engineered, pure-HTTP). Hanya menyediakan model\r              gratis `flux_dev` (tanpa perlu akun/kredit). Menjalankan\r              moderasi konten otomatis. Respon berupa streaming JSON\r              (JSON Lines — satu objek per baris) setiap 2 detik agar\r              koneksi tetap hidup sampai gambar selesai.",
+      "description": "Membuat gambar dari prompt teks via layanan vheer.com\n              (reverse-engineered, pure-HTTP). Menjalankan moderasi konten\n              otomatis. Proses generasi bisa memakan waktu > 60 detik,\n              sehingga di-offload ke Background HTTP Job proxy\n              (https://nirkyy-a.hf.space/) agar tidak kena timeout\n              serverless Vercel.\n\n              Alur:\n              1. POST /api/text2image -> langsung balas 202 + job_id\n              2. GET /api/text2image/{job_id} -> cek status sampai selesai",
       "method": "POST",
       "path": "/api/text2image",
       "responseType": "json",
-      "example": "Membuat gambar (streaming JSON)\r fetch('https://puruboy-api.vercel.app/api/text2image', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         prompt: 'seekor rubah merah di hutan salju',\r         size: '1:1',\r         num_images: 1\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         let buf = '';\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             buf += dec.decode(value);\r             const lines = buf.split('\\n');\r             buf = lines.pop();\r             for (const line of lines) {\r                 if (!line.trim()) continue;\r                 const obj = JSON.parse(line);\r                 console.log(obj.event, obj.status || '', obj.images || '');\r             }\r         }\r     })();\r });",
+      "example": "Membuat gambar (async)\n fetch('https://puruboy-api.vercel.app/api/text2image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ prompt: 'seekor rubah merah di hutan salju', size: '1:1', num_images: 1 })\n }).then(res => res.json()).then(console.log);\n // => { success: true, job_id: 't2i-xxxx', status_url: '/api/text2image/xxxx' }",
       "params": [
         {
           "name": "prompt",
@@ -1238,11 +1238,11 @@
     {
       "title": "Web Search (Bing)",
       "summary": "Cari di Bing tanpa API key.",
-      "description": "Mencari di mesin pencari Bing tanpa API key. Menggunakan\n              scraping HTML Bing yang reliable dari serverless/Vercel.\n              Retry 3x dengan backoff eksponensial jika terkena rate-limit.\n              Respons berupa streaming JSON (JSON Lines) dengan event\n              'processing' sebagai keep-alive, diakhiri event 'done'.",
+      "description": "Mencari di mesin pencari Bing tanpa API key. Menggunakan\n              scraping HTML Bing yang reliable dari serverless/Vercel.\n              Retry 3x dengan backoff eksponensial jika terkena rate-limit.\n              Respons berupa JSON biasa (bukan SSE/streaming).",
       "method": "GET",
       "path": "/api/search/duckduckgo",
       "responseType": "json",
-      "example": "fetch('https://nexta-api.vercel.app/api/search/duckduckgo?q=nodejs+tutorial&limit=5')",
+      "example": "fetch('https://nexta-api.vercel.app/api/search/duckduckgo?q=nodejs+tutorial&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
       "params": [
         {
           "name": "q",
@@ -1324,11 +1324,11 @@
     {
       "title": "Yahoo Search",
       "summary": "Cari di Yahoo (id.search.yahoo.com) dengan cookie jar & retry 5x.",
-      "description": "Mencari di mesin pencari Yahoo tanpa browser. Memakai cookie\r              jar sesi + retry hingga 5x agar lolos challenge anti-bot,\r              lalu mengembalikan judul, URL, dan snippet. Respons berupa\r              streaming JSON (JSON Lines — satu objek per baris) dengan\r              event 'processing' tiap ~2 detik sebagai keep-alive saat\r              pencarian berlangsung, diakhiri event 'done'.",
+      "description": "Mencari di mesin pencari Yahoo tanpa browser. Memakai cookie\n              jar sesi + retry hingga 5x agar lolos challenge anti-bot,\n              lalu mengembalikan judul, URL, dan snippet. Respons berupa\n              JSON biasa (bukan SSE/streaming).",
       "method": "GET",
       "path": "/api/search/yahoo",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/search/yahoo?q=nodejs+tutorial&limit=5')\r     .then(res => {\r         const reader = res.body.getReader();\r         const dec = new TextDecoder();\r         let buf = '';\r         (async () => {\r             while (true) {\r                 const { done, value } = await reader.read();\r                 if (done) break;\r                 buf += dec.decode(value);\r                 const lines = buf.split('\\n');\r                 buf = lines.pop();\r                 for (const line of lines) {\r                     if (!line.trim()) continue;\r                     console.log(JSON.parse(line));\r                 }\r             }\r         })();\r     });",
+      "example": "fetch('https://puruboy-api.vercel.app/api/search/yahoo?q=nodejs+tutorial&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
       "params": [
         {
           "name": "q",
@@ -1349,6 +1349,50 @@
           "in": "query",
           "type": "number",
           "description": "Jumlah hasil maks (default 10, maks 20).",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "text2image": [
+    {
+      "title": "Text-to-Image Status",
+      "summary": "Cek status job generasi gambar.",
+      "description": "Polling status job text-to-image yang dibuat via\n              POST /api/text2image. Selama job masih diproses akan\n              mengembalikan { status: 'processing' }. Setelah selesai\n              mengembalikan { status: 'success', images: [...] }.\n              Job tersimpan ±1 jam di proxy.",
+      "method": "GET",
+      "path": "/api/text2image/{job_id}",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/text2image/t2i-xxxx')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": []
+    },
+    {
+      "title": "Text-to-Image Worker (internal)",
+      "summary": "Endpoint internal yang menjalankan polling vheer sampai selesai.",
+      "description": "JANGAN dipanggil publik. Hanya dipanggil oleh Background HTTP\n              Job proxy (https://nirkyy-a.hf.space/) agar proses generasi\n              gambar (bisa > 60 detik) tidak kena timeout serverless Vercel.\n              Wajib menyertakan header `Authorization: Bearer <PURUBOY_ADMIN_KEY>`.",
+      "method": "POST",
+      "path": "/api/text2image/worker",
+      "responseType": "json",
+      "example": "Internal (dipanggil proxy, jangan dipakai publik)\n fetch('https://puruboy-api.vercel.app/api/text2image/worker', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer <PURUBOY_ADMIN_KEY>' },\n     body: JSON.stringify({ prompt: 'seekor rubah merah di hutan salju', size: '1:1', num_images: 1 })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "prompt",
+          "in": "body",
+          "type": "string",
+          "description": "Deskripsi gambar (wajib).",
+          "required": true
+        },
+        {
+          "name": "size",
+          "in": "body",
+          "type": "string",
+          "description": "Rasio aspek (1:1, 16:9, 9:16, auto).",
+          "required": false
+        },
+        {
+          "name": "num_images",
+          "in": "body",
+          "type": "number",
+          "description": "Jumlah gambar (default 1, maks 4).",
           "required": false
         }
       ]
@@ -1426,6 +1470,31 @@
           "in": "body",
           "type": "number",
           "description": "Faktor skala (2, 3, atau 4). Default 2.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "Puru AI Tools Executor",
+      "summary": "Eksekusi satu tool untuk agent loop client-side Puru AI.",
+      "description": "Endpoint yang mengeksekusi satu tool (search_web, crawl_web,\n              search_docs, endpoint_info, fetch) dan mengembalikan hasilnya\n              sebagai JSON. Dipakai oleh halaman /puru-ai untuk menjalankan\n              agentic loop di sisi client (streaming via /api/chat/completions).",
+      "method": "POST",
+      "path": "/api/tools/execute",
+      "responseType": "json",
+      "example": "fetch('/api/tools/execute', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         name: 'search_web',\n         args: { query: 'nodejs tutorial', limit: 5 }\n     })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "name",
+          "in": "body",
+          "type": "string",
+          "description": "Nama tool: search_web | crawl_web | search_docs | endpoint_info | fetch",
+          "required": true
+        },
+        {
+          "name": "args",
+          "in": "body",
+          "type": "object",
+          "description": "Argumen tool sesuai definisi",
           "required": false
         }
       ]
