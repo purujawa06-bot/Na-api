@@ -74,7 +74,7 @@ export async function POST(req) {
   const enc = new TextEncoder();
   const read = new ReadableStream({
     async start(controller) {
-      const emit = (obj) => controller.enqueue(enc.encode(JSON.stringify(obj) + '\n'));
+      const emit = (obj) => controller.enqueue(enc.encode('data: ' + JSON.stringify(obj) + '\n\n'));
       const heartbeat = setInterval(() => emit({ event: 'processing', status: 'running' }), 2000);
 
       try {
@@ -102,6 +102,6 @@ export async function POST(req) {
   });
 
   return new Response(read, {
-    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+    headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
   });
 }

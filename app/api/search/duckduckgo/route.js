@@ -4,23 +4,22 @@
  * @description Mencari di mesin pencari Bing tanpa API key. Menggunakan
  *              scraping HTML Bing yang reliable dari serverless/Vercel.
  *              Retry 3x dengan backoff eksponensial jika terkena rate-limit.
- *              Respons berupa streaming JSON (JSON Lines) dengan event
- *              'processing' sebagai keep-alive, diakhiri event 'done'.
+ *              Respons berupa JSON biasa (bukan SSE/streaming).
  * @method GET
  * @path /api/search/duckduckgo
  * @param {string} query.q - Kata kunci pencarian (wajib).
  * @param {number} [query.limit] - Jumlah hasil maks (default 10, maks 20).
- * @response stream
+ * @response json
  * @example
  * fetch('https://nexta-api.vercel.app/api/search/duckduckgo?q=nodejs+tutorial&limit=5')
+ *     .then(res => res.json())
+ *     .then(data => console.log(data));
  */
 import { searchBing } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-
-const KEEPALIVE_MS = 2000;
 
 function parseQuery(searchParams) {
   const q = searchParams.get('q');
@@ -34,36 +33,12 @@ function parseQuery(searchParams) {
   return { params: { q: q.trim(), limit } };
 }
 
-function stream(task) {
-  const enc = new TextEncoder();
-  const read = new ReadableStream({
-    async start(controller) {
-      const send = (obj) => controller.enqueue(enc.encode(JSON.stringify(obj) + '\n'));
-
-      let last = Date.now();
-      const heartbeat = setInterval(() => {
-        if (Date.now() - last >= KEEPALIVE_MS) {
-          last = Date.now();
-          send({ event: 'processing', status: 'running' });
-        }
-      }, KEEPALIVE_MS);
-
-      try {
-        const result = await task((o) => send({ event: 'processing', ...o }));
-        send({ event: 'done', success: true, status: 'success', ...result });
-      } catch (err) {
-        const status = err?.status === 400 ? 400 : 502;
-        send({ event: 'done', success: false, status: 'error', error: err.message, httpStatus: status });
-      } finally {
-        clearInterval(heartbeat);
-        controller.close();
-      }
-    },
+async function runSearch(params) {
+  const result = await searchBing(params.q, {
+    limit: params.limit,
+    onRetry: () => {}, // retry tetap jalan, tanpa streaming progress
   });
-
-  return new Response(read, {
-    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
-  });
+  return Response.json({ success: true, status: 'success', ...result });
 }
 
 export async function GET(req) {
@@ -72,13 +47,12 @@ export async function GET(req) {
   if (parsed.error) {
     return Response.json(parsed.error, { status: parsed.status });
   }
-  const { params } = parsed;
-  return stream((emit) =>
-    searchBing(params.q, {
-      limit: params.limit,
-      onRetry: ({ attempt }) => emit({ attempt, progress: true }),
-    })
-  );
+  try {
+    return await runSearch(parsed.params);
+  } catch (err) {
+    const status = err?.status === 400 ? 400 : 502;
+    return Response.json({ success: false, status: 'error', error: err.message, httpStatus: status }, { status });
+  }
 }
 
 export async function POST(req) {
@@ -95,11 +69,10 @@ export async function POST(req) {
   if (parsed.error) {
     return Response.json(parsed.error, { status: parsed.status });
   }
-  const { params } = parsed;
-  return stream((emit) =>
-    searchBing(params.q, {
-      limit: params.limit,
-      onRetry: ({ attempt }) => emit({ attempt, progress: true }),
-    })
-  );
+  try {
+    return await runSearch(parsed.params);
+  } catch (err) {
+    const status = err?.status === 400 ? 400 : 502;
+    return Response.json({ success: false, status: 'error', error: err.message, httpStatus: status }, { status });
+  }
 }
