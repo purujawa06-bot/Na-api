@@ -22,7 +22,7 @@ import { reportError } from '../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const TMPFILES_UPLOAD = 'https://tmpfiles.org/api/v1/upload';
 

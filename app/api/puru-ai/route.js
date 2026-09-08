@@ -50,7 +50,7 @@ import { runAgenticStep } from '../../../lib/agent-step.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 // ──────────────────── Load Docs ────────────────────
 

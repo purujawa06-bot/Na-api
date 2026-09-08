@@ -40,9 +40,9 @@ export const metadata = {
     type: 'website',
     images: [
       {
-        url: 'https://puruboy-api.vercel.app/og',
-        width: 1200,
-        height: 630,
+        url: 'https://puruboy-api.vercel.app/puruboy-ch.jpg',
+        width: 1280,
+        height: 1253,
         alt: 'PuruBoy API - Platform REST API Gratis Indonesia',
       },
     ],
@@ -52,7 +52,7 @@ export const metadata = {
     title: 'PuruBoy API - Platform REST API & Tools AI Gratis',
     description: 'Platform REST API gratis untuk developer Indonesia dengan fitur AI, Downloader, Anime, dan Tools.',
     creator: '@puruboy',
-    images: ['https://puruboy-api.vercel.app/og'],
+    images: ['https://puruboy-api.vercel.app/puruboy-ch.jpg'],
   },
   robots: {
     index: true,

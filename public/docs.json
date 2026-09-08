@@ -321,51 +321,33 @@
       ]
     },
     {
-      "title": "AI Text-to-Image (Vheer)",
-      "summary": "Generate gambar dari teks (model gratis Flux), tanpa login.",
-      "description": "Membuat gambar dari prompt teks via layanan vheer.com\n              (reverse-engineered, pure-HTTP). Menjalankan moderasi konten\n              otomatis. Proses generasi bisa memakan waktu > 60 detik,\n              sehingga di-offload ke Background HTTP Job proxy\n              (https://nirkyy-a.hf.space/) agar tidak kena timeout\n              serverless Vercel.\n\n              Alur:\n              1. POST /api/text2image -> langsung balas 202 + job_id\n              2. GET /api/text2image/{job_id} -> cek status sampai selesai",
+      "title": "AI Text-to-Image (Vheer) — SSE Stream",
+      "summary": "Generate gambar dari teks via vheer.com, result di-stream via SSE.",
+      "description": "POST /api/text2image mengembalikan text/event-stream (SSE).\n              Client menerima event_progress (status steps) lalu event_done\n              atau event_error di akhir.\n\n              Dengan `export const maxDuration`, timeout Vercel bisa diatur\n              lebih dari 60s (tergantung plan: Pro max 300s, Enterprise max 900s).",
       "method": "POST",
       "path": "/api/text2image",
       "responseType": "json",
-      "example": "Membuat gambar (async)\n fetch('https://puruboy-api.vercel.app/api/text2image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ prompt: 'seekor rubah merah di hutan salju', size: '1:1', num_images: 1 })\n }).then(res => res.json()).then(console.log);\n // => { success: true, job_id: 't2i-xxxx', status_url: '/api/text2image/xxxx' }",
+      "example": "const res = await fetch('/api/text2image', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ prompt: 'fox in snowy forest', size: '1:1', num_images: 1 })\n });\n const reader = res.body.getReader();\n const decoder = new TextDecoder();\n while (true) {\n   const { done, value } = await reader.read();\n   if (done) break;\n   console.log(decoder.decode(value));\n }",
       "params": [
         {
           "name": "prompt",
           "in": "body",
           "type": "string",
-          "description": "Deskripsi gambar yang ingin dibuat (wajib).",
+          "description": "Deskripsi gambar (wajib).",
           "required": true
         },
         {
           "name": "size",
           "in": "body",
           "type": "string",
-          "description": "Rasio aspek gambar.",
-          "required": false,
-          "choices": [
-            {
-              "value": "1:1",
-              "label": "Persegi (Default)"
-            },
-            {
-              "value": "16:9",
-              "label": "Landscape"
-            },
-            {
-              "value": "9:16",
-              "label": "Portrait"
-            },
-            {
-              "value": "auto",
-              "label": "Menyesuaikan prompt"
-            }
-          ]
+          "description": "Rasio aspek (1:1, 16:9, 9:16, auto). Default: '1:1'.",
+          "required": false
         },
         {
           "name": "num_images",
           "in": "body",
           "type": "number",
-          "description": "Jumlah gambar (default 1, maks 4).",
+          "description": "Jumlah gambar (1–4). Default: 1.",
           "required": false
         }
       ]
@@ -1349,50 +1331,6 @@
           "in": "query",
           "type": "number",
           "description": "Jumlah hasil maks (default 10, maks 20).",
-          "required": false
-        }
-      ]
-    }
-  ],
-  "text2image": [
-    {
-      "title": "Text-to-Image Status",
-      "summary": "Cek status job generasi gambar.",
-      "description": "Polling status job text-to-image yang dibuat via\n              POST /api/text2image. Selama job masih diproses akan\n              mengembalikan { status: 'processing' }. Setelah selesai\n              mengembalikan { status: 'success', images: [...] }.\n              Job tersimpan ±1 jam di proxy.",
-      "method": "GET",
-      "path": "/api/text2image/{job_id}",
-      "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/text2image/t2i-xxxx')\n     .then(res => res.json())\n     .then(console.log);",
-      "params": []
-    },
-    {
-      "title": "Text-to-Image Worker (internal)",
-      "summary": "Endpoint internal yang menjalankan polling vheer sampai selesai.",
-      "description": "JANGAN dipanggil publik. Hanya dipanggil oleh Background HTTP\n              Job proxy (https://nirkyy-a.hf.space/) agar proses generasi\n              gambar (bisa > 60 detik) tidak kena timeout serverless Vercel.\n              Wajib menyertakan header `Authorization: Bearer <PURUBOY_ADMIN_KEY>`.",
-      "method": "POST",
-      "path": "/api/text2image/worker",
-      "responseType": "json",
-      "example": "Internal (dipanggil proxy, jangan dipakai publik)\n fetch('https://puruboy-api.vercel.app/api/text2image/worker', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer <PURUBOY_ADMIN_KEY>' },\n     body: JSON.stringify({ prompt: 'seekor rubah merah di hutan salju', size: '1:1', num_images: 1 })\n }).then(res => res.json()).then(console.log);",
-      "params": [
-        {
-          "name": "prompt",
-          "in": "body",
-          "type": "string",
-          "description": "Deskripsi gambar (wajib).",
-          "required": true
-        },
-        {
-          "name": "size",
-          "in": "body",
-          "type": "string",
-          "description": "Rasio aspek (1:1, 16:9, 9:16, auto).",
-          "required": false
-        },
-        {
-          "name": "num_images",
-          "in": "body",
-          "type": "number",
-          "description": "Jumlah gambar (default 1, maks 4).",
           "required": false
         }
       ]
