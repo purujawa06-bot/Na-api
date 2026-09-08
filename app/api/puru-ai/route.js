@@ -350,6 +350,14 @@ You have access to tools that let you search the web, crawl web pages, and query
   let stepsLeft = maxSteps;
 
   while (stepsLeft-- > 0) {
+    // ─── GUARD: Inject stop hint at 75% of max steps ───
+    if (stepsLeft === Math.floor(maxSteps * 0.25) - 1) {
+      messages.push({
+        role: 'user',
+        content: '[GUARD] Sudah banyak melakukan Iteration. Berhenti segera dan berikan jawaban final berdasarkan semua informasi yang sudah dikumpulkan. JANGAN panggil tool lagi.',
+      });
+    }
+
     const { message: msg, model: usedModel } = await runAgenticStep({ model, messages, tools });
 
     // If no tool calls, return final text

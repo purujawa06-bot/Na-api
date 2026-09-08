@@ -5,7 +5,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { buildOpenAITools, getToolMeta } from '../../lib/puru-ai-tools';
-import { pruneMessages, pruneForAPI } from '../../lib/puru-ai-prune';
+import { pruneMessages } from '../../lib/puru-ai-prune';
 
 /* ═══════════════════════════════════════════════════════════════
    Puru AI — Chat dengan AI + Tools (Client-side Agentic Loop)
@@ -643,17 +643,13 @@ export default function PuruAIPage() {
     const abort = new AbortController();
     abortRef.current = abort;
 
-    // Build API messages dengan pruning
+    // Build API messages — NO pruning during loop (preserves tool context)
+    // Pruning only happens on saveHistory (after loop finishes)
     const apiMessages = [
       { role: 'system', content: SYSTEM_PROMPT },
-      ...pruneForAPI(
-        pruneMessages(
-          [...messages, userMsg]
-            .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
-            .map((m) => ({ role: m.role, content: m.content })),
-          { maxUserMessages: 10, keepRecent: 3 },
-        ),
-      ),
+      ...[...messages, userMsg]
+        .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
+        .map((m) => ({ role: m.role, content: m.content })),
     ];
 
     let loopCount = 0;
@@ -664,6 +660,15 @@ export default function PuruAIPage() {
     try {
       while (loopCount < MAX_LOOPS) {
         loopCount += 1;
+
+        // ─── GUARD: Inject stop hint at iteration 10 ───
+        if (loopCount === 10) {
+          apiMessages.push({
+            role: 'user',
+            content: '[GUARD] Sudah banyak melakukan Iteration. Berhenti segera dan berikan jawaban final berdasarkan semua informasi yang sudah dikumpulkan. JANGAN panggil tool lagi.',
+          });
+        }
+
         let iterationText = '';
         let iterationReasoning = '';
 
