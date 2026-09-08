@@ -5,9 +5,8 @@
  *              Client menerima event_progress (status steps) lalu event_done
  *              atau event_error di akhir.
  *
- *              ⚠️ Vercel timeout max 60s. Jika generasi lebih lama dari itu,
- *              koneksi akan terputus. Pertimbangkan upgrade atau gunakan
- *              worker terpisah untuk production.
+ *              Dengan `export const maxDuration`, timeout Vercel bisa diatur
+ *              lebih dari 60s (tergantung plan: Pro max 300s, Enterprise max 900s).
  *
  * @method POST
  * @path /api/text2image
@@ -34,7 +33,7 @@ import { reportError } from '../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const SIZES = ['1:1', '16:9', '9:16', 'auto'];
 
@@ -83,7 +82,7 @@ export async function POST(req) {
           prompt,
           aspectRatio: size,
           numImages,
-          maxWaitMs: 55000, // slightly under 60s Vercel timeout
+          maxWaitMs: 115000, // slightly under 120s maxDuration
           onProgress: (event, data) => {
             send('progress', { event, ...data });
           },
