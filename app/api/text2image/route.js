@@ -33,7 +33,7 @@ import { reportError } from '../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const SIZES = ['1:1', '16:9', '9:16', 'auto'];
 
@@ -82,7 +82,6 @@ export async function POST(req) {
           prompt,
           aspectRatio: size,
           numImages,
-          maxWaitMs: 115000, // slightly under 120s maxDuration
           onProgress: (event, data) => {
             send('progress', { event, ...data });
           },
