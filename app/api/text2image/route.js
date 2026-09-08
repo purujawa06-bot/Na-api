@@ -76,13 +76,20 @@ export async function POST(req) {
   const workerUrl = `${getPublicBase()}/api/text2image/worker`;
   const workerSecret = process.env.PURUBOY_ADMIN_KEY || '';
 
+  // Build headers for worker — skip Authorization if secret is empty
+  // (Python httpx rejects "Bearer " with empty token as illegal header value).
+  const workerHeaders = { 'content-type': 'application/json' };
+  if (workerSecret) {
+    workerHeaders.authorization = `Bearer ${workerSecret}`;
+  }
+
   try {
     // Jalankan worker di background via proxy. Worker yang melakukan polling
     // vheer sampai selesai (bisa > 60 detik) — di luar timeout Vercel.
     await createProxyJob(jobId, {
       method: 'post',
       targetUrl: workerUrl,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${workerSecret}` },
+      headers: workerHeaders,
       body: { prompt, size, num_images: numImages },
     });
 
