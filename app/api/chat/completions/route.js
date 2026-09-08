@@ -4,7 +4,7 @@
  * @description Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.
  *              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,
  *              FUNCTION CALLING (body.tools) untuk semua model — tool calls
- *              diemulasi via Hermes protocol (JSON dalam XML tags, via @ai-sdk-tool/parser;
+ *              diemulasi via MorphXML protocol (XML element per tool, via @ai-sdk-tool/parser;
  *              body.tool_choice diabaikan),
  *              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).
  *              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).
@@ -21,7 +21,7 @@
  *        @choice true - Ya (Streaming)
  *        @choice false - Tidak (JSON Default)
  * @param {array} [body.tools] - Definisi fungsi format OpenAI [{type:"function", function:{name, description, parameters}}].
- *                               Diemulasi via Hermes protocol (prompt-injection, JSON dalam XML tags).
+ *                               Diemulasi via MorphXML protocol (XML element per function call).
  *                               Cocok untuk tugas sederhana (pencarian, fetch, cuaca, translate, dll).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
  * fetch('https://puruboy-api.vercel.app/api/chat/completions', {
@@ -142,14 +142,14 @@ export async function POST(req) {
 
   const aiTools = toAiTools(body.tools ?? []);
   // body.tool_choice sengaja diabaikan: format & pemaksaan murni lewat
-  // injeksi bawaan middleware parser (@ai-sdk-tool/parser, Hermes protocol).
+  // injeksi bawaan middleware parser (@ai-sdk-tool/parser, MorphXML protocol).
   const { instructions, messages: modelMessages } = splitPrompt(messages);
   // meta.used diisi adapter auto dengan ID model aktual yang menjawab
   const meta = {};
   // Urutan fallback mode 'auto' dari settings admin (cache 60s; DB opsional ->
   // tanpa DB dipakai urutan default gemini-3.6-flash -> gemini-1.5-flash).
   const autoChain = model === 'auto' ? await settingsService.getAutoChain() : undefined;
-  const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain });
+  const lm = buildModel(model, { tools: aiTools, meta, chain: autoChain, protocol: 'morphxml' });
 
   // ---------- STREAMING ----------
   if (stream) {
@@ -327,7 +327,7 @@ export async function GET() {
     endpoint: '/api/chat/completions',
     compatible: 'OpenAI Chat Completions API',
     models: ALL_MODEL_IDS,
-    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (hermes protocol — cocok untuk tugas sederhana)'],
+    features: ['multi-turn', 'streaming-sse', 'reasoning_content', 'function-calling (morphxml protocol — cocok untuk tugas sederhana)'],
     usage: {
       method: 'POST',
       body: {
@@ -339,6 +339,6 @@ export async function GET() {
       },
       curl: `curl -X POST http://localhost:8080/api/chat/completions -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"halo"}]}'`,
     },
-    note: 'Function calling diemulasi via prompt injection (Hermes protocol — JSON dalam XML tags). Cocok untuk tugas sederhana seperti pencarian, fetch, cuaca, translate. Bukan untuk coding kompleks.',
+    note: 'Function calling diemulasi via prompt injection (MorphXML protocol — XML element per function call). Cocok untuk tugas sederhana seperti pencarian, fetch, cuaca, translate. Bukan untuk coding kompleks.',
   });
 }
