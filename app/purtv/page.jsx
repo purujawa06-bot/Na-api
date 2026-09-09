@@ -187,6 +187,7 @@ const FeaturedSlider = ({ items, onClick }) => {
 const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
   const [detail, setDetail] = useState(null);
   const [seriesSynopsis, setSeriesSynopsis] = useState(null);
+  const [seriesPoster, setSeriesPoster] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [playerSrc, setPlayerSrc] = useState(null);
@@ -218,6 +219,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
     setLoading(true);
     setError(null);
     setDetail(null);
+    setSeriesPoster(null);
     setPlayerSrc(null);
     setActiveServer(null);
     setPlayerError(null);
@@ -232,9 +234,9 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
             const first = d.streamingLinks.find((x) => x.post && x.nume) || d.streamingLinks[0];
             if (first?.post) resolvePlayer(first, d.episodeSlug);
           }
-          if (!d.synopsis && d.seriesUrl) {
+          if (d.seriesUrl && (!d.thumbnail || !d.synopsis)) {
             fetchJson(`${API}/series?url=${encodeURIComponent(d.seriesUrl)}`)
-              .then((sd) => { if (active) setSeriesSynopsis(sd.synopsis || null); })
+              .then((sd) => { if (active) { if (!d.synopsis) setSeriesSynopsis(sd.synopsis || null); if (!d.thumbnail) setSeriesPoster(sd.poster || null); } })
               .catch(() => {});
           }
         }
@@ -256,6 +258,37 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
         </div>
       </div>
 
+
+      {/* Header thumbnail (donghua/anime) */}
+      {(detail && !loading && (detail.thumbnail || seriesPoster)) && (
+        <div className="native-card overflow-hidden mb-4">
+          <div className="flex gap-3 p-3">
+            <div className="relative w-24 h-32 rounded-xl overflow-hidden bg-input flex-shrink-0">
+              <Image
+                src={detail.thumbnail || seriesPoster}
+                alt={detail.title || episode.title}
+                fill
+                sizes="96px"
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <h3 className="text-sm font-bold text-primary leading-snug mb-1">{detail.title || episode.title}</h3>
+              {detail.series && (
+                <div className="text-[11px] text-accent font-semibold truncate mb-1">
+                  <i className="fas fa-tv text-[9px] mr-1"></i>{detail.series}
+                </div>
+              )}
+              {detail.episode && (
+                <span className="text-[9px] font-bold bg-accent/15 text-accent px-2 py-0.5 rounded-full self-start">
+                  Episode {detail.episode}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sinopsis (anime/donghua) */}
       {(detail && !loading && (detail.synopsis || seriesSynopsis)) && (
