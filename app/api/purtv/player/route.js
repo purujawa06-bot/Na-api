@@ -11,6 +11,10 @@
  * @param {string} [query.type=SCHTML] - data-type
  * @param {string} [query.slug] - slug episode (untuk Referer)
  * @response json
+ * @example
+ * fetch('https://puruboy-api.vercel.app/api/purtv/player?post=12345&nume=1&type=schtml&slug=one-piece-episode-1000')
+ *     .then(res => res.json())
+ *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
 
