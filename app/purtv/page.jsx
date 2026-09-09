@@ -192,10 +192,12 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
   const [playerSrc, setPlayerSrc] = useState(null);
   const [playerLoading, setPlayerLoading] = useState(false);
   const [activeServer, setActiveServer] = useState(null);
+  const [playerError, setPlayerError] = useState(null);
 
   const resolvePlayer = useCallback(async (server, slug) => {
     if (!server?.post || !server?.nume) return;
     setPlayerLoading(true);
+    setPlayerError(null);
     setActiveServer(server);
     try {
       const qs = new URLSearchParams({ post: server.post, nume: server.nume, type: server.type || 'schtml', slug: slug || '' });
@@ -205,6 +207,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
       else throw new Error(j.error || 'Gagal memuat player');
     } catch (e) {
       console.error('player error', e);
+      setPlayerError(e.message || 'Gagal memuat player');
     } finally {
       setPlayerLoading(false);
     }
@@ -217,6 +220,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
     setDetail(null);
     setPlayerSrc(null);
     setActiveServer(null);
+    setPlayerError(null);
     fetchJson(`${API}/detail?url=${encodeURIComponent(episode.url)}`)
       .then((d) => {
         if (active) {
@@ -286,7 +290,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
       {detail && !loading && (
         <>
           {/* Player */}
-          {(playerSrc || detail.defaultIframe) && (
+          {(playerSrc || detail.defaultIframe || playerLoading || playerError || (detail.streamingLinks || []).some((x) => x.post && x.nume)) && (
             <div className="native-card overflow-hidden mb-4">
               <div className="relative w-full aspect-video bg-black">
                 {playerLoading && (
@@ -294,29 +298,47 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
                     <i className="fas fa-spinner fa-spin text-accent text-xl"></i>
                   </div>
                 )}
-                <iframe
-                  key={playerSrc || detail.defaultIframe}
-                  src={playerSrc || detail.defaultIframe}
-                  title={episode.title}
-                  className="absolute inset-0 w-full h-full"
-                  allowFullScreen
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-                  referrerPolicy="no-referrer"
-                />
+                {(playerSrc || detail.defaultIframe) ? (
+                  <iframe
+                    key={playerSrc || detail.defaultIframe}
+                    src={playerSrc || detail.defaultIframe}
+                    title={episode.title}
+                    className="absolute inset-0 w-full h-full"
+                    allowFullScreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : !playerLoading && playerError ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                    <i className="fas fa-exclamation-triangle text-amber-400 text-xl"></i>
+                    <p className="text-[11px] text-secondary">{playerError}</p>
+                    <button
+                      onClick={() => {
+                        const srv = activeServer || (detail.streamingLinks || []).find((x) => x.post && x.nume);
+                        if (srv) resolvePlayer(srv, detail.episodeSlug);
+                      }}
+                      className="text-[11px] bg-accent text-white font-bold px-4 py-2 rounded-xl active:scale-95 transition-all"
+                    >
+                      <i className="fas fa-redo mr-1"></i> Coba Lagi
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div className="p-3 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-muted font-semibold uppercase tracking-wider">
                   <i className="fas fa-tv mr-1 text-accent"></i> {activeServer ? activeServer.server || `Server ${activeServer.index}` : 'Player Default'}
                 </span>
-                <a
-                  href={playerSrc || detail.defaultIframe}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] bg-input border border-default text-secondary hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
-                >
-                  <i className="fas fa-external-link-alt mr-1"></i> Buka di Tab Baru
-                </a>
+                {(playerSrc || detail.defaultIframe) && (
+                  <a
+                    href={playerSrc || detail.defaultIframe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] bg-input border border-default text-secondary hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
+                  >
+                    <i className="fas fa-external-link-alt mr-1"></i> Buka di Tab Baru
+                  </a>
+                )}
               </div>
             </div>
           )}

@@ -42,15 +42,20 @@ async function fetchPlayer({ post, nume, type, slug }) {
   let res = await fetch(url, { method: 'POST', headers, body: body.toString(), redirect: 'follow' }).catch(() => null);
   let text = res ? await res.text().catch(() => '') : '';
 
-  // If blocked by Cloudflare, try via proxy (GET proxy with POST emulation not ideal, but try)
+  // If blocked by Cloudflare, forward the SAME POST via proxy
+  // (proxy /api/fetch meneruskan method+body+headers, terbukti mengembalikan iframe).
   if (!res || res.status === 403 || /Just a moment|challenge-error-text/.test(text)) {
-    // Try proxy as GET with query params (some proxies support it)
     try {
       const proxyUrl = `${CF_PROXY}?get=${encodeURIComponent(url)}`;
-      const proxyRes = await fetch(proxyUrl, { headers: { 'user-agent': UA } });
+      const proxyRes = await fetch(proxyUrl, {
+        method: 'POST',
+        headers,
+        body: body.toString(),
+        redirect: 'follow',
+      });
       if (proxyRes.ok) {
         const proxyText = await proxyRes.text();
-        if (!/Just a moment/.test(proxyText)) {
+        if (proxyText && !/Just a moment|challenge-error-text/.test(proxyText)) {
           text = proxyText;
           res = proxyRes;
         }
