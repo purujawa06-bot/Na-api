@@ -11,7 +11,7 @@ export const metadata = {
     keywords: ['PuruBoy API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'PuruBoy'],
     openGraph: {
         title: 'PuruBoy API - REST API Gratis Indonesia',
-        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools Ã¢â‚¬â€ semua gratis!',
+        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
         url: 'https://puruboy-api.vercel.app',
         siteName: 'PuruBoy API',
         type: 'website',
@@ -92,7 +92,7 @@ const ChannelPromo = () => (
             <div className="absolute bottom-0 left-0 right-0 p-5">
                 <div className="flex items-center gap-2 mb-2">
                     <span className="bg-[#24A1DE] text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                        Ã¢Å“â€œ Official
+                        ✔ Official
                     </span>
                     <span className="text-gray-300 text-[10px] font-medium flex items-center gap-1">
                         <i className="fas fa-users"></i> Community Channel
@@ -223,7 +223,7 @@ export default async function HomePage() {
                                 {contributor.login}
                             </span>
                             <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-mono border border-accent/20">
-                                {contributor.contributions}Ã¢Å“Â¦
+                                {contributor.contributions}✦
                             </span>
                         </a>
                     ))}

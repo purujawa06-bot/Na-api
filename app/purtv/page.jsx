@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 
 /* ============================================================
-   PurTV Ã¢â‚¬â€ Nonton Donghua & Anime (anichin.cafe + samehadaku)
+   PurTV — Nonton Donghua & Anime (anichin.cafe + samehadaku)
    Data: /api/purtv/* (home, list, genres, schedule, search,
          series, detail)
    ============================================================ */

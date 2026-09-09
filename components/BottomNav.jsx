@@ -18,7 +18,7 @@ const BottomNav = () => {
     ];
 
     // Sembunyikan navigasi bawah pada halaman chat agar tampilan lebih luas/mirip aplikasi native
-    if (pathname === '/chat' || pathname === '/puru-ai') return null;
+    if (pathname === '/chat' || pathname === '/puru-ai' || pathname === '/purtv') return null;
 
     return (
         <>
