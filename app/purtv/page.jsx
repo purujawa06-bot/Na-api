@@ -28,7 +28,7 @@ async function fetchJson(path) {
 /* ---------- Skeleton ---------- */
 const CardSkeleton = () => (
   <div className="native-card overflow-hidden animate-pulse">
-    <div className="aspect-[3/4] bg-input"></div>
+    <div className="w-full aspect-[3/4] bg-input"></div>
     <div className="p-3 space-y-2">
       <div className="h-3 bg-input rounded w-3/4"></div>
       <div className="h-2.5 bg-input rounded w-1/2"></div>
@@ -56,7 +56,7 @@ const MediaCard = ({ item, onClick, showType = false }) => {
       onClick={() => onClick(item)}
       className="native-card overflow-hidden text-left group hover:border-accent/40 transition-all active:scale-95 flex flex-col h-full"
     >
-      <div className="relative aspect-[3/4] w-full bg-input overflow-hidden flex-shrink-0">
+      <div className="relative w-full aspect-[3/4] bg-input overflow-hidden flex-shrink-0">
         {item.thumbnail ? (
           <Image
             src={item.thumbnail}
@@ -135,7 +135,7 @@ const SectionRow = ({ title, icon, items, onClick, horizontal = true }) => {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-fr">
           {items.map((item, i) => (
             <MediaCard key={i} item={item} onClick={onClick} showType />
           ))}
