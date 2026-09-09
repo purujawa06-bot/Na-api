@@ -8,8 +8,8 @@ import { usePathname } from 'next/navigation';
 export default function Footer() {
     const pathname = usePathname();
 
-    // Sembunyikan footer di halaman chat, docs, dan support
-    if (pathname === '/chat' || pathname.startsWith('/docs') || pathname === '/support') return null;
+    // Sembunyikan footer di halaman chat, docs, support, dan purtv
+    if (pathname === '/chat' || pathname.startsWith('/docs') || pathname === '/support' || pathname.startsWith('/purtv')) return null;
 
     return (
         <footer className="mt-12 border-t border-default pt-8 pb-28 px-4">

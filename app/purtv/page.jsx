@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 /* ============================================================
    PurTV — Nonton Donghua & Anime (anichin.cafe + samehadaku)
@@ -792,16 +793,22 @@ export default function PurTVPage() {
     <div ref={scrollRef} className="pb-6">
       {/* Header */}
       <div className="mb-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
-            <i className="fas fa-tv text-white text-sm"></i>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
+              <i className="fas fa-tv text-white text-sm"></i>
+            </div>
+            <div>
+              <h1 className="text-lg font-extrabold text-primary tracking-tight">
+                Pur<span className="gradient-text">TV</span>
+              </h1>
+              <p className="text-[10px] text-muted font-medium">Nonton Donghua & Anime Sub Indo</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-extrabold text-primary tracking-tight">
-              Pur<span className="gradient-text">TV</span>
-            </h1>
-            <p className="text-[10px] text-muted font-medium">Nonton Donghua & Anime Sub Indo</p>
-          </div>
+          <Link href="/docs" className="flex items-center gap-1.5 text-[11px] font-bold bg-card border border-default text-secondary hover:text-white hover:border-accent/40 px-3 py-2 rounded-xl transition-all active:scale-95 flex-shrink-0">
+            <i className="fas fa-arrow-left text-[9px]"></i>
+            Docs
+          </Link>
         </div>
 
         {/* Search */}
