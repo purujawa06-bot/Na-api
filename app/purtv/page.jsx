@@ -54,9 +54,9 @@ const MediaCard = ({ item, onClick, showType = false }) => {
   return (
     <button
       onClick={() => onClick(item)}
-      className="native-card overflow-hidden text-left group hover:border-accent/40 transition-all active:scale-95 flex flex-col"
+      className="native-card overflow-hidden text-left group hover:border-accent/40 transition-all active:scale-95 flex flex-col h-full"
     >
-      <div className="relative aspect-[3/4] bg-input overflow-hidden">
+      <div className="relative aspect-[3/4] w-full bg-input overflow-hidden flex-shrink-0">
         {item.thumbnail ? (
           <Image
             src={item.thumbnail}
@@ -102,8 +102,8 @@ const MediaCard = ({ item, onClick, showType = false }) => {
           )}
         </div>
       </div>
-      <div className="p-2.5 flex-1">
-        <div className="text-[11px] font-bold text-primary leading-snug line-clamp-2 group-hover:text-accent transition-colors">
+      <div className="p-2.5 flex-1 flex flex-col">
+        <div className="text-[11px] font-bold text-primary leading-snug line-clamp-2 group-hover:text-accent transition-colors min-h-[32px]">
           {title}
         </div>
         {rating && (
@@ -189,16 +189,45 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
   const [seriesSynopsis, setSeriesSynopsis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [playerSrc, setPlayerSrc] = useState(null);
+  const [playerLoading, setPlayerLoading] = useState(false);
+  const [activeServer, setActiveServer] = useState(null);
+
+  const resolvePlayer = useCallback(async (server, slug) => {
+    if (!server?.post || !server?.nume) return;
+    setPlayerLoading(true);
+    setActiveServer(server);
+    try {
+      const qs = new URLSearchParams({ post: server.post, nume: server.nume, type: server.type || 'schtml', slug: slug || '' });
+      const r = await fetch(`${API}/player?${qs.toString()}`);
+      const j = await r.json();
+      if (j.success && j.iframe) setPlayerSrc(j.iframe);
+      else throw new Error(j.error || 'Gagal memuat player');
+    } catch (e) {
+      console.error('player error', e);
+    } finally {
+      setPlayerLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
     setDetail(null);
+    setPlayerSrc(null);
+    setActiveServer(null);
     fetchJson(`${API}/detail?url=${encodeURIComponent(episode.url)}`)
       .then((d) => {
         if (active) {
           setDetail(d);
+          // Auto-load player: donghua uses defaultIframe, anime uses first server via /player
+          if (d.defaultIframe) {
+            setPlayerSrc(d.defaultIframe);
+          } else if (d.episodeSlug && d.streamingLinks && d.streamingLinks.length > 0) {
+            const first = d.streamingLinks.find((x) => x.post && x.nume) || d.streamingLinks[0];
+            if (first?.post) resolvePlayer(first, d.episodeSlug);
+          }
           if (!d.synopsis && d.seriesUrl) {
             fetchJson(`${API}/series?url=${encodeURIComponent(d.seriesUrl)}`)
               .then((sd) => { if (active) setSeriesSynopsis(sd.synopsis || null); })
@@ -257,23 +286,31 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
       {detail && !loading && (
         <>
           {/* Player */}
-          {detail.defaultIframe && (
+          {(playerSrc || detail.defaultIframe) && (
             <div className="native-card overflow-hidden mb-4">
               <div className="relative w-full aspect-video bg-black">
+                {playerLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                    <i className="fas fa-spinner fa-spin text-accent text-xl"></i>
+                  </div>
+                )}
                 <iframe
-                  src={detail.defaultIframe}
+                  key={playerSrc || detail.defaultIframe}
+                  src={playerSrc || detail.defaultIframe}
                   title={episode.title}
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                  referrerPolicy="no-referrer"
                 />
               </div>
               <div className="p-3 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-muted font-semibold uppercase tracking-wider">
-                  <i className="fas fa-tv mr-1 text-accent"></i> Player Default
+                  <i className="fas fa-tv mr-1 text-accent"></i> {activeServer ? activeServer.server || `Server ${activeServer.index}` : 'Player Default'}
                 </span>
                 <a
-                  href={detail.defaultIframe}
+                  href={playerSrc || detail.defaultIframe}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] bg-input border border-default text-secondary hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
@@ -291,36 +328,28 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
                 <i className="fas fa-server text-accent text-[10px]"></i> Server Streaming
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                {detail.streamingLinks.map((s, i) => {
-                  return s.url ? (
-                    <a
-                      key={i}
-                      href={s.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="native-card p-3 flex items-center gap-2 hover:border-accent/40 transition-all active:scale-95 group"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
-                        <i className="fas fa-play text-[10px]"></i>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-primary truncate">{s.server || `Server ${s.index}`}</div>
-                        <div className="text-[9px] text-muted">#{s.index}</div>
-                      </div>
-                    </a>
-                  ) : (
+                {detail.streamingLinks.map((srv, i) => {
+                  const isActive = activeServer && (activeServer.post === srv.post && activeServer.nume === srv.nume) || (!activeServer && i === 0 && !srv.url && srv.post);
+                  const hasDirectUrl = !!srv.url;
+                  const hasPlayer = !!srv.post && !!srv.nume;
+                  return (
                     <button
                       key={i}
-                      onClick={() => window.open(episode.url, '_blank')}
-                      className="native-card p-3 flex items-center gap-2 hover:border-accent/40 transition-all active:scale-95 group text-left"
+                      onClick={() => {
+                        if (hasDirectUrl) { setPlayerSrc(srv.url); setActiveServer(srv); }
+                        else if (hasPlayer) resolvePlayer(srv, detail.episodeSlug);
+                        else window.open(episode.url, '_blank');
+                      }}
+                      className={`native-card p-3 flex items-center gap-2 transition-all active:scale-95 group text-left w-full ${isActive ? 'border-accent/60 bg-accent/5' : 'hover:border-accent/40'}`}
                     >
-                      <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'bg-accent text-white' : 'bg-accent/10 text-accent'}`}>
                         <i className="fas fa-play text-[10px]"></i>
                       </div>
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-primary truncate">{s.server || `Server ${s.index}`}</div>
-                        <div className="text-[9px] text-muted">Buka di tab baru</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-bold text-primary truncate">{srv.server || `Server ${srv.index || i+1}`}</div>
+                        <div className="text-[9px] text-muted">{hasDirectUrl ? 'Direct' : hasPlayer ? `#${srv.nume} ${srv.type || ''}`.trim() : 'Buka di tab baru'}</div>
                       </div>
+                      {isActive && <i className="fas fa-check text-accent text-[10px]"></i>}
                     </button>
                   );
                 })}
@@ -740,12 +769,12 @@ export default function PurTVPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 overflow-x-auto custom-scrollbar pb-1 -mx-1 px-1 snap-x snap-mandatory">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => switchTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex-shrink-0 snap-start whitespace-nowrap ${
               tab === t.id
                 ? 'bg-accent text-white shadow-lg shadow-accent/25'
                 : 'bg-card border border-default text-muted hover:text-white'
@@ -783,9 +812,9 @@ export default function PurTVPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-fr">
                 {(searchData.results || []).map((item, i) => (
-                  <MediaCard key={i} item={item} onClick={handleOpenItem} showType />
+                  <div key={i} className="h-full"><MediaCard key={i} item={item} onClick={handleOpenItem} showType /></div>
                 ))}
               </div>
               {searchData.hasNext && (
@@ -907,9 +936,9 @@ export default function PurTVPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-fr">
                 {visibleResults.map((item, i) => (
-                  <MediaCard key={i} item={item} onClick={handleOpenItem} showType />
+                  <div key={i} className="h-full"><MediaCard key={i} item={item} onClick={handleOpenItem} showType /></div>
                 ))}
               </div>
 
