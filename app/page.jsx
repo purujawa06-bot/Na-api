@@ -11,7 +11,7 @@ export const metadata = {
     keywords: ['PuruBoy API', 'REST API Gratis Indonesia', 'API AI Indonesia', 'TikTok Downloader', 'YouTube Downloader API', 'Anime API', 'Developer API', 'PuruBoy'],
     openGraph: {
         title: 'PuruBoy API - REST API Gratis Indonesia',
-        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools â€” semua gratis!',
+        description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools Ã¢â‚¬â€ semua gratis!',
         url: 'https://puruboy-api.vercel.app',
         siteName: 'PuruBoy API',
         type: 'website',
@@ -92,7 +92,7 @@ const ChannelPromo = () => (
             <div className="absolute bottom-0 left-0 right-0 p-5">
                 <div className="flex items-center gap-2 mb-2">
                     <span className="bg-[#24A1DE] text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                        âœ“ Official
+                        Ã¢Å“â€œ Official
                     </span>
                     <span className="text-gray-300 text-[10px] font-medium flex items-center gap-1">
                         <i className="fas fa-users"></i> Community Channel
@@ -162,6 +162,7 @@ export default async function HomePage() {
                 <div className="grid grid-cols-2 gap-3">
                     {[
                         { href: '/puru-ai', icon: 'fa-bolt', label: 'Puru AI', desc: 'Chat AI + Search Web', color: 'from-violet-600 to-purple-700' },
+                        { href: '/purtv', icon: 'fa-tv', label: 'PurTV', desc: 'Nonton Donghua & Anime', color: 'from-rose-500 to-orange-500' },
                         { href: '/docs', icon: 'fa-book', label: 'Dokumentasi', desc: 'Lihat semua endpoint', color: 'from-pink-600 to-rose-600' },
                         { href: '/chat', icon: 'fa-comments', label: 'Chat Room', desc: 'Ngobrol realtime', color: 'from-blue-600 to-indigo-600' },
                         { href: '/blog', icon: 'fa-newspaper', label: 'Blog', desc: 'Update & berita', color: 'from-purple-600 to-violet-600' },
@@ -222,7 +223,7 @@ export default async function HomePage() {
                                 {contributor.login}
                             </span>
                             <span className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-mono border border-accent/20">
-                                {contributor.contributions}âœ¦
+                                {contributor.contributions}Ã¢Å“Â¦
                             </span>
                         </a>
                     ))}
