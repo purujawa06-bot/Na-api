@@ -186,6 +186,7 @@ const FeaturedSlider = ({ items, onClick }) => {
 /* ---------- Player / Episode Detail ---------- */
 const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
   const [detail, setDetail] = useState(null);
+  const [seriesSynopsis, setSeriesSynopsis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -195,7 +196,16 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
     setError(null);
     setDetail(null);
     fetchJson(`${API}/detail?url=${encodeURIComponent(episode.url)}`)
-      .then((d) => { if (active) setDetail(d); })
+      .then((d) => {
+        if (active) {
+          setDetail(d);
+          if (!d.synopsis && d.seriesUrl) {
+            fetchJson(`${API}/series?url=${encodeURIComponent(d.seriesUrl)}`)
+              .then((sd) => { if (active) setSeriesSynopsis(sd.synopsis || null); })
+              .catch(() => {});
+          }
+        }
+      })
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -212,6 +222,18 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
           <span className="text-[10px] text-muted">Detail Episode</span>
         </div>
       </div>
+
+
+      {/* Sinopsis (anime/donghua) */}
+      {(detail && !loading && (detail.synopsis || seriesSynopsis)) && (
+        <div className="native-card p-4 mb-4">
+          <h4 className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2 flex items-center gap-2">
+            <i className="fas fa-align-left text-accent text-[9px]"></i> Sinopsis
+          </h4>
+          <p className="text-xs text-secondary leading-relaxed">{detail.synopsis || seriesSynopsis}</p>
+        </div>
+      )}
+
 
       {loading && (
         <div className="native-card p-8 flex flex-col items-center gap-3 animate-pulse">
@@ -269,23 +291,39 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
                 <i className="fas fa-server text-accent text-[10px]"></i> Server Streaming
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                {detail.streamingLinks.map((s, i) => (
-                  <a
-                    key={i}
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="native-card p-3 flex items-center gap-2 hover:border-accent/40 transition-all active:scale-95 group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
-                      <i className="fas fa-play text-[10px]"></i>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-bold text-primary truncate">{s.server || `Server ${s.index}`}</div>
-                      <div className="text-[9px] text-muted">#{s.index}</div>
-                    </div>
-                  </a>
-                ))}
+                {detail.streamingLinks.map((s, i) => {
+                  return s.url ? (
+                    <a
+                      key={i}
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="native-card p-3 flex items-center gap-2 hover:border-accent/40 transition-all active:scale-95 group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
+                        <i className="fas fa-play text-[10px]"></i>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-primary truncate">{s.server || `Server ${s.index}`}</div>
+                        <div className="text-[9px] text-muted">#{s.index}</div>
+                      </div>
+                    </a>
+                  ) : (
+                    <button
+                      key={i}
+                      onClick={() => window.open(episode.url, '_blank')}
+                      className="native-card p-3 flex items-center gap-2 hover:border-accent/40 transition-all active:scale-95 group text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
+                        <i className="fas fa-play text-[10px]"></i>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-primary truncate">{s.server || `Server ${s.index}`}</div>
+                        <div className="text-[9px] text-muted">Buka di tab baru</div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -297,12 +335,29 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
                 <i className="fas fa-download text-accent text-[10px]"></i> Download
               </h3>
               <div className="space-y-2">
-                {detail.downloadLinks.map((d, i) => (
-                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="native-card p-3 flex items-center justify-between hover:border-accent/40 transition-all active:scale-95">
-                    <span className="text-[11px] font-semibold text-secondary truncate">{d.title || d.quality || `Link ${i + 1}`}</span>
-                    <i className="fas fa-download text-muted text-xs"></i>
-                  </a>
-                ))}
+                {detail.downloadLinks.map((d, i) => {
+                  const links = d.links && d.links.length ? d.links : (d.url ? [{ host: d.host || 'Link', url: d.url }] : []);
+                  const label = d.title || d.quality || (d.links && d.links[0]?.quality) || `Link ${i + 1}`;
+                  if (links.length === 0) return null;
+                  return (
+                    <div key={i} className="native-card p-3">
+                      <div className="text-[11px] font-bold text-primary mb-2">{label}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {links.map((l, j) => (
+                          <a
+                            key={j}
+                            href={l.url || l.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] bg-input border border-default text-secondary hover:text-white hover:border-accent/40 px-2.5 py-1 rounded-lg font-bold transition-colors"
+                          >
+                            <i className="fas fa-download text-[8px] mr-1"></i>{l.host || 'Download'}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -349,6 +404,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
 /* ---------- Series View (episodes) ---------- */
 const SeriesView = ({ series, onBack, onOpenEpisode }) => {
   const [episodes, setEpisodes] = useState([]);
+  const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -357,7 +413,7 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
     setLoading(true);
     setError(null);
     fetchJson(`${API}/series?url=${encodeURIComponent(series.url)}`)
-      .then((d) => { if (active) setEpisodes(d.episodes || []); })
+      .then((d) => { if (active) { setDetail(d); setEpisodes(d.episodes || []); } })
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -375,6 +431,64 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
         </div>
       </div>
 
+
+      {/* Info + Sinopsis */}
+      {detail && !loading && (
+        <div className="mb-4">
+          <div className="native-card overflow-hidden mb-3">
+            <div className="flex gap-3 p-3">
+              {detail.poster && (
+                <div className="relative w-24 h-32 rounded-xl overflow-hidden bg-input flex-shrink-0">
+                  <Image
+                    src={detail.poster}
+                    alt={detail.title || series.title}
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-primary mb-1">{detail.title || series.title}</h3>
+                {detail.rating && (
+                  <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold mb-1">
+                    <i className="fas fa-star text-[9px]"></i> {detail.rating}
+                  </div>
+                )}
+                {detail.genres && detail.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {detail.genres.map((g, i) => (
+                      <span key={i} className="text-[9px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">
+                        {typeof g === 'string' ? g : g.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {detail.info && Object.entries(detail.info).length > 0 && (
+                  <div className="space-y-0.5">
+                    {Object.entries(detail.info).map(([k, v]) => (
+                      <div key={k} className="text-[10px] text-muted">
+                        <span className="text-secondary font-bold">{k}:</span> {v}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          {detail.synopsis && (
+            <div className="native-card p-4 mb-3">
+              <h4 className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2 flex items-center gap-2">
+                <i className="fas fa-align-left text-accent text-[9px]"></i> Sinopsis
+              </h4>
+              <p className="text-xs text-secondary leading-relaxed">{detail.synopsis}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+
       {loading && (
         <div className="native-card p-8 flex flex-col items-center gap-3 animate-pulse">
           <div className="w-12 h-12 rounded-2xl bg-input flex items-center justify-center">
@@ -388,7 +502,7 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
         <div className="native-card p-6 text-center">
           <i className="fas fa-exclamation-triangle text-amber-400 text-2xl mb-2 block"></i>
           <p className="text-xs text-secondary mb-3">{error}</p>
-          <button onClick={() => setError(null) || fetchJson(`${API}/series?url=${encodeURIComponent(series.url)}`).then(d => setEpisodes(d.episodes || [])).catch(e => setError(e.message))} className="text-xs bg-accent text-white font-bold px-4 py-2 rounded-xl">
+          <button onClick={() => setError(null) || fetchJson(`${API}/series?url=${encodeURIComponent(series.url)}`).then(d => { setDetail(d); setEpisodes(d.episodes || []); }).catch(e => setError(e.message))} className="text-xs bg-accent text-white font-bold px-4 py-2 rounded-xl">
             Coba Lagi
           </button>
         </div>
