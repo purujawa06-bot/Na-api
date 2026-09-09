@@ -665,7 +665,7 @@ export default function PurTVPage() {
           ) : (searchData.results || []).length === 0 ? (
             <div className="native-card p-6 text-center">
               <i className="fas fa-search text-muted text-2xl mb-2 block"></i>
-              <p className="text-xs text-muted">Tidak ada hasil untuk "{searchQuery}".</p>
+              <p className="text-xs text-muted">Tidak ada hasil untuk &quot;{searchQuery}&quot;.</p>
             </div>
           ) : (
             <>
