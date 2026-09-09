@@ -238,7 +238,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [episode.url]);
+  }, [episode.url, resolvePlayer]);
 
   return (
     <div className="animate-fade-in">
