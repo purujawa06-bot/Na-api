@@ -1,54 +1,25 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { buildOpenAITools, getToolMeta } from '../../lib/puru-ai-tools';
+import { getToolMeta } from '../../lib/puru-ai-tools';
 import { pruneMessages } from '../../lib/puru-ai-prune';
 
 /* ═══════════════════════════════════════════════════════════════
-   Puru AI — Chat dengan AI + Tools (Client-side Agentic Loop)
-   
-   - Tool definitions: zod schemas via lib/puru-ai-tools.js
-   - Context pruning: lib/puru-ai-prune.js
-   - Loop: client → /api/chat/completions (SSE) → execute tools → repeat
-   - Max 50 iterasi, history dibatasi 10 user entry
+   Puru AI — Chat dengan AI + Tools (Server-side Agentic Loop)
+
+   - Loop: client → /api/puru-ai (SSE JSON-lines) → ToolLoopAgent server
+   - Server: potong history + pruneMessages sebelum turn, loop via
+     ToolLoopAgent sampai berhenti, kirim jawaban akhir
+   - Client: streaming event saja — TIDAK ada loop manual, guard,
+     forceStop, atau dedupe lagi
+   - History localStorage dibatasi 10 user entry (lib/puru-ai-prune.js)
    ═══════════════════════════════════════════════════════════════ */
 
-const API_URL = '/api/chat/completions';
-const TOOL_EXEC_URL = '/api/tools/execute';
+const PURU_AI_URL = '/api/puru-ai';
 const STORAGE_KEY = 'puru-ai-history';
-const MAX_LOOPS = 50;
-
-const SYSTEM_PROMPT = `You are Puru AI — an intelligent assistant built on the PuruBoy API platform.
-
-You have access to tools that let you search the web, crawl web pages, and query the PuruBoy API documentation.
-
-## Capabilities
-- **search_web**: Search the internet via Bing for general knowledge, news, facts
-- **crawl_web**: Fetch and read content from any URL
-- **search_docs**: Search through PuruBoy API documentation
-- **endpoint_info**: Get detailed info about a specific API endpoint (path must start with /api/)
-- **fetch**: Make HTTP requests to any URL (useful for testing APIs)
-
-## Guidelines
-- For questions about PuruBoy API, always search docs first using search_docs or endpoint_info
-- For general knowledge questions, use search_web
-- If a user asks about a specific API endpoint, use endpoint_info to get the full specification
-- When showing API examples, include the full fetch() code
-- **The fetch tool runs directly in the user's browser** — no server roundtrip, faster execution
-- Answer in the language the user uses (Indonesian/English)
-- Be concise but thorough
-- Use markdown formatting for readability (code blocks, lists, bold, etc.)
-- If a tool fails, explain the error and try an alternative approach — DO NOT retry the same tool call with the same arguments
-- You can call multiple tools in sequence to gather all needed information
-
-## IMPORTANT: Tool Usage Rules
-- When calling "fetch" tool, you MUST include the "url" parameter as a string. Example: fetch({ url: "https://example.com/api/data" }) or fetch({ url: "/api/endpoint" })
-- When calling "crawl_web" tool, you MUST include the "url" parameter as a string. Example: crawl_web({ url: "https://example.com/article" })
-- NEVER call fetch or crawl_web without the url parameter — it will fail
-- If you don't know the exact URL, use search_docs or endpoint_info first to find it`;
+const MAX_STEPS = 8;
 
 const SUGGESTIONS = [
   { icon: '🔍', text: 'Apa itu PuruBoy API?' },
@@ -342,27 +313,25 @@ const MessageBubble = React.memo(function MessageBubble({ msg }) {
 
 /* ══════════════════════ Helpers ══════════════════════ */
 
-function safeParseArgs(args) {
-  if (typeof args === 'object' && args !== null) return args;
-  try { return JSON.parse(args || '{}'); } catch { return {}; }
-}
-
 /**
- * Streaming satu langkah agent via /api/chat/completions (SSE OpenAI).
+ * Streaming dari /api/puru-ai (SSE JSON-lines, satu objek per baris).
+ * Server menjalankan ToolLoopAgent sampai berhenti lalu mengirim:
+ *   thinking → reasoning, tools/tools_done → tool calls,
+ *   text → potongan jawaban akhir, done → selesai, error → gagal.
  */
-async function streamChatCompletion({ messages, tools, signal, onDelta }) {
-  const res = await fetch(API_URL, {
+async function streamPuruAI({ messages, model = 'auto', maxSteps = MAX_STEPS, signal, onEvent }) {
+  const res = await fetch(PURU_AI_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'auto', stream: true, messages, tools }),
+    body: JSON.stringify({ model, messages, maxSteps }),
     signal,
   });
 
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
+    let msg = 'HTTP ' + res.status;
     try {
       const j = await res.json();
-      msg = j?.error?.message || msg;
+      msg = j?.error || msg;
     } catch { /* ignore */ }
     throw new Error(msg);
   }
@@ -370,147 +339,48 @@ async function streamChatCompletion({ messages, tools, signal, onDelta }) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
-  let text = '';
-  let reasoning = '';
+  let fullText = '';
+  let fullReasoning = '';
   const toolCalls = [];
-  let finishReason = 'stop';
+  let usedModel = model;
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buf += dec.decode(value, { stream: true });
-    const parts = buf.split('\n\n');
-    buf = parts.pop();
-    for (const part of parts) {
-      const trimmed = part.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
-      let json;
-      try { json = JSON.parse(payload); } catch { continue; }
-      if (json.error) throw new Error(json.error.message || 'Stream error');
-      const choice = json.choices?.[0];
-      if (!choice) continue;
-      if (choice.finish_reason) finishReason = choice.finish_reason;
-      const delta = choice.delta || {};
-
-      if (delta.reasoning_content) {
-        const r = delta.reasoning_content;
-        if (!r.startsWith('[menunggu respons provider')) {
-          reasoning += r;
-          onDelta?.({ type: 'reasoning', content: r });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let evt;
+      try { evt = JSON.parse(trimmed); } catch { continue; }
+      if (evt.type === 'thinking' && evt.content) {
+        fullReasoning += evt.content;
+        onEvent?.({ type: 'reasoning', content: evt.content });
+      } else if ((evt.type === 'tools' || evt.type === 'tools_done') && Array.isArray(evt.tools)) {
+        for (const t of evt.tools) {
+          toolCalls.push({
+            id: t.id || ('call_' + Math.random().toString(36).slice(2)),
+            name: t.name,
+            args: t.args || {},
+            result: t.result,
+            status: 'done',
+          });
         }
-      }
-      if (delta.content) {
-        text += delta.content;
-        onDelta?.({ type: 'text', content: delta.content });
-      }
-      if (delta.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          const idx = tc.index ?? 0;
-          if (!toolCalls[idx]) toolCalls[idx] = { id: '', name: '', arguments: '' };
-          if (tc.id) toolCalls[idx].id = tc.id;
-          // Set name sekali saja — jangan append (mencegah "fetchfetch" saat start duplikat)
-          if (tc.function?.name && !toolCalls[idx].name) {
-            toolCalls[idx].name = tc.function.name;
-          }
-          if (tc.function?.arguments) toolCalls[idx].arguments += tc.function.arguments;
-        }
+        onEvent?.({ type: 'tools', toolCalls: [...toolCalls] });
+      } else if (evt.type === 'text' && evt.content) {
+        fullText += evt.content;
+        onEvent?.({ type: 'text', content: evt.content });
+      } else if (evt.type === 'done') {
+        if (evt.model) usedModel = evt.model;
+      } else if (evt.type === 'error') {
+        throw new Error(evt.message || 'Server error');
       }
     }
   }
 
-  return {
-    text,
-    reasoning,
-    finishReason,
-    toolCalls: toolCalls.filter(Boolean).map((tc) => ({
-      id: tc.id || `call_${Math.random().toString(36).slice(2)}`,
-      name: tc.name,
-      arguments: tc.arguments,
-    })),
-  };
-}
-
-/** Eksekusi satu tool call. fetch = client-side, lainnya via /api/tools/execute. */
-async function executeToolClient(tool) {
-  const args = safeParseArgs(tool.arguments);
-
-  // Client-side validation: log untuk debugging + beri hint ke model
-  if ((tool.name === 'crawl_web' || tool.name === 'fetch') && (!args.url || typeof args.url !== 'string' || !args.url.trim())) {
-    console.warn(`[PuruAI] Tool "${tool.name}" dipanggil tanpa parameter 'url'. Args:`, JSON.stringify(args));
-    return JSON.stringify({
-      error: `Tool ${tool.name} memerlukan parameter 'url' dengan nilai string non-kosong.`,
-      hint: `Contoh pemanggilan yang benar: ${tool.name}({ url: "https://example.com" }) atau ${tool.name}({ url: "/api/endpoint" }). JANGAN panggil ${tool.name} tanpa parameter url.`,
-      received_args: args,
-    });
-  }
-
-  // ─── fetch: dieksekusi langsung di browser (client-side) ───
-  if (tool.name === 'fetch') {
-    return executeFetchClient(args);
-  }
-
-  // ─── tools lainnya: via server /api/tools/execute ───
-  const res = await fetch(TOOL_EXEC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: tool.name, args }),
-  });
-  let j;
-  try { j = await res.json(); } catch { j = {}; }
-  if (!res.ok || !j.success) {
-    return JSON.stringify({ error: j?.error || `Tool ${tool.name} gagal dieksekusi` });
-  }
-  return j.result;
-}
-
-/**
- * Eksekusi fetch langsung di browser (client-side).
- * Menggunakan native fetch() — lebih cepat, tidak ada server roundtrip.
- */
-async function executeFetchClient({ url, method = 'GET', headers = {}, body }) {
-  if (!url || typeof url !== 'string') {
-    return JSON.stringify({ error: 'URL tidak valid: parameter url wajib berupa string non-kosong' });
-  }
-
-  // Resolve relative URL → absolute (terhadap origin browser)
-  let resolvedUrl;
-  try {
-    resolvedUrl = url.startsWith('http') ? url : new URL(url, window.location.origin).href;
-  } catch {
-    return JSON.stringify({ error: `URL tidak valid: "${url.slice(0, 80)}"` });
-  }
-
-  // Blokir URL internal/local/SSRF
-  try {
-    const u = new URL(resolvedUrl);
-    const host = u.hostname.toLowerCase();
-    const blocked =
-      host === 'localhost' || host === '0.0.0.0' || host === '127.0.0.1' || host === '::1' ||
-      host.endsWith('.local') || host.endsWith('.internal') || host === '169.254.169.254' ||
-      /^10\./.test(host) || /^192\.168\./.test(host) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-    if (blocked) return JSON.stringify({ error: 'URL internal/local dilarang' });
-  } catch {
-    return JSON.stringify({ error: 'URL tidak valid' });
-  }
-
-  try {
-    const opts = { method: String(method || 'GET').toUpperCase(), headers: { ...headers } };
-    if (body && ['POST', 'PUT', 'PATCH'].includes(opts.method)) {
-      opts.headers['Content-Type'] = 'application/json';
-      opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-    }
-    const res = await fetch(resolvedUrl, { ...opts, signal: AbortSignal.timeout(15000) });
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = text.slice(0, 5000); }
-    return JSON.stringify({ status: res.status, data }, null, 2);
-  } catch (e) {
-    const msg = e.name === 'TimeoutError' ? 'Request timeout (15 detik)' : e.message || 'Fetch gagal';
-    return JSON.stringify({ error: msg, url: resolvedUrl });
-  }
+  return { text: fullText, reasoning: fullReasoning, toolCalls, model: usedModel };
 }
 
 /* ══════════════════════ Main Page ══════════════════════ */
@@ -519,7 +389,6 @@ export default function PuruAIPage() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  const [docsSummary, setDocsSummary] = useState('');
 
   // Input via refs (tidak trigger re-render per keystroke)
   const inputRefEl = useRef(null);
@@ -559,26 +428,7 @@ export default function PuruAIPage() {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, []);
 
-  // Fetch docs.json untuk search_docs
-  useEffect(() => {
-    fetch('/docs.json')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && typeof data === 'object') {
-          const lines = Object.entries(data).map(([cat, eps]) => {
-            const list = (Array.isArray(eps) ? eps : [])
-              .map((e) => `  • ${e.method} ${e.path} — ${e.title || ''}`)
-              .join('\n');
-            return `[${cat}]\n${list}`;
-          });
-          setDocsSummary(lines.join('\n\n'));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
-  // Tool definitions — dibangun dari zod schemas via lib/puru-ai-tools.js
-  const TOOLS = useMemo(() => buildOpenAITools(docsSummary || null), [docsSummary]);
 
   // Load history
   useEffect(() => {
@@ -617,7 +467,7 @@ export default function PuruAIPage() {
     inputTimeoutRef.current = setTimeout(() => setInputDraft(val), 60);
   }, []);
 
-  // ─── Agentic Loop ───
+  // ─── Server-side Agentic Loop (ToolLoopAgent) — client hanya streaming event ───
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || loadingRef.current) return;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
@@ -643,111 +493,33 @@ export default function PuruAIPage() {
     const abort = new AbortController();
     abortRef.current = abort;
 
-    // Build API messages — NO pruning during loop (preserves tool context)
-    // Pruning only happens on saveHistory (after loop finishes)
-    const apiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...[...messages, userMsg]
-        .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
-        .map((m) => ({ role: m.role, content: m.content })),
-    ];
-
-    let loopCount = 0;
-    let fullText = '';
-    let fullReasoning = '';
-    const allToolCalls = [];
+    // History untuk server: user/assistant text saja
+    // (server potong history + pruneMessages lagi sebelum turn agar konteks free)
+    const historyMessages = [...messages, userMsg]
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
+      .map((m) => ({ role: m.role, content: m.content }));
 
     try {
-      while (loopCount < MAX_LOOPS) {
-        loopCount += 1;
+      let fullText = '';
+      let fullReasoning = '';
 
-        // ─── GUARD: Inject stop hint at iteration 10 ───
-        if (loopCount === 10) {
-          apiMessages.push({
-            role: 'user',
-            content: '[GUARD] Sudah banyak melakukan Iteration. Berhenti segera dan berikan jawaban final berdasarkan semua informasi yang sudah dikumpulkan. JANGAN panggil tool lagi.',
-          });
-        }
-
-        let iterationText = '';
-        let iterationReasoning = '';
-
-        const result = await streamChatCompletion({
-          messages: apiMessages,
-          tools: TOOLS,
-          signal: abort.signal,
-          onDelta: (d) => {
-            if (d.type === 'text') {
-              iterationText += d.content;
-              scheduleUpdate({ content: fullText + iterationText, streaming: true });
-            } else if (d.type === 'reasoning') {
-              iterationReasoning += d.content;
-              scheduleUpdate({ reasoning: fullReasoning + iterationReasoning });
-            }
-          },
-        });
-
-        if (iterationText) {
-          fullText = fullText ? `${fullText}\n\n${iterationText}` : iterationText;
-        }
-        if (iterationReasoning) {
-          fullReasoning = fullReasoning ? `${fullReasoning}\n\n${iterationReasoning}` : iterationReasoning;
-        }
-        scheduleUpdate({ content: fullText, reasoning: fullReasoning, streaming: true });
-
-        if (!result.toolCalls || result.toolCalls.length === 0) break;
-
-        // ─── Dedupe tool calls (jaga-jaga server masih kirim duplikat) ───
-        const seenIds = new Set();
-        const seenSig = new Set();
-        const uniqueToolCalls = result.toolCalls.filter((tc) => {
-          const sig = `${tc.name}:${tc.arguments}`;
-          if (tc.id && seenIds.has(tc.id)) return false;
-          if (seenSig.has(sig)) return false;
-          if (tc.id) seenIds.add(tc.id);
-          seenSig.add(sig);
-          return true;
-        });
-        // Kalau semua duplikat → hentikan loop biar tidak infinite
-        if (uniqueToolCalls.length === 0) break;
-        result.toolCalls = uniqueToolCalls;
-
-        // Tambah assistant message + tool_calls ke API context
-        apiMessages.push({
-          role: 'assistant',
-          content: iterationText || null,
-          tool_calls: result.toolCalls.map((tc) => ({
-            id: tc.id,
-            type: 'function',
-            function: { name: tc.name, arguments: tc.arguments },
-          })),
-        });
-
-        // Eksekusi semua tool calls
-        for (const tc of result.toolCalls) {
-          const card = { id: tc.id, name: tc.name, args: safeParseArgs(tc.arguments), status: 'running' };
-          allToolCalls.push(card);
-          scheduleUpdate({ toolCalls: [...allToolCalls] });
-
-          let output;
-          try {
-            output = await executeToolClient(tc);
-          } catch (e) {
-            output = JSON.stringify({ error: e.message || 'Tool execution failed' });
+      const result = await streamPuruAI({
+        messages: historyMessages,
+        model: 'auto',
+        maxSteps: MAX_STEPS,
+        signal: abort.signal,
+        onEvent: (e) => {
+          if (e.type === 'text') {
+            fullText += e.content;
+            scheduleUpdate({ content: fullText, streaming: true });
+          } else if (e.type === 'reasoning') {
+            fullReasoning += e.content;
+            scheduleUpdate({ reasoning: fullReasoning });
+          } else if (e.type === 'tools') {
+            scheduleUpdate({ toolCalls: e.toolCalls });
           }
-
-          card.result = output;
-          card.status = 'done';
-          scheduleUpdate({ toolCalls: [...allToolCalls] });
-
-          apiMessages.push({
-            role: 'tool',
-            tool_call_id: tc.id,
-            name: tc.name,
-            content: output,
-          });
-        }
-      }
+        },
+      });
 
       // Force flush pending rAF
       if (rafRef.current) {
@@ -755,15 +527,13 @@ export default function PuruAIPage() {
         rafRef.current = null;
       }
 
-      const finalContent = loopCount >= MAX_LOOPS
-        ? `${fullText || ''}\n\n> ⚠️ **Loop mencapai batas maksimal (${MAX_LOOPS} iterasi).** Coba pecah pertanyaan menjadi lebih spesifik.`
-        : fullText;
-
       setMessages((prev) => {
         const copy = [...prev];
         copy[copy.length - 1] = {
           ...copy[copy.length - 1],
-          content: finalContent,
+          content: result.text,
+          reasoning: result.reasoning,
+          toolCalls: result.toolCalls,
           streaming: false,
         };
         return copy;
@@ -793,7 +563,7 @@ export default function PuruAIPage() {
       loadingRef.current = false;
       abortRef.current = null;
     }
-  }, [messages, saveHistory, TOOLS, scheduleUpdate]);
+  }, [messages, saveHistory, scheduleUpdate]);
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
@@ -920,7 +690,7 @@ export default function PuruAIPage() {
             </button>
           </div>
           <p className="text-center text-[10px] text-[#3f3f46] mt-2">
-            Puru AI menggunakan api/chat/completions dan menggunakan model auto
+            Puru AI menggunakan /api/puru-ai (ToolLoopAgent) dengan model auto
           </p>
         </form>
       </div>
