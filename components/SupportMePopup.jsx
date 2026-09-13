@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 
 const STORAGE_KEY = 'support_popup_shown_at';
@@ -9,8 +10,10 @@ const EXPIRY_MS = 23 * 60 * 60 * 1000; // 23 jam
 
 export default function SupportMePopup() {
     const [isVisible, setIsVisible] = useState(false);
+    const pathname = usePathname();
 
     useEffect(() => {
+        if (pathname?.startsWith('/purtv')) return;
         const shownAt = Number(localStorage.getItem(STORAGE_KEY));
         const expired = !shownAt || Date.now() - shownAt > EXPIRY_MS;
         if (expired) {
@@ -24,7 +27,7 @@ export default function SupportMePopup() {
                 document.body.style.overflow = 'auto';
             };
         }
-    }, []);
+    }, [pathname]);
 
     const handleDismiss = () => {
         setIsVisible(false);

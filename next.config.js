@@ -31,6 +31,30 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'saweria.co',
       },
+      {
+        protocol: 'https',
+        hostname: 'anichin.cafe',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i0.wp.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i1.wp.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i2.wp.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i3.wp.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'v2.samehadaku.how',
+      },
     ],
   },
   async headers() {
