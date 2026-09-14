@@ -175,6 +175,7 @@ export default function PurTVPage() {
   const [err, setErr] = useState(null);
   const [tab, setTab] = useState('home');
   const [genre, setGenre] = useState('');
+  const [gpage, setGpage] = useState(1);
   const [search, setSearch] = useState('');
   const [input, setInput] = useState('');
   const [suggest, setSuggest] = useState([]);
@@ -199,21 +200,21 @@ export default function PurTVPage() {
     try { const h = await fetchJson(API + '/home'); setHome(h); try { const g = await fetchJson(API + '/genres'); setGenres(asArray(g.genres)); } catch {} }
     catch (e) { setErr(e.message); } finally { setLoading(false); }
   }, []);
-  const loadList = useCallback(async (t = tab, g = genre, qq = search) => {
+  const loadList = useCallback(async (t = tab, g = genre, qq = search, pg = gpage) => {
     setLoading(true); setErr(null);
     try {
       let dd;
       if (t === 'search' && qq) dd = await fetchJson(API + '/search?q=' + encodeURIComponent(qq));
-      else { const p = new URLSearchParams(); if (g) p.set('genre', g); dd = await fetchJson(API + '/list?' + p.toString()); }
+      else { const p = new URLSearchParams(); if (g) p.set('genre', g); p.set('page', String(pg || 1)); dd = await fetchJson(API + '/list?' + p.toString()); }
       let items = asArray(dd.results ?? dd.items);
       if (t === 'anime') items = items.filter(x => x?.source === 'samehadaku' || /samehadaku/i.test(x?.url || ''));
       if (t === 'donghua') items = items.filter(x => x?.source === 'anichin' || /anichin/i.test(x?.url || ''));
       setList({ ...dd, items });
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
-  }, [tab, genre, search]);
+  }, [tab, genre, search, gpage]);
 
   useEffect(() => { loadHome(); }, [loadHome]);
-  useEffect(() => { if (tab !== 'home') loadList(tab, genre, search); }, [tab, genre, search]);
+  useEffect(() => { if (tab !== 'home') loadList(tab, genre, search, gpage); }, [tab, genre, search, gpage]);
 
   const openSch = async () => { setShowSch(true); if (!schedule) { try { setSchedule(await fetchJson(API + '/schedule')); } catch {} } };
   const onInput = (v) => {
@@ -225,8 +226,9 @@ export default function PurTVPage() {
   const openEp = (ep) => { if (!ep?.url) return; setShowSg(false); setSelE(ep); setView('episode'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const openSe = (url, title, th = null) => { const u = typeof url === 'string' ? url : url?.url; if (!u) return; setShowSg(false); setSelS({ url: u, title: asString(title), thumbnail: th }); setView('series'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const clickCard = (it) => { if (!it?.url) return; if (isSeriesUrl(it.url) || it.isSeries) openSe(it.url, it.title, it.thumbnail); else openEp(it); };
-  const doSearch = (e, preset) => { e?.preventDefault(); const qv = (preset ?? input).trim(); if (!qv) return; setSearch(qv); setInput(qv); setShowSg(false); setTab('search'); setGenre(''); setView('list'); };
-  const chTab = (t) => { setTab(t); setGenre(''); setSearch(''); setInput(''); setShowSg(false); setView(t === 'home' ? 'home' : 'list'); };
+  const doSearch = (e, preset) => { e?.preventDefault(); const qv = (preset ?? input).trim(); if (!qv) return; setSearch(qv); setInput(qv); setShowSg(false); setTab('search'); setGenre(''); setGpage(1); setView('list'); };
+  const chTab = (t) => { setTab(t); setGenre(''); setSearch(''); setInput(''); setShowSg(false); setGpage(1); setView(t === 'home' ? 'home' : 'list'); };
+  const goPage = (pg) => { const n = Math.max(1, pg || 1); setGpage(n); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const goBack = () => { setView(tab === 'home' ? 'home' : 'list'); setSelS(null); setSelE(null); };
 
   const featured = asArray(home?.featuredSlider ?? home?.featured);
@@ -281,7 +283,7 @@ export default function PurTVPage() {
         <div className="tabs">{[['home', 'Beranda', 'fa-home'], ['anime', 'Anime', 'fa-dragon'], ['donghua', 'Donghua', 'fa-fire']].map(([t, l, ic]) => <button key={t} onClick={() => chTab(t)} className={'tab' + (tab === t ? ' on' : '')}><i className={'fas ' + ic + ' mr-1.5'} />{l}</button>)}<button onClick={openSch} className="tab"><i className="fas fa-calendar-day mr-1.5" />Jadwal</button><button onClick={() => setShowHis(true)} className="tab"><i className="fas fa-history mr-1.5" />Riwayat{his.length ? ' (' + his.length + ')' : ''}</button></div>
       )}
       {view !== 'episode' && view !== 'series' && allG.length > 0 && (
-        <div className="tabs !pt-0">{allG.slice(0, 14).map((g, i) => { const slug = typeof g === 'string' ? g : g.slug || g.name; const label = typeof g === 'string' ? g : g.name || g.slug; return <button key={i} onClick={() => { setGenre(slug); setTab('genre'); setView('list'); }} className={'tab' + (genre === slug ? ' on' : '')}>{label}</button>; })}</div>
+        <div className="tabs !pt-0">{allG.slice(0, 14).map((g, i) => { const slug = typeof g === 'string' ? g : g.slug || g.name; const label = typeof g === 'string' ? g : g.name || g.slug; return <button key={i} onClick={() => { setGenre(slug); setTab('genre'); setGpage(1); setView('list'); }} className={'tab' + (genre === slug ? ' on' : '')}>{label}</button>; })}</div>
       )}
       <div className="pb-3 min-h-[50vh]">
         {view === 'episode' && selE ? <EpisodeView episode={selE} onBack={goBack} onOpenSeries={openSe} onOpenEpisode={openEp} onWatched={onWatched} />
@@ -304,11 +306,18 @@ export default function PurTVPage() {
           </div>
         ) : (
           <div className="anim-in">
-            <div className="px-3.5 pt-1"><h2 className="text-sm font-black text-white">{tab === 'search' ? 'Hasil: ' + search : genre ? asString(genre).replace(/-/g, ' ') : tab === 'anime' ? 'Anime' : tab === 'donghua' ? 'Donghua' : 'Daftar'}</h2><p className="text-[10px] text-gray-500 font-bold">{items.length} hasil</p></div>
+            <div className="px-3.5 pt-1"><h2 className="text-sm font-black text-white">{tab === 'search' ? 'Hasil: ' + search : genre ? asString(genre).replace(/-/g, ' ') : tab === 'anime' ? 'Anime' : tab === 'donghua' ? 'Donghua' : 'Daftar'}</h2><p className="text-[10px] text-gray-500 font-bold">{items.length} hasil{tab !== 'search' ? ' • Halaman ' + gpage : ''}</p></div>
             {loading && <div className="grid-r mt-3">{[0,1,2,3,4,5].map(i => <div key={i} className="skel aspect-[2/3]" />)}</div>}
-            {err && !loading && <div className="mx-3.5 mt-3 panel p-6 text-center"><p className="text-xs text-gray-300 mb-3">{err}</p><button onClick={() => loadList(tab, genre, search)} className="btn-primary text-xs font-bold px-4 py-2 rounded-xl">Coba Lagi</button></div>}
+            {err && !loading && <div className="mx-3.5 mt-3 panel p-6 text-center"><p className="text-xs text-gray-300 mb-3">{err}</p><button onClick={() => loadList(tab, genre, search, gpage)} className="btn-primary text-xs font-bold px-4 py-2 rounded-xl">Coba Lagi</button></div>}
             {!loading && !err && items.length > 0 && <div className="grid-r mt-3">{items.map((it, i) => <Card key={i} item={it} onClick={clickCard} />)}</div>}
-            {!loading && !err && list && items.length === 0 && <div className="mx-3.5 mt-3 panel p-8 text-center"><i className="fas fa-film text-2xl text-gray-600 mb-3 block" /><p className="text-xs text-gray-500">Tidak ada hasil.</p></div>}
+            {!loading && !err && items.length > 0 && tab !== 'search' && (
+              <div className="flex items-center justify-center gap-2 px-3.5 mt-4">
+                <button disabled={gpage <= 1 || loading} onClick={() => goPage(gpage - 1)} className="srv-btn flex-1 max-w-[160px] disabled:opacity-30"><i className="fas fa-chevron-left mr-1" />Prev</button>
+                <span className="text-[11px] font-black text-gray-400 px-2">Hal {gpage}</span>
+                {(list?.hasNext ?? list?.purtv_pagenation?.hasNext) ? <button disabled={loading} onClick={() => goPage(gpage + 1)} className="srv-btn flex-1 max-w-[160px] disabled:opacity-30">Next<i className="fas fa-chevron-right ml-1" /></button> : <span className="srv-btn flex-1 max-w-[160px] opacity-30 pointer-events-none">Next<i className="fas fa-chevron-right ml-1" /></span>}
+              </div>
+            )}
+            {!loading && !err && list && items.length === 0 && <div className="mx-3.5 mt-3 panel p-8 text-center"><i className="fas fa-film text-2xl text-gray-600 mb-3 block" /><p className="text-xs text-gray-500">Tidak ada hasil.</p>{gpage > 1 && <button onClick={() => goPage(gpage - 1)} className="srv-btn mt-3"><i className="fas fa-chevron-left mr-1" />Kembali ke hal {gpage - 1}</button>}</div>}
           </div>
         )}
       </div>
