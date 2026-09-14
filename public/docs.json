@@ -1170,6 +1170,45 @@
       ]
     },
     {
+      "title": "PurTV Player Resolver",
+      "summary": "Resolve samehadaku player_ajax -> iframe src",
+      "description": "POST ke admin-ajax.php samehadaku untuk mendapatkan iframe embed. Dipakai untuk anime (samehadaku) yang player-nya di-load via AJAX. Coba direct fetch dulu, fallback ke proxy jika kena Cloudflare 403.",
+      "method": "GET",
+      "path": "/api/purtv/player",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/player?post=12345&nume=1&type=schtml&slug=one-piece-episode-1000').then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "post",
+          "in": "query",
+          "type": "string",
+          "description": "data-post dari streamingLinks",
+          "required": true
+        },
+        {
+          "name": "nume",
+          "in": "query",
+          "type": "string",
+          "description": "data-nume dari streamingLinks",
+          "required": true
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "type": "string",
+          "description": "data-type",
+          "required": false
+        },
+        {
+          "name": "slug",
+          "in": "query",
+          "type": "string",
+          "description": "slug episode (untuk Referer)",
+          "required": false
+        }
+      ]
+    },
+    {
       "title": "PurTV Jadwal",
       "summary": "Jadwal rilis donghua per hari.",
       "description": "Mengambil jadwal rilis mingguan donghua dari sumber PurTV\r              (anichin.cafe /schedule/) — dikelompokkan per hari (Senin-Minggu)\r              dengan jam rilis & episode berikutnya. Menyertakan `purtv_pagenation`.",
