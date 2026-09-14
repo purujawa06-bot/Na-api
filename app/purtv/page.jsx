@@ -8,11 +8,15 @@ import Link from 'next/link';
    PurTV — Nonton Donghua & Anime (anichin.cafe + samehadaku)
    Data: /api/purtv/* (home, list, genres, schedule, search,
          series, detail)
+   FIX: guard semua .map agar tidak crash "l.map is not a function"
    ============================================================ */
 
 const API = '/api/purtv';
 
-const isSeriesUrl = (url = '') => /\/seri\/|\/anime\//.test(url);
+const asArray = (v) => (Array.isArray(v) ? v : []);
+const asString = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+const isSeriesUrl = (url = '') => /\/seri\/|\/anime\//.test(url || '');
 
 async function fetchJson(path) {
   const res = await fetch(path);
@@ -45,12 +49,13 @@ const SkeletonGrid = ({ count = 6 }) => (
 
 /* ---------- Media Card ---------- */
 const MediaCard = ({ item, onClick, showType = false }) => {
-  const title = item.title || '';
-  const episode = item.episode || '';
-  const type = item.type || '';
-  const source = item.source || '';
-  const rating = item.rating || '';
-  const rank = item.rank || '';
+  if (!item) return null;
+  const title = asString(item.title) || 'Tanpa Judul';
+  const episode = asString(item.episode);
+  const type = asString(item.type);
+  const source = asString(item.source);
+  const rating = asString(item.rating);
+  const rank = asString(item.rank);
 
   return (
     <button
@@ -119,17 +124,18 @@ const MediaCard = ({ item, onClick, showType = false }) => {
 
 /* ---------- Section Row ---------- */
 const SectionRow = ({ title, icon, items, onClick, horizontal = true }) => {
-  if (!items || items.length === 0) return null;
+  const list = asArray(items);
+  if (list.length === 0) return null;
   return (
     <div className="mb-6">
       <h3 className="text-sm font-bold text-primary mb-3 px-1 flex items-center gap-2">
         <i className={`fas ${icon} text-accent text-xs`}></i>
         <span className="uppercase tracking-wider text-[12px]">{title}</span>
-        <span className="text-[10px] text-muted font-semibold">{items.length}</span>
+        <span className="text-[10px] text-muted font-semibold">{list.length}</span>
       </h3>
       {horizontal ? (
         <div className="flex gap-3 overflow-x-auto custom-scrollbar snap-x snap-mandatory pb-2 -mx-1 px-1">
-          {items.map((item, i) => (
+          {list.map((item, i) => (
             <div key={i} className="w-[130px] md:w-[150px] flex-shrink-0 snap-start">
               <MediaCard item={item} onClick={onClick} />
             </div>
@@ -137,7 +143,7 @@ const SectionRow = ({ title, icon, items, onClick, horizontal = true }) => {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-fr">
-          {items.map((item, i) => (
+          {list.map((item, i) => (
             <MediaCard key={i} item={item} onClick={onClick} showType />
           ))}
         </div>
@@ -148,21 +154,22 @@ const SectionRow = ({ title, icon, items, onClick, horizontal = true }) => {
 
 /* ---------- Featured Slider ---------- */
 const FeaturedSlider = ({ items, onClick }) => {
-  if (!items || items.length === 0) return null;
+  const list = asArray(items);
+  if (list.length === 0) return null;
   return (
     <div className="mb-6">
       <div className="flex gap-3 overflow-x-auto custom-scrollbar snap-x snap-mandatory pb-2 -mx-1 px-1">
-        {items.map((item, i) => (
+        {list.map((item, i) => (
           <button
             key={i}
             onClick={() => onClick(item)}
             className="relative w-[240px] md:w-[320px] flex-shrink-0 snap-start rounded-2xl overflow-hidden native-card group text-left"
           >
             <div className="relative aspect-video bg-input">
-              {item.thumbnail && (
+              {item?.thumbnail && (
                 <Image
                   src={item.thumbnail}
-                  alt={item.title || 'Featured'}
+                  alt={asString(item.title) || 'Featured'}
                   fill
                   sizes="(max-width: 768px) 60vw, 30vw"
                   className="object-cover group-hover:scale-105 transition-transform duration-700"
@@ -174,7 +181,7 @@ const FeaturedSlider = ({ items, onClick }) => {
                 <span className="text-[8px] font-bold bg-accent text-white px-2 py-0.5 rounded-full uppercase tracking-widest mb-1.5 inline-block">
                   <i className="fas fa-play mr-1"></i> Unggulan
                 </span>
-                <div className="text-[13px] font-bold text-white leading-snug line-clamp-2">{item.title}</div>
+                <div className="text-[13px] font-bold text-white leading-snug line-clamp-2">{asString(item?.title)}</div>
               </div>
             </div>
           </button>
@@ -202,7 +209,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
     setPlayerError(null);
     setActiveServer(server);
     try {
-      const qs = new URLSearchParams({ post: server.post, nume: server.nume, type: server.type || 'schtml', slug: slug || '' });
+      const qs = new URLSearchParams({ post: asString(server.post), nume: asString(server.nume), type: asString(server.type) || 'schtml', slug: asString(slug) || '' });
       const r = await fetch(`${API}/player?${qs.toString()}`);
       const j = await r.json();
       if (j.success && j.iframe) setPlayerSrc(j.iframe);
@@ -221,18 +228,27 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
     setError(null);
     setDetail(null);
     setSeriesPoster(null);
+    setSeriesSynopsis(null);
     setPlayerSrc(null);
     setActiveServer(null);
     setPlayerError(null);
+    if (!episode?.url) {
+      setError('URL episode tidak valid');
+      setLoading(false);
+      return () => { active = false; };
+    }
     fetchJson(`${API}/detail?url=${encodeURIComponent(episode.url)}`)
       .then((d) => {
         if (active) {
           setDetail(d);
           if (d.defaultIframe) {
             setPlayerSrc(d.defaultIframe);
-          } else if (d.episodeSlug && d.streamingLinks && d.streamingLinks.length > 0) {
-            const first = d.streamingLinks.find((x) => x.post && x.nume) || d.streamingLinks[0];
-            if (first?.post) resolvePlayer(first, d.episodeSlug);
+          } else {
+            const links = asArray(d.streamingLinks);
+            if (d.episodeSlug && links.length > 0) {
+              const first = links.find((x) => x?.post && x?.nume) || links[0];
+              if (first?.post) resolvePlayer(first, d.episodeSlug);
+            }
           }
           if (d.seriesUrl && (!d.thumbnail || !d.synopsis)) {
             fetchJson(`${API}/series?url=${encodeURIComponent(d.seriesUrl)}`)
@@ -244,7 +260,10 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [episode.url, resolvePlayer]);
+  }, [episode?.url, resolvePlayer]);
+
+  const streamingLinks = asArray(detail?.streamingLinks);
+  const episodes = asArray(detail?.episodes);
 
   return (
     <div className="animate-fade-in">
@@ -253,7 +272,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
           <i className="fas fa-arrow-left text-sm"></i>
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-bold text-primary truncate">{episode.title}</h2>
+          <h2 className="text-sm font-bold text-primary truncate">{asString(episode?.title)}</h2>
           <span className="text-[10px] text-muted">Detail Episode</span>
         </div>
       </div>
@@ -264,7 +283,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
             <div className="relative w-24 h-32 rounded-xl overflow-hidden bg-input flex-shrink-0">
               <Image
                 src={detail.thumbnail || seriesPoster}
-                alt={detail.title || episode.title}
+                alt={asString(detail.title || episode?.title)}
                 fill
                 sizes="96px"
                 className="object-cover"
@@ -272,15 +291,15 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
               />
             </div>
             <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <h3 className="text-sm font-bold text-primary leading-snug mb-1">{detail.title || episode.title}</h3>
+              <h3 className="text-sm font-bold text-primary leading-snug mb-1">{asString(detail.title || episode?.title)}</h3>
               {detail.series && (
                 <div className="text-[11px] text-accent font-semibold truncate mb-1">
-                  <i className="fas fa-tv text-[9px] mr-1"></i>{detail.series}
+                  <i className="fas fa-tv text-[9px] mr-1"></i>{asString(detail.series)}
                 </div>
               )}
               {detail.episode && (
                 <span className="text-[9px] font-bold bg-accent/15 text-accent px-2 py-0.5 rounded-full self-start">
-                  Episode {detail.episode}
+                  Episode {asString(detail.episode)}
                 </span>
               )}
             </div>
@@ -293,7 +312,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
           <h4 className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2 flex items-center gap-2">
             <i className="fas fa-align-left text-accent text-[9px]"></i> Sinopsis
           </h4>
-          <p className="text-xs text-secondary leading-relaxed">{detail.synopsis || seriesSynopsis}</p>
+          <p className="text-xs text-secondary leading-relaxed">{asString(detail.synopsis || seriesSynopsis)}</p>
         </div>
       )}
 
@@ -318,7 +337,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
 
       {detail && !loading && (
         <>
-          {(playerSrc || detail.defaultIframe || playerLoading || playerError || (detail.streamingLinks || []).some((x) => x.post && x.nume)) && (
+          {(playerSrc || detail.defaultIframe || playerLoading || playerError || streamingLinks.some((x) => x?.post && x?.nume)) && (
             <div className="native-card overflow-hidden mb-4">
               <div className="relative w-full aspect-video bg-black">
                 {playerLoading && (
@@ -330,7 +349,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
                   <iframe
                     key={playerSrc || detail.defaultIframe}
                     src={playerSrc || detail.defaultIframe}
-                    title={episode.title}
+                    title={asString(episode?.title)}
                     className="absolute inset-0 w-full h-full"
                     allowFullScreen
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -343,7 +362,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
                     <p className="text-[11px] text-secondary">{playerError}</p>
                     <button
                       onClick={() => {
-                        const srv = activeServer || (detail.streamingLinks || []).find((x) => x.post && x.nume);
+                        const srv = activeServer || streamingLinks.find((x) => x?.post && x?.nume);
                         if (srv) resolvePlayer(srv, detail.episodeSlug);
                       }}
                       className="text-[11px] bg-accent text-white font-bold px-4 py-2 rounded-xl"
@@ -360,15 +379,15 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
             </div>
           )}
 
-          {(detail.episodes || []).length > 0 && (
+          {episodes.length > 0 && (
             <div className="native-card p-4 mb-4">
               <h4 className="text-[10px] font-bold text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
                 <i className="fas fa-list-ol text-accent text-[9px]"></i> Episode
               </h4>
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                {detail.episodes.map((ep, i) => (
+                {episodes.map((ep, i) => (
                   <button key={i} onClick={() => onOpenEpisode(ep)} className="text-[10px] font-bold bg-input border border-default rounded-lg py-2 px-1 text-secondary hover:text-primary hover:border-accent/50 transition-colors">
-                    {ep.episode || ep.title || `Ep ${i + 1}`}
+                    {asString(ep?.episode || ep?.title) || `Ep ${i + 1}`}
                   </button>
                 ))}
               </div>
@@ -376,7 +395,7 @@ const EpisodeView = ({ episode, onBack, onOpenSeries, onOpenEpisode }) => {
           )}
 
           {detail.seriesUrl && (
-            <button onClick={() => onOpenSeries(detail.seriesUrl, detail.series || episode.title)} className="w-full native-card p-4 flex items-center justify-center gap-2 text-accent hover:border-accent/40 transition-all active:scale-95 mb-4">
+            <button onClick={() => onOpenSeries(detail.seriesUrl, asString(detail.series || episode?.title))} className="w-full native-card p-4 flex items-center justify-center gap-2 text-accent hover:border-accent/40 transition-all active:scale-95 mb-4">
               <i className="fas fa-tv"></i> Buka Halaman Series
             </button>
           )}
@@ -397,19 +416,24 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
     setLoading(true);
     setError(null);
     setDetail(null);
+    if (!series?.url) {
+      setError('URL series tidak valid');
+      setLoading(false);
+      return () => { active = false; };
+    }
     fetchJson(`${API}/series?url=${encodeURIComponent(series.url)}`)
       .then((d) => { if (active) setDetail(d); })
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [series.url]);
+  }, [series?.url]);
 
   if (loading) {
     return (
       <div className="animate-fade-in">
         <div className="flex items-center gap-3 mb-4">
           <button onClick={onBack} className="w-9 h-9 rounded-xl bg-input border border-default text-secondary flex items-center justify-center"><i className="fas fa-arrow-left text-sm"></i></button>
-          <h2 className="text-sm font-bold text-primary truncate">{series.title}</h2>
+          <h2 className="text-sm font-bold text-primary truncate">{asString(series?.title)}</h2>
         </div>
         <div className="native-card p-4 animate-pulse">
           <div className="h-40 bg-input rounded-xl mb-4"></div>
@@ -430,13 +454,17 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
     );
   }
 
-  const poster = detail?.poster || detail?.thumbnail || series.thumbnail;
+  const poster = detail?.poster || detail?.thumbnail || series?.thumbnail;
+  const episodes = asArray(detail?.episodes);
+  const rawGenres = asArray(detail?.genres);
+  const genreText = rawGenres.map((g) => (typeof g === 'string' ? g : asString(g?.name || g?.slug || g))).filter(Boolean).join(' • ');
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center gap-3 mb-4">
         <button onClick={onBack} className="w-9 h-9 rounded-xl bg-input border border-default text-secondary hover:text-white flex items-center justify-center active:scale-90 transition-all"><i className="fas fa-arrow-left text-sm"></i></button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-bold text-primary truncate">{detail?.title || series.title}</h2>
+          <h2 className="text-sm font-bold text-primary truncate">{asString(detail?.title || series?.title)}</h2>
           <span className="text-[10px] text-muted">Detail Series</span>
         </div>
       </div>
@@ -445,29 +473,29 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
         <div className="flex gap-4 p-4">
           {poster && (
             <div className="relative w-28 h-40 rounded-xl overflow-hidden bg-input flex-shrink-0">
-              <Image src={poster} alt={detail?.title || series.title} fill sizes="112px" className="object-cover" unoptimized />
+              <Image src={poster} alt={asString(detail?.title || series?.title)} fill sizes="112px" className="object-cover" unoptimized />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-bold text-primary leading-snug mb-2">{detail?.title || series.title}</h3>
-            {detail?.genres && <div className="text-[10px] text-accent font-semibold mb-2">{Array.isArray(detail.genres) ? detail.genres.join(' • ') : detail.genres}</div>}
-            {detail?.synopsis && <p className="text-[11px] text-secondary leading-relaxed line-clamp-6">{detail.synopsis}</p>}
+            <h3 className="text-base font-bold text-primary leading-snug mb-2">{asString(detail?.title || series?.title)}</h3>
+            {genreText && <div className="text-[10px] text-accent font-semibold mb-2">{genreText}</div>}
+            {detail?.synopsis && <p className="text-[11px] text-secondary leading-relaxed line-clamp-6">{asString(detail.synopsis)}</p>}
           </div>
         </div>
       </div>
 
-      {(detail?.episodes || []).length > 0 && (
+      {episodes.length > 0 && (
         <div className="mb-6">
           <h3 className="text-sm font-bold text-primary mb-3 px-1 flex items-center gap-2">
             <i className="fas fa-list-ol text-accent text-xs"></i>
             <span className="uppercase tracking-wider text-[12px]">Daftar Episode</span>
-            <span className="text-[10px] text-muted font-semibold">{detail.episodes.length}</span>
+            <span className="text-[10px] text-muted font-semibold">{episodes.length}</span>
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-fr">
-            {detail.episodes.map((ep, i) => (
+            {episodes.map((ep, i) => (
               <button key={i} onClick={() => onOpenEpisode(ep)} className="native-card p-3 text-left hover:border-accent/40 transition-all active:scale-95 min-w-0">
-                <div className="text-[11px] font-bold text-primary line-clamp-2">{ep.title || ep.episode || `Episode ${i + 1}`}</div>
-                {ep.episode && <div className="text-[9px] text-muted mt-1">Episode {ep.episode}</div>}
+                <div className="text-[11px] font-bold text-primary line-clamp-2">{asString(ep?.title || ep?.episode) || `Episode ${i + 1}`}</div>
+                {ep?.episode && <div className="text-[9px] text-muted mt-1">Episode {asString(ep.episode)}</div>}
               </button>
             ))}
           </div>
@@ -481,6 +509,7 @@ const SeriesView = ({ series, onBack, onOpenEpisode }) => {
 export default function PurTVPage() {
   const [view, setView] = useState('home');
   const [home, setHome] = useState(null);
+  const [genreList, setGenreList] = useState([]);
   const [list, setList] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -494,17 +523,31 @@ export default function PurTVPage() {
 
   const loadHome = useCallback(async () => {
     setLoading(true); setError(null);
-    try { setHome(await fetchJson(`${API}/home`)); } catch (e) { setError(e.message); } finally { setLoading(false); }
+    try {
+      const h = await fetchJson(`${API}/home`);
+      setHome(h);
+      try {
+        const g = await fetchJson(`${API}/genres`);
+        setGenreList(asArray(g.genres));
+      } catch {}
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
   }, []);
 
   const loadList = useCallback(async (type = activeTab, genre = activeGenre, query = search) => {
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams();
-      if (type && type !== 'home') params.set('type', type);
-      if (genre) params.set('genre', genre);
-      if (query) params.set('q', query);
-      setList(await fetchJson(`${API}/list?${params.toString()}`));
+      let data;
+      if (type === 'search' && query) {
+        data = await fetchJson(`${API}/search?q=${encodeURIComponent(query)}`);
+      } else {
+        const params = new URLSearchParams();
+        if (genre) params.set('genre', typeof genre === 'string' ? genre : genre.slug || genre.name || '');
+        data = await fetchJson(`${API}/list?${params.toString()}`);
+      }
+      let items = asArray(data.results ?? data.items);
+      if (type === 'anime') items = items.filter((it) => it?.source === 'samehadaku' || /samehadaku/i.test(it?.url || ''));
+      if (type === 'donghua') items = items.filter((it) => it?.source === 'anichin' || /anichin/i.test(it?.url || ''));
+      setList({ ...data, items });
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   }, [activeTab, activeGenre, search]);
 
@@ -514,19 +557,29 @@ export default function PurTVPage() {
     if (activeTab !== 'home') loadList(activeTab, activeGenre, search);
   }, [activeTab, activeGenre, search, loadList]);
 
-  const openEpisode = (ep) => { setSelectedEpisode(ep); setView('episode'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const openSeries = (url, title, thumbnail = null) => { setSelectedSeries({ url, title, thumbnail }); setView('series'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const openEpisode = (ep) => { if (!ep?.url) return; setSelectedEpisode(ep); setView('episode'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const openSeries = (url, title, thumbnail = null) => {
+    const u = typeof url === 'string' ? url : url?.url;
+    if (!u) return;
+    setSelectedSeries({ url: u, title: asString(title), thumbnail });
+    setView('series');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleCardClick = (item) => {
-    if (item.url && (isSeriesUrl(item.url) || item.isSeries)) openSeries(item.url, item.title, item.thumbnail);
+    if (!item?.url) return;
+    if (isSeriesUrl(item.url) || item.isSeries) openSeries(item.url, item.title, item.thumbnail);
     else openEpisode(item);
   };
 
   const doSearch = (e) => {
     e?.preventDefault();
-    setSearch(searchInput.trim());
+    const q = searchInput.trim();
+    if (!q) return;
+    setSearch(q);
     setActiveTab('search');
     setActiveGenre(null);
+    setView('list');
   };
 
   const changeTab = (tab) => {
@@ -535,9 +588,27 @@ export default function PurTVPage() {
     else setView('list');
   };
 
-  const handleGenre = (genre) => { setActiveGenre(genre); setActiveTab('genre'); setSearch(''); setSearchInput(''); setView('list'); };
+  const handleGenre = (genre) => {
+    const slug = typeof genre === 'string' ? genre : genre?.slug || genre?.name || genre?.id;
+    if (!slug) return;
+    setActiveGenre(slug);
+    setActiveTab('genre');
+    setSearch('');
+    setSearchInput('');
+    setView('list');
+  };
 
-  const goBack = () => { setView('home'); setSelectedSeries(null); setSelectedEpisode(null); };
+  const goBack = () => { setView(activeTab === 'home' ? 'home' : 'list'); setSelectedSeries(null); setSelectedEpisode(null); };
+
+  const featured = asArray(home?.featuredSlider ?? home?.featured);
+  const latest = asArray(home?.latestReleases ?? home?.latest);
+  const popular = asArray(home?.popularToday ?? home?.popular);
+  const ongoing = asArray(home?.ongoing);
+  const animeLatest = Array.isArray(home?.anime) ? home.anime : asArray(home?.anime?.latestAnime);
+  const animePopular = Array.isArray(home?.anime) ? [] : asArray(home?.anime?.popularAnime);
+  const recGenres = asArray(home?.recommendations?.genres);
+  const allGenres = genreList.length > 0 ? genreList : recGenres;
+  const listItems = asArray(list?.items);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
@@ -559,13 +630,17 @@ export default function PurTVPage() {
             <i className={`fas ${icon} mr-1.5`}></i>{label}
           </button>
         ))}
-        {home?.genres && (
+        {asArray(allGenres).length > 0 && (
           <div className="flex gap-2">
-            {home.genres.slice(0, 8).map((g, i) => (
-              <button key={i} onClick={() => handleGenre(g)} className={`flex-shrink-0 px-3 py-2 rounded-xl text-[10px] font-bold border ${activeGenre === g ? 'bg-accent text-white border-accent' : 'bg-input text-secondary border-default'}`}>
-                {g}
-              </button>
-            ))}
+            {asArray(allGenres).slice(0, 8).map((g, i) => {
+              const slug = typeof g === 'string' ? g : g?.slug || g?.name || g?.id || `genre-${i}`;
+              const label = typeof g === 'string' ? g : g?.name || g?.slug || `Genre ${i+1}`;
+              return (
+                <button key={`${slug}-${i}`} onClick={() => handleGenre(g)} className={`flex-shrink-0 px-3 py-2 rounded-xl text-[10px] font-bold border ${activeGenre === slug ? 'bg-accent text-white border-accent' : 'bg-input text-secondary border-default'}`}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -582,11 +657,12 @@ export default function PurTVPage() {
               {error && !loading && <div className="native-card p-6 text-center"><p className="text-xs text-secondary mb-3">{error}</p><button onClick={loadHome} className="text-xs bg-accent text-white font-bold px-4 py-2 rounded-xl">Coba Lagi</button></div>}
               {!loading && !error && home && (
                 <>
-                  {home.featured && <FeaturedSlider items={home.featured} onClick={handleCardClick} />}
-                  <SectionRow title="Episode Terbaru" icon="fa-clock" items={home.latest} onClick={handleCardClick} />
-                  <SectionRow title="Anime Terbaru" icon="fa-dragon" items={home.anime} onClick={handleCardClick} />
-                  <SectionRow title="Donghua Terbaru" icon="fa-film" items={home.donghua} onClick={handleCardClick} />
-                  <SectionRow title="Populer" icon="fa-fire" items={home.popular} onClick={handleCardClick} />
+                  <FeaturedSlider items={featured} onClick={handleCardClick} />
+                  <SectionRow title="Episode Terbaru" icon="fa-clock" items={latest} onClick={handleCardClick} />
+                  <SectionRow title="Anime Terbaru" icon="fa-dragon" items={animeLatest} onClick={handleCardClick} />
+                  <SectionRow title="Donghua Terbaru" icon="fa-film" items={latest.length > 0 ? latest : ongoing} onClick={handleCardClick} />
+                  <SectionRow title="Ongoing" icon="fa-calendar" items={ongoing} onClick={handleCardClick} />
+                  <SectionRow title="Populer" icon="fa-fire" items={popular.length > 0 ? popular : animePopular} onClick={handleCardClick} />
                 </>
               )}
             </>
@@ -596,18 +672,18 @@ export default function PurTVPage() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-base font-bold text-primary">{activeTab === 'search' ? `Hasil: ${search}` : activeGenre ? activeGenre : activeTab === 'anime' ? 'Anime' : activeTab === 'donghua' ? 'Donghua' : 'Daftar'}</h2>
-                  <p className="text-[10px] text-muted">{list?.items?.length || 0} hasil</p>
+                  <h2 className="text-base font-bold text-primary">{activeTab === 'search' ? `Hasil: ${search}` : activeGenre ? asString(activeGenre) : activeTab === 'anime' ? 'Anime' : activeTab === 'donghua' ? 'Donghua' : 'Daftar'}</h2>
+                  <p className="text-[10px] text-muted">{listItems.length} hasil</p>
                 </div>
               </div>
               {loading && <SkeletonGrid count={9} />}
               {error && !loading && <div className="native-card p-6 text-center"><p className="text-xs text-secondary mb-3">{error}</p><button onClick={() => loadList(activeTab, activeGenre, search)} className="text-xs bg-accent text-white font-bold px-4 py-2 rounded-xl">Coba Lagi</button></div>}
-              {!loading && !error && list?.items?.length > 0 && (
+              {!loading && !error && listItems.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-fr">
-                  {list.items.map((item, i) => <MediaCard key={i} item={item} onClick={handleCardClick} showType />)}
+                  {listItems.map((item, i) => <MediaCard key={i} item={item} onClick={handleCardClick} showType />)}
                 </div>
               )}
-              {!loading && !error && list && (!list.items || list.items.length === 0) && (
+              {!loading && !error && list && listItems.length === 0 && (
                 <div className="native-card p-8 text-center"><i className="fas fa-film text-2xl text-muted mb-3"></i><p className="text-xs text-muted">Tidak ada hasil.</p></div>
               )}
             </div>
