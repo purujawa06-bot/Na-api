@@ -7,8 +7,10 @@
  *              - search_docs: cari endpoint di dokumentasi PuruBoy API
  *              - endpoint_info: ambil info lengkap satu endpoint
  *
- *              Server menjalankan agentic loop: AI memanggil tools → server eksekusi →
- *              hasil dikembalikan ke AI → loop sampai AI memberikan jawaban final.
+ *              Server menjalankan agentic loop native via ToolLoopAgent (ai SDK v7):
+ *              potong history + pruneMessages sebelum turn agar konteks free,
+ *              lalu turn dan looping terus-menerus sampai ToolLoopAgent berhenti,
+ *              kemudian kirim jawaban akhir.
  *              Response berupa stream JSON Lines (satu objek per baris).
  * @method POST
  * @path /api/puru-ai
@@ -43,384 +45,11 @@
  *     })();
  * });
  */
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { searchBing } from '../../../lib/bing-search.js';
-import { runAgenticStep } from '../../../lib/agent-step.js';
+import { runPuruAgent } from '../../../lib/puru-agent.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-
-// ──────────────────── Load Docs ────────────────────
-
-let _docsCache = null;
-let _docsCacheTime = 0;
-
-async function loadDocs() {
-  if (_docsCache && Date.now() - _docsCacheTime < 60_000) return _docsCache;
-  try {
-    const raw = await readFile(join(process.cwd(), 'public', 'docs.json'), 'utf-8');
-    _docsCache = JSON.parse(raw);
-    _docsCacheTime = Date.now();
-  } catch {
-    _docsCache = _docsCache || {};
-  }
-  return _docsCache;
-}
-
-// ──────────────────── Tool Definitions ────────────────────
-
-function getToolDefinitions(docs) {
-  const categories = Object.keys(docs).map((c) => `- ${c} (${docs[c].length} endpoints)`).join('\n');
-  const catDetails = Object.entries(docs)
-    .map(([cat, eps]) => {
-      const list = eps.map((e) => `  • ${e.method} ${e.path} — ${e.title || ''}`).join('\n');
-      return `[${cat}]\n${list}`;
-    })
-    .join('\n\n');
-
-  return {
-    tools: [
-      {
-        type: 'function',
-        function: {
-          name: 'search_web',
-          description: 'Cari informasi di internet via Bing. Gunakan untuk pertanyaan umum, berita, fakta terkini, atau topik yang tidak terkait PuruBoy API.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Kata kunci pencarian' },
-              limit: { type: 'number', description: 'Jumlah hasil (default 5, maks 10)' },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'crawl_web',
-          description: 'Ambil dan ekstrak teks dari sebuah URL. Berguna untuk membaca artikel, dokumentasi, atau halaman web tertentu.',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: { type: 'string', description: 'URL halaman web yang ingin dibaca' },
-              maxChars: { type: 'number', description: 'Maks karakter yang diambil (default 8000)' },
-            },
-            required: ['url'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_docs',
-          description: `Cari endpoint di dokumentasi PuruBoy API. Gunakan untuk pertanyaan tentang cara pakai API ini. Kategori tersedia:\n${categories}\n\nDaftar endpoint:\n${catDetails}\n\nCari berdasarkan kata kunci (judul, path, atau deskripsi).`,
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Kata kunci pencarian (judul, path, atau deskripsi endpoint)' },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'endpoint_info',
-          description: 'Ambil informasi lengkap satu endpoint: method, path, params, example. Path harus diawali /api/',
-          parameters: {
-            type: 'object',
-            properties: {
-              path: { type: 'string', description: 'Path endpoint, contoh: /api/search/duckduckgo' },
-            },
-            required: ['path'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'fetch',
-          description: 'Fetch URL apapun dengan method HTTP apapun. Berguna untuk testing API endpoint atau mengambil data dari URL tertentu.',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: { type: 'string', description: 'URL yang akan di-fetch' },
-              method: { type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE). Default GET.' },
-              headers: { type: 'object', description: 'HTTP headers (opsional)' },
-              body: { description: 'Request body untuk POST/PUT (opsional, string atau object)' },
-            },
-            required: ['url'],
-          },
-        },
-      },
-    ],
-    docsMeta: {
-      categories: Object.keys(docs),
-      totalEndpoints: Object.values(docs).flat().length,
-    },
-  };
-}
-
-// ──────────────────── Tool Executors ────────────────────
-
-/** Cegah SSRF: blokir akses ke host internal/lokal/metadata cloud. */
-function assertSafeUrl(url) {
-  let u;
-  try {
-    u = new URL(url);
-  } catch {
-    throw new Error('URL tidak valid');
-  }
-  const host = u.hostname.toLowerCase();
-  const blocked =
-    host === 'localhost' ||
-    host === '0.0.0.0' ||
-    host === '127.0.0.1' ||
-    host === '::1' ||
-    host.endsWith('.local') ||
-    host.endsWith('.internal') ||
-    host === '169.254.169.254' || // AWS metadata
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-  if (blocked) throw new Error('URL internal/local dilarang');
-  return u;
-}
-
-async function executeSearchWeb({ query, limit = 5 }) {
-  const r = await searchBing(query, { limit: Math.min(limit || 5, 10) });
-  return JSON.stringify(
-    r.results.map((item) => ({ title: item.title, url: item.url, snippet: item.snippet })),
-    null,
-    2,
-  );
-}
-
-async function executeCrawlWeb({ url, maxChars = 8000 }) {
-  const safeUrl = assertSafeUrl(url).toString();
-  const res = await fetch(safeUrl, {
-    headers: {
-      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    signal: AbortSignal.timeout(15000),
-    redirect: 'follow',
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  // Strip tags, collapse whitespace
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const truncated = text.slice(0, maxChars);
-  return JSON.stringify({ url: safeUrl, length: truncated.length, content: truncated });
-}
-
-async function executeSearchDocs({ query }, docs) {
-  const q = query.toLowerCase();
-  const results = [];
-  for (const [category, endpoints] of Object.entries(docs)) {
-    for (const ep of endpoints) {
-      const haystack = `${ep.title || ''} ${ep.summary || ''} ${ep.path || ''} ${ep.description || ''}`.toLowerCase();
-      if (haystack.includes(q)) {
-        results.push({
-          category,
-          method: ep.method,
-          path: ep.path,
-          title: ep.title || '',
-          summary: ep.summary || '',
-          params: (ep.params || []).map((p) => ({
-            name: p.name,
-            type: p.type,
-            required: p.required,
-            description: p.description,
-          })),
-        });
-      }
-    }
-  }
-  if (results.length === 0) {
-    // Fallback: search word by word
-    const words = q.split(/\s+/).filter(Boolean);
-    for (const [category, endpoints] of Object.entries(docs)) {
-      for (const ep of endpoints) {
-        const haystack = `${ep.title || ''} ${ep.summary || ''} ${ep.path || ''} ${ep.description || ''}`.toLowerCase();
-        if (words.some((w) => haystack.includes(w))) {
-          results.push({
-            category,
-            method: ep.method,
-            path: ep.path,
-            title: ep.title || '',
-            summary: ep.summary || '',
-          });
-        }
-      }
-    }
-  }
-  return JSON.stringify(results.slice(0, 10), null, 2);
-}
-
-async function executeEndpointInfo({ path }, docs) {
-  const normalizedPath = path.startsWith('/api/') ? path : `/api/${path}`;
-  for (const [, endpoints] of Object.entries(docs)) {
-    for (const ep of endpoints) {
-      if (ep.path === normalizedPath) {
-        return JSON.stringify(ep, null, 2);
-      }
-    }
-  }
-  return JSON.stringify({ error: `Endpoint "${normalizedPath}" tidak ditemukan` });
-}
-
-async function executeFetch({ url, method = 'GET', headers = {}, body }) {
-  const safeUrl = assertSafeUrl(url).toString();
-  const opts = { method: method.toUpperCase(), headers: { 'user-agent': 'Mozilla/5.0', ...headers } };
-  if (body && ['POST', 'PUT', 'PATCH'].includes(opts.method)) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-  }
-  const res = await fetch(safeUrl, { ...opts, signal: AbortSignal.timeout(15000) });
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text.slice(0, 5000);
-  }
-  return JSON.stringify({ status: res.status, data }, null, 2);
-}
-
-async function executeTool(toolName, args, docs) {
-  switch (toolName) {
-    case 'search_web': return await executeSearchWeb(args);
-    case 'crawl_web': return await executeCrawlWeb(args);
-    case 'search_docs': return await executeSearchDocs(args, docs);
-    case 'endpoint_info': return await executeEndpointInfo(args, docs);
-    case 'fetch': return await executeFetch(args);
-    default: return JSON.stringify({ error: `Tool "${toolName}" tidak dikenal` });
-  }
-}
-
-// ──────────────────── Agentic Loop ────────────────────
-
-async function agenticLoop(userMessages, { model = 'auto', maxSteps = 8 } = {}) {
-  const docs = await loadDocs();
-  const { tools, docsMeta } = getToolDefinitions(docs);
-
-  const systemMessage = {
-    role: 'system',
-    content: `You are Puru AI — an intelligent assistant built on the PuruBoy API platform.
-
-You have access to tools that let you search the web, crawl web pages, and query the PuruBoy API documentation.
-
-## Capabilities
-- **search_web**: Search the internet via Bing for general knowledge, news, facts
-- **crawl_web**: Fetch and read content from any URL
-- **search_docs**: Search through PuruBoy API documentation (${docsMeta.totalEndpoints} endpoints in ${docsMeta.categories.length} categories: ${docsMeta.categories.join(', ')})
-- **endpoint_info**: Get detailed info about a specific API endpoint (path must start with /api/)
-- **fetch**: Make HTTP requests to any URL (useful for testing APIs)
-
-## Guidelines
-- For questions about PuruBoy API, always search docs first using search_docs or endpoint_info
-- For general knowledge questions, use search_web
-- If a user asks about a specific API endpoint, use endpoint_info to get the full specification
-- When showing API examples, include the full fetch() code
-- Answer in the language the user uses (Indonesian/English)
-- Be concise but thorough
-- Use markdown formatting for readability (code blocks, lists, bold, etc.)
-- If a tool fails, explain the error and try an alternative approach
-- You can call multiple tools in sequence to gather all needed information`,
-  };
-
-  const messages = [systemMessage, ...userMessages];
-  const allToolCalls = [];
-  let stepsLeft = maxSteps;
-
-  while (stepsLeft-- > 0) {
-    // ─── GUARD: Inject stop hint at 75% of max steps ───
-    if (stepsLeft === Math.floor(maxSteps * 0.25) - 1) {
-      messages.push({
-        role: 'user',
-        content: '[GUARD] Sudah banyak melakukan Iteration. Berhenti segera dan berikan jawaban final berdasarkan semua informasi yang sudah dikumpulkan. JANGAN panggil tool lagi.',
-      });
-    }
-
-    const { message: msg, model: usedModel } = await runAgenticStep({ model, messages, tools });
-
-    // If no tool calls, return final text
-    if (!msg.tool_calls || msg.tool_calls.length === 0) {
-      return {
-        type: 'final',
-        text: msg.content || '',
-        reasoning: msg.reasoning_content || null,
-        model: usedModel,
-        toolCalls: allToolCalls,
-        finishReason: 'stop',
-      };
-    }
-
-    // Has tool calls → execute them
-    messages.push({
-      role: 'assistant',
-      content: msg.content || null,
-      tool_calls: msg.tool_calls.map((tc) => ({
-        id: tc.id,
-        type: 'function',
-        function: { name: tc.function.name, arguments: tc.function.arguments },
-      })),
-    });
-
-    for (const tc of msg.tool_calls) {
-      const name = tc.function.name;
-      let args;
-      try {
-        args = JSON.parse(tc.function.arguments || '{}');
-      } catch {
-        args = {};
-      }
-
-      allToolCalls.push({ id: tc.id, name, args });
-
-      let result;
-      try {
-        result = await executeTool(name, args, docs);
-      } catch (e) {
-        result = JSON.stringify({ error: e.message });
-      }
-
-      allToolCalls[allToolCalls.length - 1].result = result;
-      messages.push({
-        role: 'tool',
-        tool_call_id: tc.id,
-        content: result,
-      });
-    }
-  }
-
-  // Max steps exceeded — get one final answer
-  const { message: finalMsg, model: finalModel } = await runAgenticStep({ model, messages, tools });
-  return {
-    type: 'final',
-    text: finalMsg?.content || 'Maaf, saya membutuhkan lebih banyak langkah untuk menjawab pertanyaan ini.',
-    reasoning: finalMsg?.reasoning_content || null,
-    model: finalModel,
-    toolCalls: allToolCalls,
-    finishReason: 'stop',
-  };
-}
 
 // ──────────────────── Route Handler ────────────────────
 
@@ -432,7 +61,7 @@ export async function POST(req) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { messages, model = 'auto' } = body;
+  const { messages, model = 'auto', maxSteps = 8 } = body || {};
   if (!Array.isArray(messages) || !messages.length) {
     return Response.json({ error: 'messages required' }, { status: 400 });
   }
@@ -447,7 +76,7 @@ export async function POST(req) {
       };
 
       try {
-        const result = await agenticLoop(messages, { model });
+        const result = await runPuruAgent(messages, { model, maxSteps });
 
         // Send reasoning if present
         if (result.reasoning) {
@@ -456,16 +85,18 @@ export async function POST(req) {
 
         // Send tool calls for display
         if (result.toolCalls.length > 0) {
+          send({ type: 'tools', tools: result.toolCalls });
+          // kompatibilitas: client lama membaca tools_done
           send({ type: 'tools_done', tools: result.toolCalls });
         }
 
         // Send final text (streaming word-by-word for effect)
-        const words = result.text.split(/(\s+)/);
+        const words = String(result.text || '').split(/(\s+)/);
         for (const word of words) {
           send({ type: 'text', content: word });
         }
 
-        send({ type: 'done', model: result.model });
+        send({ type: 'done', model: result.model, steps: result.steps });
       } catch (err) {
         send({ type: 'error', message: err.message || 'Internal error' });
       }
@@ -491,6 +122,6 @@ export async function GET() {
       model: 'auto (default)',
     },
     tools: ['search_web', 'crawl_web', 'search_docs', 'endpoint_info', 'fetch'],
-    note: 'Agentic loop: AI memanggil tools → server eksekusi → hasil dikembalikan ke AI → loop sampai jawaban final.',
+    note: 'Agentic loop native via ToolLoopAgent: potong history + pruneMessages sebelum turn, loop sampai berhenti, kirim jawaban akhir.',
   });
 }
