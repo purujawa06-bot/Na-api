@@ -38,6 +38,8 @@ import { NextResponse } from 'next/server';
 import blogService from '../../../../lib/blogService';
 import { reportError } from '../../../../lib/errorLogger';
 
+export const maxDuration = 60;
+
 const checkAuth = (req) => {
     const password = req.headers.get('authorization');
     if (!password || password !== process.env.PURUBOY_ADMIN_KEY) return { authorized: false, error: 'Invalid password' };

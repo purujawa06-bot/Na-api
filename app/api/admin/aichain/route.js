@@ -28,6 +28,7 @@ import settingsService from '../../../../lib/settingsService';
 import { reportError } from '../../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const checkAuth = (req) => {
     const password = req.headers.get('authorization');

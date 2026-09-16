@@ -42,6 +42,7 @@ import CryptoJS from 'crypto-js';
 import { reportError } from '../../../lib/errorLogger';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const SECRET_KEY = 'PuruBoyChatSecureKey2025'; // Harus sama dengan di client
 

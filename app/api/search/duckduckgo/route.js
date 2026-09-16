@@ -19,7 +19,7 @@ import { searchBing } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function parseQuery(searchParams) {
   const q = searchParams.get('q');

@@ -21,6 +21,7 @@ const { MODELS, ALL_MODEL_IDS } = aiModels;
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const CREATED = 1704067200; // 2024-01-01
 

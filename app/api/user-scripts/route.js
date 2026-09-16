@@ -17,6 +17,7 @@ import { reportError } from '../../../lib/errorLogger';
 import { listUserScriptFiles, getUserScriptRaw, parseUserScriptMeta } from '../../../lib/userscripts-github';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 export async function GET(req) {
     try {

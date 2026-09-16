@@ -16,6 +16,8 @@
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/errorLogger';
 
+export const maxDuration = 60;
+
 export async function POST(req) {
     try {
         const body = await req.json();

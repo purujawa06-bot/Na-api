@@ -33,6 +33,7 @@ import { reportError } from '../../../lib/errorLogger';
 
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
