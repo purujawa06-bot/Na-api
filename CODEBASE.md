@@ -94,10 +94,10 @@ prompt "kamu model AI apa" lewat `puruboy-api.vercel.app/api/chat/completions`).
 ## Model Puru AI (09/2026)
 
 `lib/puru-web.js` + `lib/ai-provider-web.js` — model id publik `claude-opus-4` (label "Claude Opus 4") untuk `/api/chat/completions`.
-Upstream Koyeb dikirimi `model: "puru"` (alias endpoint); probe identitas: **claude-opus-4-20250514**.
+Upstream HF Space dikirimi `model: "puru"` (alias endpoint); probe identitas: **claude-opus-4-20250514**.
 
-- Upstream: Koyeb endpoint (`https://productive-alyson-nue-api-e6b8b676.koyeb.app/v1`) dengan model name `puru`.
-- Konfigurasi env: `PURUBOY_PURU_BASE_URL` (default ke Koyeb) & `PURUBOY_PURU_API_KEY` (opsional).
+- Upstream: HF Space endpoint (`https://nirkyy-a.hf.space/v1`) dengan model name `puru`.
+- Konfigurasi env: `PURUBOY_PURU_BASE_URL` (default ke HF Space) & `PURUBOY_PURU_API_KEY` (ada default fallback).
 - Streaming real (SSE) — pola sama dengan EaseMate.
 - Buffering penuh untuk non-streaming (`fakeSingleChunkStream` atau loop `streamPuru`).
 
