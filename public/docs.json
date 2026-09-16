@@ -296,31 +296,6 @@
       "params": []
     },
     {
-      "title": "Puru AI — Agentic Chat",
-      "summary": "Chat dengan AI yang bisa search web, crawl halaman, dan akses dokumentasi API.",
-      "description": "Endpoint agentic chat yang menghubungkan AI dengan tools nyata:\n              - search_web: pencarian Bing (tanpa API key)\n              - crawl_web: ambil dan ekstrak konten dari URL\n              - search_docs: cari endpoint di dokumentasi PuruBoy API\n              - endpoint_info: ambil info lengkap satu endpoint\n\n              Server menjalankan agentic loop: AI memanggil tools → server eksekusi →\n              hasil dikembalikan ke AI → loop sampai AI memberikan jawaban final.\n              Response berupa stream JSON Lines (satu objek per baris).",
-      "method": "POST",
-      "path": "/api/puru-ai",
-      "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/puru-ai', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Bagaimana cara pakai TikTok downloader?' }]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         let buf = '';\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             buf += dec.decode(value);\n             const lines = buf.split('\\n');\n             buf = lines.pop();\n             for (const line of lines) {\n                 if (!line.trim()) continue;\n                 const obj = JSON.parse(line);\n                 console.log(obj.type, obj.content || '');\n             }\n         }\n     })();\n });",
-      "params": [
-        {
-          "name": "messages",
-          "in": "body",
-          "type": "array",
-          "description": "Array pesan format OpenAI [{role: \"user\"|\"assistant\", content}]. Wajib.",
-          "required": true
-        },
-        {
-          "name": "model",
-          "in": "body",
-          "type": "string",
-          "description": "ID model AI (default \"auto\").",
-          "required": false
-        }
-      ]
-    },
-    {
       "title": "AI Text-to-Image (Vheer) — SSE Stream",
       "summary": "Generate gambar dari teks via vheer.com, result di-stream via SSE.",
       "description": "POST /api/text2image mengembalikan text/event-stream (SSE).\n              Client menerima event_progress (status steps) lalu event_done\n              atau event_error di akhir.\n\n              Dengan `export const maxDuration`, timeout Vercel bisa diatur\n              lebih dari 60s (tergantung plan: Pro max 300s, Enterprise max 900s).",
@@ -1452,9 +1427,9 @@
       ]
     },
     {
-      "title": "Puru AI Tools Executor",
-      "summary": "Eksekusi satu tool untuk agent loop client-side Puru AI.",
-      "description": "Endpoint yang mengeksekusi satu tool (search_web, crawl_web,\n              search_docs, endpoint_info, fetch) dan mengembalikan hasilnya\n              sebagai JSON. Dipakai oleh halaman /puru-ai untuk menjalankan\n              agentic loop di sisi client (streaming via /api/chat/completions).",
+      "title": "Tools Executor",
+      "summary": "Eksekusi satu tool generik (search, crawl, docs, fetch).",
+      "description": "Endpoint yang mengeksekusi satu tool (search_web, crawl_web,\n              search_docs, endpoint_info, fetch) dan mengembalikan hasilnya\n              sebagai JSON.",
       "method": "POST",
       "path": "/api/tools/execute",
       "responseType": "json",
