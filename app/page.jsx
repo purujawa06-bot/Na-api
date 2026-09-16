@@ -161,7 +161,6 @@ export default async function HomePage() {
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                     {[
-                        { href: '/puru-ai', icon: 'fa-bolt', label: 'Puru AI', desc: 'Chat AI + Search Web', color: 'from-violet-600 to-purple-700' },
                         { href: '/purtv', icon: 'fa-tv', label: 'PurTV', desc: 'Nonton Donghua & Anime', color: 'from-rose-500 to-orange-500' },
                         { href: '/docs', icon: 'fa-book', label: 'Dokumentasi', desc: 'Lihat semua endpoint', color: 'from-pink-600 to-rose-600' },
                         { href: '/chat', icon: 'fa-comments', label: 'Chat Room', desc: 'Ngobrol realtime', color: 'from-blue-600 to-indigo-600' },

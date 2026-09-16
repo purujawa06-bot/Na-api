@@ -27,7 +27,6 @@
 - Endpoint chat yang kompatibel dengan format OpenAI pada `/v1/chat/completions`.
 - Integrasi berbagai model/provider, termasuk Gemini dan DeepSeek.
 - Registry model dinamis melalui `/api/models`.
-- Puru AI untuk penggunaan AI yang terintegrasi dengan ekosistem PuruBoy.
 - Fitur vision, reasoning, dan text-to-image pada endpoint yang tersedia.
 
 ### 📥 Downloader & Multimedia
@@ -93,7 +92,7 @@ Dokumentasi API dikelompokkan secara otomatis agar endpoint lebih mudah ditemuka
 
 | Kategori | Contoh endpoint |
 | --- | --- |
-| **AI** | `/v1/chat/completions`, `/api/models`, `/api/puru-ai` |
+| **AI** | `/v1/chat/completions`, `/api/models` |
 | **Downloader** | `/api/play/soundcloud` |
 | **DramaBox** | `/api/dramabox/home`, `/api/dramabox/search`, `/api/dramabox/detail` |
 | **Komiku** | `/api/komiku/home`, `/api/komiku/search`, `/api/komiku/detail` |

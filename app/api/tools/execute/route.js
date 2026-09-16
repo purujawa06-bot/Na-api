@@ -1,10 +1,9 @@
 /**
- * @title Puru AI Tools Executor
- * @summary Eksekusi satu tool untuk agent loop client-side Puru AI.
+ * @title Tools Executor
+ * @summary Eksekusi satu tool generik (search, crawl, docs, fetch).
  * @description Endpoint yang mengeksekusi satu tool (search_web, crawl_web,
  *              search_docs, endpoint_info, fetch) dan mengembalikan hasilnya
- *              sebagai JSON. Dipakai oleh halaman /puru-ai untuk menjalankan
- *              agentic loop di sisi client (streaming via /api/chat/completions).
+ *              sebagai JSON.
  * @method POST
  * @path /api/tools/execute
  * @param {string} body.name - Nama tool: search_web | crawl_web | search_docs | endpoint_info | fetch
