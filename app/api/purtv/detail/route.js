@@ -1,17 +1,18 @@
 /**
  * @title PurTV Detail Episode
  * @summary Detail episode — gabungan donghua (anichin) + anime (samehadaku).
- * @description Mengambil detail halaman episode. URL from anichin.cafe → donghua;
+ * @description Mengambil detail halaman episode. URL dari anichin.com.co → donghua;
  *              URL dari v2.samehadaku.how → anime. Mencakup judul, seri induk,
- *              sinopsis, player default, daftar server video (base64 di-decode utk
- *              donghua), link download (jika ada), navigasi episode, dan
- *              `purtv_pagenation`. For anime, server disertakan beserta post/nume/type.
+ *              sinopsis, player default, daftar server video (halaman mirror
+ *              /v/N/ di-resolve ke iframe utk donghua), navigasi episode, dan
+ *              `purtv_pagenation`. Situs baru tidak menyediakan link download
+ *              (downloadLinks kosong). For anime, server disertakan beserta post/nume/type.
  * @method GET
  * @path /api/purtv/detail
  * @param {string} query.url - URL halaman episode (diambil dari hasil home/search/list).
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/purtv/detail?url=https://anichin.cafe/soul-land-episode-1/')
+ * fetch('https://puruboy-api.vercel.app/api/purtv/detail?url=https://anichin.com.co/soul-land-episode-1/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

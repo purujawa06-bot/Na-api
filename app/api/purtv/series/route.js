@@ -1,7 +1,7 @@
 /**
  * @title PurTV Series
  * @summary Halaman seri — gabungan donghua (anichin) + anime (samehadaku).
- * @description Mengambil halaman seri. URL `/seri/<slug>/` (anichin.cafe) → donghua;
+ * @description Mengambil halaman seri. URL `/series/<slug>/` (anichin.com.co) → donghua;
  *              URL `/anime/<slug>/` (v2.samehadaku.how) → anime. Menyertakan judul,
  *              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.
  * @method GET
@@ -9,7 +9,7 @@
  * @param {string} query.url - URL halaman seri (bisa dari navigation.allEpisodes).
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.cafe/seri/soul-land/')
+ * fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

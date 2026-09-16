@@ -1,9 +1,10 @@
 /**
  * @title PurTV Jadwal
  * @summary Jadwal rilis donghua per hari.
- * @description Mengambil jadwal rilis mingguan donghua dari sumber PurTV
- *              (anichin.cafe /schedule/) — dikelompokkan per hari (Senin-Minggu)
- *              dengan jam rilis & episode berikutnya. Menyertakan `purtv_pagenation`.
+ * @description Sumber baru anichin.com.co tidak menyediakan halaman jadwal,
+ *              jadi endpoint mengembalikan daftar kosong + note (HTTP 200,
+ *              bukan error) agar frontend tetap jalan.
+ *              Menyertakan `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/schedule
  * @response json

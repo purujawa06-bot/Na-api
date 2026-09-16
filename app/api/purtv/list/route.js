@@ -3,7 +3,7 @@
  * @summary Listing per genre — gabungan donghua (anichin) + anime (samehadaku).
  * @description Menampilkan daftar donghua dan anime yang difilter berdasarkan
  *              genre dan halaman, mengikuti pola PurTV: anichin
- *              (`/seri/?genre[]=<slug>&page=N`) + samehadaku
+ *              (`/series/?genre[]=<slug>&page=N`) + samehadaku
  *              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda
  *              `source` ('anichin'/'samehadaku'). Halaman di luar daftar
  *              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan

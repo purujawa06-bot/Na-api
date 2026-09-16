@@ -1,7 +1,7 @@
 /**
  * @title PurTV Home
  * @summary Beranda purtv.vercel.app — gabungan donghua + anime.
- * @description Mengambil data halaman beranda sumber PurTV (anichin.cafe) dan
+ * @description Mengambil data halaman beranda sumber PurTV (anichin.com.co) dan
  *              anime (samehadaku): featured slider, populer, terbaru, ongoing,
  *              rekomendasi per genre, plus anime terbaru & populer. Setiap respon
  *              menyertakan `purtv_pagenation`.
