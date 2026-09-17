@@ -79,7 +79,6 @@ prompt "kamu model AI apa" lewat `puruboy-api.vercel.app/api/chat/completions`).
 | gemini-lite | gemini-3.6-flash | Gemini 3.6 Flash | Gemini 3.6 Flash |
 | gemini-share | gemini | Gemini | Gemini (inkonsisten versi) |
 | easemate | gemini-1.5-flash | Gemini 1.5 Flash | gemini-1.5-flash |
-| puru | claude-opus-4 | Claude Opus 4 | claude-opus-4-20250514 |
 | quillbot | gpt-4.1-mini | GPT-4.1 Mini | gpt-4.1-mini |
 | auto | auto | Auto (Fallback) | — |
 

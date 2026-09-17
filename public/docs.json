@@ -29,10 +29,6 @@
               "label": "gemini-1.5-flash"
             },
             {
-              "value": "claude-opus-4",
-              "label": "claude-opus-4"
-            },
-            {
               "value": "gpt-4.1-mini",
               "label": "gpt-4.1-mini"
             },
@@ -1422,31 +1418,6 @@
           "in": "body",
           "type": "number",
           "description": "Faktor skala (2, 3, atau 4). Default 2.",
-          "required": false
-        }
-      ]
-    },
-    {
-      "title": "Tools Executor",
-      "summary": "Eksekusi satu tool generik (search, crawl, docs, fetch).",
-      "description": "Endpoint yang mengeksekusi satu tool (search_web, crawl_web,\n              search_docs, endpoint_info, fetch) dan mengembalikan hasilnya\n              sebagai JSON.",
-      "method": "POST",
-      "path": "/api/tools/execute",
-      "responseType": "json",
-      "example": "fetch('/api/tools/execute', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         name: 'search_web',\n         args: { query: 'nodejs tutorial', limit: 5 }\n     })\n }).then(res => res.json()).then(console.log);",
-      "params": [
-        {
-          "name": "name",
-          "in": "body",
-          "type": "string",
-          "description": "Nama tool: search_web | crawl_web | search_docs | endpoint_info | fetch",
-          "required": true
-        },
-        {
-          "name": "args",
-          "in": "body",
-          "type": "object",
-          "description": "Argumen tool sesuai definisi",
           "required": false
         }
       ]
