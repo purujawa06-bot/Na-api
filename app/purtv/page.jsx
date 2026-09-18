@@ -115,6 +115,7 @@ function EpisodeView({ episode, onBack, onOpenSeries, onOpenEpisode, onWatched }
   const dls = asArray(d?.downloadLinks);
   const nav = d?.navigation || {};
   const thumb = d?.thumbnail || extra?.poster || episode?.thumbnail;
+  const dm = d?.dailymotion || null;
   return (
     <div className="anim-in">
       <div className="top-bar"><button onClick={onBack} className="icon-btn2"><i className="fas fa-arrow-left" /></button><div className="flex-1 min-w-0"><h2 className="top-title">{asString(d?.title || episode?.title)}</h2><span className="top-sub">{asString(d?.series || 'Detail Episode')}</span></div>{d?.seriesUrl && <button onClick={() => onOpenSeries(d.seriesUrl, d.series)} className="icon-btn2"><i className="fas fa-tv" /></button>}</div>
@@ -125,7 +126,7 @@ function EpisodeView({ episode, onBack, onOpenSeries, onOpenEpisode, onWatched }
           <div className="panel overflow-hidden mb-3">
             <div className="relative w-full aspect-video bg-black">
               {srvLoad && <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10"><span className="inline-spinner" /></div>}
-              {src ? <iframe key={src} src={src} className="absolute inset-0 w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerPolicy="no-referrer" /> : !srvLoad && <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs">{srvErr || 'Player tidak tersedia'}</div>}
+              {src ? <iframe key={src} src={src} className="absolute inset-0 w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" /> : !srvLoad && <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs">{srvErr || 'Player tidak tersedia'}</div>}
             </div>
             <div className="p-3 flex gap-2 border-t border-white/5">
               <button disabled={!nav.prev} onClick={() => nav.prev && onOpenEpisode({ url: nav.prev, title: 'Prev' })} className="srv-btn flex-1 disabled:opacity-30"><i className="fas fa-backward mr-1" />Prev</button>
@@ -135,6 +136,7 @@ function EpisodeView({ episode, onBack, onOpenSeries, onOpenEpisode, onWatched }
           </div>
           {thumb && <div className="panel p-3 mb-3 flex gap-3"><div className="relative w-20 h-28 rounded-xl overflow-hidden bg-black flex-shrink-0"><Image src={thumb} alt="" fill sizes="80px" className="object-cover" unoptimized /></div><div className="flex-1 min-w-0 flex flex-col justify-center"><h3 className="text-sm font-bold text-white">{asString(d.title)}</h3>{d.series && <div className="text-[11px] text-blue-400 font-semibold truncate mt-1">{asString(d.series)}</div>}{d.episode && <span className="chip-blue self-start mt-2">EP {asString(d.episode)}</span>}</div></div>}
           {links.length > 0 && <div className="panel p-3 mb-3"><h4 className="mini-head"><i className="fas fa-server mr-2 text-blue-400" />Pilih Server</h4><div className="flex flex-wrap gap-2">{links.map((s, i) => <button key={i} onClick={() => resolve(s, d.episodeSlug)} className={'srv-btn' + (active === s ? ' on' : '')}>{asString(s.server || 'Server ' + (i + 1))}</button>)}</div></div>}
+          {dm?.watchUrl && <div className="panel p-3 mb-3"><h4 className="mini-head"><i className="fas fa-external-link-alt mr-2 text-blue-400" />Video dibatasi di situs ini?</h4><p className="text-[11px] text-gray-400 mb-2">Kalau player di atas menolak diputar, buka langsung di Dailymotion — videonya sama persis.</p><a href={dm.watchUrl} target="_blank" rel="noreferrer" className="srv-btn on inline-block"><i className="fas fa-play mr-1" />Buka di Dailymotion</a></div>}
           {(d.synopsis || extra?.synopsis) && <div className="panel p-4 mb-3"><h4 className="mini-head"><i className="fas fa-align-left mr-2 text-blue-400" />Sinopsis</h4><p className="text-xs text-gray-300 leading-relaxed">{asString(d.synopsis || extra.synopsis)}</p></div>}
           {dls.length > 0 && <div className="panel p-3 mb-3"><h4 className="mini-head"><i className="fas fa-download mr-2 text-blue-400" />Download</h4>{dls.slice(0, 6).map((x, i) => <div key={i} className="dl-row mb-2"><div className="text-[11px] font-bold text-white">{asString(x.quality || 'Mirror')}</div><div className="flex flex-wrap gap-1.5 mt-1">{asArray(x.links).slice(0, 6).map((l, j) => <a key={j} href={typeof l === 'string' ? l : l.link} target="_blank" rel="noreferrer" className="dl-link">{asString(typeof l === 'string' ? 'Link' : l.host || 'Link')}</a>)}</div></div>)}</div>}
         </>
