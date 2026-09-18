@@ -245,8 +245,9 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
         }
     };
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormValues(prev => ({ ...prev, [name]: value }));
+        const { name, value, files, type } = e.target;
+        const val = type === 'file' ? files[0] : value;
+        setFormValues(prev => ({ ...prev, [name]: val }));
         // bersihkan penanda error saat field diisi
         setMissingParams(prev => prev.filter((n) => n !== name));
     };
@@ -447,10 +448,8 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                     name={param.name}
                                                                     type={param.type === 'file' ? 'file' : 'text'}
                                                                     placeholder={`Enter ${param.name}...`}
-                                                                    {...(param.type !== 'file' ? { 
-                                                                        value: formValues[param.name] || '', 
-                                                                        onChange: handleInputChange 
-                                                                    } : {})}
+                                                                    value={param.type === 'file' ? undefined : (formValues[param.name] || '')}
+                                                                    onChange={handleInputChange}
                                                                     className={`w-full bg-input border rounded-xl pl-9 pr-3 py-2.5 text-sm text-primary focus:outline-none focus:ring-1 transition-all placeholder-gray-700 ${
                                                                         missingParams.includes(param.name)
                                                                             ? 'border-red-500 ring-red-500/50 focus:border-red-400'
