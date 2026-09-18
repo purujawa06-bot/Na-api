@@ -6,7 +6,7 @@
  *              Respon berisi direct link (i.ibb.co), thumbnail, medium, viewer & delete URL.
  * @method POST
  * @path /api/uploader/imggbb
- * @param {file} body.file - File gambar (jpeg/png/gif/webp/bmp/tiff/heic, maks 32 MB) (wajib).
+ * @param {file} formData.file - File gambar (jpeg/png/gif/webp/bmp/tiff/heic, maks 32 MB) (wajib).
  * @response json
  * @example
  * const fd = new FormData();
@@ -14,7 +14,6 @@
  * fetch('https://puruboy-api.vercel.app/api/uploader/imggbb', { method: 'POST', body: fd })
  *     .then(res => res.json())
  *     .then(console.log);
- * // body payload: JSON.stringify({ file: 'binary-image' })
  */
 import { NextResponse } from 'next/server';
 import { uploadFile, MAX_FILE_SIZE } from '../../../../lib/imgbb.js';
