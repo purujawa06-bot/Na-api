@@ -44,14 +44,18 @@ const Hero = ({ items, onClick }) => {
 };
 
 const Card = ({ item, onClick }) => {
+  const [imgErr, setImgErr] = useState(false);
+  const thumb = item?.thumbnail || null;
+  useEffect(() => { setImgErr(false); }, [thumb]);
   if (!item) return null;
   const title = asString(item.title) || 'Tanpa Judul';
   const ep = asString(item.episode || item.nextEpisode || item.releaseTime);
   const isAnime = item.source === 'samehadaku' || /samehadaku/i.test(item.url || '');
+  const showImg = thumb && !imgErr;
   return (
     <div onClick={() => onClick(item)} className="card-poster">
       <div className="relative aspect-poster bg-black overflow-hidden">
-        {item.thumbnail ? <Image src={item.thumbnail} alt={title} fill sizes="220px" className="object-cover" unoptimized loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-gray-700"><i className="fas fa-film text-2xl" /></div>}
+        {showImg ? <Image src={thumb} alt={title} fill sizes="220px" className="object-cover" unoptimized loading="lazy" onError={() => setImgErr(true)} /> : <div className="w-full h-full flex items-center justify-center text-gray-700"><i className="fas fa-film text-2xl" /></div>}
         {ep && <span className="ep-badge">{ep}</span>}
         <span className={'src-badge ' + (isAnime ? 'anime' : 'donghua')}>{isAnime ? 'Anime' : 'Donghua'}</span>
         <div className="play-overlay"><span className="play-btn"><i className="fas fa-play" /></span></div>

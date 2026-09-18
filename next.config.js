@@ -37,6 +37,10 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'anichin.com.co',
+      },
+      {
+        protocol: 'https',
         hostname: 'i0.wp.com',
       },
       {
