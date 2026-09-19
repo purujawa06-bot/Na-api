@@ -174,6 +174,7 @@
                 <input type="password" id="password" name="password" placeholder="Password" required class="input-field text-center tracking-widest">
                 <button type="submit" class="btn-primary w-full">Unlock Console</button>
                 <p id="login-error" class="text-red-400 text-xs mt-2"></p>
+                <p id="saved-pass" class="hidden text-xs text-gray-400 mt-3 break-all"></p>
             </form>
         </div>
     </div>
@@ -189,9 +190,12 @@
                 </div>
                 <h1 class="text-xl font-bold text-white">Admin Panel</h1>
             </div>
-            <button id="logout-btn" class="w-10 h-10 rounded-full bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center">
-                <i class="fas fa-sign-out-alt"></i>
-            </button>
+            <div class="flex items-center gap-2">
+                <span id="saved-pass-badge" class="hidden text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded-full font-mono"></span>
+                <button id="logout-btn" class="w-10 h-10 rounded-full bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
         </header>
 
         <!-- Tabs Navigation -->
@@ -451,6 +455,19 @@
         let isPreview = false;
 
         document.addEventListener('DOMContentLoaded', () => {
+            const savedPass = localStorage.getItem(PASSWORD_KEY);
+            if(savedPass) {
+                const loginHint = document.getElementById('saved-pass');
+                if(loginHint) {
+                    loginHint.textContent = '🔑 Password tersimpan: ' + savedPass;
+                    loginHint.classList.remove('hidden');
+                }
+                const badge = document.getElementById('saved-pass-badge');
+                if(badge) {
+                    badge.textContent = '🔑 ' + savedPass;
+                    badge.classList.remove('hidden');
+                }
+            }
             if(localStorage.getItem(PASSWORD_KEY)) showAdmin();
             document.getElementById('content').addEventListener('input', (e) => {
                 if(isPreview) updatePreview(e.target.value);
