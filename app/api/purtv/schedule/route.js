@@ -1,9 +1,11 @@
 /**
  * @title PurTV Jadwal
- * @summary Jadwal rilis anime per hari (Senin–Minggu).
- * @description Diambil dari REST API resmi samehadaku
- *              (wp-json/custom/v1/all-schedule) karena anichin.com.co tidak
- *              menyediakan halaman jadwal. Bentuk: schedule: [{ day, dayEn, list }].
+ * @summary Jadwal rilis anime per hari (Senin–Minggu) + donghua terbaru.
+ * @description Anime dari REST API resmi samehadaku
+ *              (wp-json/custom/v1/all-schedule). Donghua dari beranda
+ *              anichin.com.co (rilis terbaru) karena anichin tidak
+ *              menyediakan halaman jadwal. Bentuk: schedule: [{ day, dayEn, list }],
+ *              donghuaSchedule: [{ day, dayEn, list }].
  *              Menyertakan `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/schedule
