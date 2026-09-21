@@ -14,10 +14,11 @@ const BottomNav = () => {
         { name: 'Chat', href: '/chat', icon: 'fa-comments' },
         { name: 'Blog', href: '/blog', icon: 'fa-newspaper' },
         { name: 'Scripts', href: '/userscripts', icon: 'fa-cubes' },
+        { name: 'PurTV', href: '/purtv', icon: 'fa-tv' },
     ];
 
     // Sembunyikan navigasi bawah pada halaman chat agar tampilan lebih luas/mirip aplikasi native
-    if (pathname === '/chat' || pathname === '/purtv') return null;
+    if (pathname === '/chat') return null;
 
     return (
         <>

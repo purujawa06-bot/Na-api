@@ -14,6 +14,7 @@ const Navbar = () => {
         { name: 'Chat', href: '/chat', icon: 'fa-comments' },
         { name: 'Blog', href: '/blog', icon: 'fa-newspaper' },
         { name: 'Scripts', href: '/userscripts', icon: 'fa-cubes' },
+        { name: 'PurTV', href: '/purtv', icon: 'fa-tv' },
     ];
 
     return (
