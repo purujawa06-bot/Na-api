@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-build:
+    name: Lint & Build (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps (npm ci)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+        continue-on-error: false
+
+      - name: Rebuild docs (validasi docsService)
+        run: node scripts/rebuild-docs.js
+        env:
+          PURUBOY_PG_URL: postgres://user:pass@localhost:5432/db?sslmode=require
+          PURUBOY_ADMIN_KEY: ci-dummy-key
+
+      - name: Build (next build)
+        run: npm run build
+        env:
+          PURUBOY_PG_URL: postgres://user:pass@localhost:5432/db?sslmode=require
+          PURUBOY_ADMIN_KEY: ci-dummy-key
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Cek file besar tak sengaja ke-commit (>5MB, kecuali package-lock)
+        run: |
+          echo "== file >5MB =="
+          find . -path ./node_modules -prune -o -path ./.git -prune -o -path ./.next -prune -o -type f -size +5M -print | grep -v package-lock.json || echo "OK: tidak ada file besar"
+          # gagalkan jika ada file besar yg bukan lockfile
+          BIG=$(find . -path ./node_modules -prune -o -path ./.git -prune -o -path ./.next -prune -o -type f -size +5M -print | grep -v package-lock.json || true)
+          if [ -n "$BIG" ]; then echo "$BIG"; echo "❌ ada file >5MB, pindahkan ke storage eksternal"; exit 1; fi
