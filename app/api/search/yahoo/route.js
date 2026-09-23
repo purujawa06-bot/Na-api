@@ -1,9 +1,11 @@
 /**
  * @title Yahoo Search
- * @summary Cari di Yahoo (id.search.yahoo.com) dengan cookie jar & retry 5x.
+ * @summary Cari di Yahoo (id.search.yahoo.com) dengan fallback Bing.
  * @description Mencari di mesin pencari Yahoo tanpa browser. Memakai cookie
  *              jar sesi + retry hingga 5x agar lolos challenge anti-bot,
- *              lalu mengembalikan judul, URL, dan snippet. Respons berupa
+ *              lalu mengembalikan judul, URL, dan snippet. Kalau Yahoo
+ *              nge-block IP datacenter/Vercel (flaky 500/429/503), otomatis
+ *              fallback ke Bing agar endpoint tetap hidup. Respons berupa
  *              JSON biasa (bukan SSE/streaming).
  * @method GET
  * @path /api/search/yahoo
@@ -17,6 +19,7 @@
  *     .then(data => console.log(data));
  */
 import { searchYahoo } from '../../../../lib/yahoo-search.js';
+import { searchBing } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,12 +39,36 @@ function parseQuery(searchParams) {
 }
 
 async function runSearch(params) {
-  const result = await searchYahoo(params.q, {
-    page: params.page,
-    limit: params.limit,
-    onRetry: () => {}, // retry tetap jalan, tanpa streaming progress
-  });
-  return Response.json({ success: true, status: 'success', ...result });
+  try {
+    const result = await searchYahoo(params.q, {
+      page: params.page,
+      limit: params.limit,
+      onRetry: () => {}, // retry tetap jalan, tanpa streaming progress
+    });
+    return Response.json({ success: true, status: 'success', ...result });
+  } catch (yahooErr) {
+    // Yahoo sering block IP datacenter/Vercel (500 INKApi / 429 / captcha).
+    // Fallback ke Bing biar endpoint tetap hidup, tetap 200.
+    try {
+      const fb = await searchBing(params.q, { limit: params.limit, onRetry: () => {} });
+      return Response.json({
+        success: true,
+        status: 'success',
+        source: fb.source,
+        query: fb.query,
+        page: params.page,
+        limit: fb.limit,
+        result_count: fb.result_count,
+        results: fb.results,
+        fallback: true,
+        fallback_from: 'yahoo',
+        note: `Yahoo diblokir (${yahooErr.message}), hasil dari Bing`,
+      });
+    } catch {
+      const status = yahooErr?.status === 400 ? 400 : 502;
+      return Response.json({ success: false, status: 'error', error: yahooErr.message, httpStatus: status }, { status });
+    }
+  }
 }
 
 export async function GET(req) {
