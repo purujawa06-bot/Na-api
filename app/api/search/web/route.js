@@ -1,23 +1,26 @@
 /**
  * @title Web Search
- * @summary Cari web murni via Yahoo + Baidu + Startpage + Wikipedia sekaligus (tanpa API key).
- * @description Yahoo/Baidu/Startpage murni scraping halaman hasil dengan
+ * @summary Cari web murni via Baidu + Bing + Wikipedia sekaligus (tanpa API key).
+ * @description Baidu/Bing murni scraping halaman hasil dengan
  *              bypass guard (cookie sesi persisten di Firebase + refresh
- *              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x);
+ *              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x;
+ *              Bing juga menolak mode degradasi via cek relevansi);
  *              Wikipedia via MediaWiki API resmi (tanpa guard).
- *              Keempat provider selalu ditembak BERSAMAAN via Promise.all;
+ *              Ketiga provider selalu ditembak BERSAMAAN via Promise.all;
  *              masing-masing menyumbang maksimal `limit` hasil yang
- *              digabung selang-seling ke dalam SATU array (dedupe URL,
- *              total maks 4x limit, cap 20). Blok hasil organik di-parse
+ *              digabung ke dalam SATU array lalu DIURUTKAN berdasar
+ *              skor relevansi terhadap query (dedupe URL, total maks
+ *              3x limit, cap 20; skor seri mempertahankan urutan
+ *              selang-seling agar beragam). Blok hasil organik di-parse
  *              (judul, URL asli, snippet, nama situs; tiap item ada
- *              field `engine`: yahoo | baidu | startpage | wikipedia).
+ *              field `engine`: baidu | bing | wikipedia).
  *              Typo huruf ganda dikoreksi otomatis 1x retry
  *              (ditandai `corrected_from`). Satu/lebih provider diblokir
  *              tak menggagalkan yang lain. Default bahasa Indonesia.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
- * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Yahoo & Wikipedia).
+ * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Wikipedia).
  * @param {number} [query.limit] - Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).
  * @response json
  * @example
@@ -25,9 +28,8 @@
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchYahoo } from '../../../../lib/yahoo-scrape.js';
 import { searchBaidu } from '../../../../lib/baidu-scrape.js';
-import { searchStartpage } from '../../../../lib/startpage-scrape.js';
+import { searchBing } from '../../../../lib/bing-scrape.js';
 import { searchWikipedia } from '../../../../lib/wikipedia-search.js';
 import { suggestCorrection } from '../../../../lib/bing-search.js';
 
@@ -67,29 +69,62 @@ function normalizeMix(u) {
   }
 }
 
+/** Kata generik yang diabaikan saat tokenisasi query (id + en). */
+const STOPWORDS = new Set(
+  'yang,dan,di,ke,dari,untuk,dengan,adalah,apa,siapa,bagaimana,berapa,yaitu,atau,the,of,and,for,with,what,who,how,are,was,ini,itu,pada,oleh,agar'.split(
+    ',',
+  ),
+);
+
 /**
- * Gabung hasil SEMUA provider selang-seling ke SATU array:
- * peringkat 1 Yahoo, 1 Baidu, 1 Startpage, 1 Wikipedia,
- * 2 Yahoo, 2 Baidu, dst. (dedupe URL, total maks cap).
+ * Gabung hasil SEMUA provider ke SATU array yang diurutkan berdasar
+ * SKOR RELEVANSI terhadap query (paling relevan di paling atas,
+ * bukan selang-seling provider): dedupe URL -> skor tiap item ->
+ * sort menurun -> potong `cap` -> `rank` ulang.
+ * Sort stabil: skor seri mempertahankan urutan selang-seling
+ * (1 Baidu, 1 Bing, 1 Wikipedia, 2 Baidu, ...) agar beragam.
  * Satu provider gagal = kontribusi nol, provider lain tetap jalan.
  */
-function mergeMixed(providers, cap) {
+function mergeRanked(providers, query, cap) {
   const lists = (providers || []).map((p) => p?.results || []);
-  const merged = [];
-  const seen = new Set();
   const maxLen = Math.max(0, ...lists.map((l) => l.length));
-  for (let i = 0; i < maxLen && merged.length < cap; i++) {
+  const pooled = [];
+  const seen = new Set();
+  for (let i = 0; i < maxLen; i++) {
     for (const list of lists) {
       const item = list[i];
       if (!item?.url) continue;
       const key = normalizeMix(item.url);
       if (seen.has(key)) continue;
       seen.add(key);
-      merged.push({ ...item, rank: merged.length + 1 });
-      if (merged.length >= cap) break;
+      pooled.push(item);
     }
   }
-  return merged;
+  const ql = String(query || '').toLowerCase().trim();
+  const tokens = (ql.match(/[a-z\u00c0-\u024f\u1e00-\u1eff]{4,}/g) || []).filter(
+    (t) => !STOPWORDS.has(t),
+  );
+  const scored = pooled.map((item) => {
+    const title = String(item.title || '').toLowerCase();
+    const snippet = String(item.snippet || '').toLowerCase();
+    const url = String(item.url || '').toLowerCase();
+    let s = 0;
+    let titleHits = 0;
+    if (ql && title.includes(ql)) s += 30; // frasa query utuh di judul
+    for (const t of tokens) {
+      if (title.includes(t)) {
+        s += 10;
+        titleHits++;
+      } else if (snippet.includes(t)) {
+        s += 4;
+      }
+      if (url.includes(t)) s += 2;
+    }
+    if (tokens.length && titleHits === tokens.length) s += 15; // semua token di judul
+    return { item, s };
+  });
+  scored.sort((a, b) => b.s - a.s);
+  return scored.slice(0, cap).map(({ item }, i) => ({ ...item, rank: i + 1 }));
 }
 
 /** Relevan bila minimal 1 kata query (huruf, >=4) muncul di judul/snippet. */
@@ -107,36 +142,38 @@ function looksRelevant(results, query) {
 
 async function runSearch(params) {
   const opts = { limit: params.limit, lang: params.lang };
-  const cap = Math.min(params.limit * 4, 20);
+  const cap = Math.min(params.limit * 3, 20);
 
-  // 1. Tembak keempatnya bersamaan; masing-masing nyumbang maks `limit`.
+  // 1. Tembak ketiganya bersamaan; masing-masing nyumbang maks `limit`.
   let providers = await Promise.all([
-    searchYahoo(params.query, opts),
     searchBaidu(params.query, opts),
-    searchStartpage(params.query, opts),
+    searchBing(params.query, opts),
     searchWikipedia(params.query, opts),
   ]);
   // 2. Pemulih typo: bila hasil nihil ATAU tak relevan (mis. Baidu
   //    mengembalikan hasil asal untuk query typo "penemuu"), koreksi
   //    huruf ganda lalu retry semuanya 1x.
   let correctedFrom = null;
+  let effectiveQuery = params.query;
   const fixed = suggestCorrection(params.query);
   const needsFix =
     fixed &&
     fixed !== params.query &&
     (!providers.every((p) => p.success) ||
-      !looksRelevant(mergeMixed(providers, cap), params.query));
+      !looksRelevant(mergeRanked(providers, params.query, cap), params.query));
   if (needsFix) {
     providers = await Promise.all([
-      searchYahoo(fixed, opts),
       searchBaidu(fixed, opts),
-      searchStartpage(fixed, opts),
+      searchBing(fixed, opts),
       searchWikipedia(fixed, opts),
     ]);
-    if (providers.some((p) => p.success)) correctedFrom = params.query;
+    if (providers.some((p) => p.success)) {
+      correctedFrom = params.query;
+      effectiveQuery = fixed; // skor relevansi memakai ejaan yang benar
+    }
   }
 
-  const results = mergeMixed(providers, cap);
+  const results = mergeRanked(providers, effectiveQuery, cap);
   if (!results.length) {
     const guard = providers.every((p) => /_blocked$|_challenge$/.test(p.error || ''));
     const err = new Error(

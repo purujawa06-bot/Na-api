@@ -384,8 +384,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Cari web murni via Yahoo + Baidu + Startpage + Wikipedia sekaligus (tanpa API key).",
-      "description": "Yahoo/Baidu/Startpage murni scraping halaman hasil dengan\r              bypass guard (cookie sesi persisten di Firebase + refresh\r              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x);\r              Wikipedia via MediaWiki API resmi (tanpa guard).\r              Keempat provider selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung selang-seling ke dalam SATU array (dedupe URL,\r              total maks 4x limit, cap 20). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: yahoo | baidu | startpage | wikipedia).\r              Typo huruf ganda dikoreksi otomatis 1x retry\r              (ditandai `corrected_from`). Satu/lebih provider diblokir\r              tak menggagalkan yang lain. Default bahasa Indonesia.",
+      "summary": "Cari web murni via Baidu + Bing + Wikipedia sekaligus (tanpa API key).",
+      "description": "Baidu/Bing murni scraping halaman hasil dengan\r              bypass guard (cookie sesi persisten di Firebase + refresh\r              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x;\r              Bing juga menolak mode degradasi via cek relevansi);\r              Wikipedia via MediaWiki API resmi (tanpa guard).\r              Ketiga provider selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung ke dalam SATU array lalu DIURUTKAN berdasar\r              skor relevansi terhadap query (dedupe URL, total maks\r              3x limit, cap 20; skor seri mempertahankan urutan\r              selang-seling agar beragam). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: baidu | bing | wikipedia).\r              Typo huruf ganda dikoreksi otomatis 1x retry\r              (ditandai `corrected_from`). Satu/lebih provider diblokir\r              tak menggagalkan yang lain. Default bahasa Indonesia.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",
@@ -402,7 +402,7 @@
           "name": "lang",
           "in": "query",
           "type": "string",
-          "description": "Bahasa hasil: id | en (default id; khusus Yahoo & Wikipedia).",
+          "description": "Bahasa hasil: id | en (default id; khusus Wikipedia).",
           "required": false
         },
         {
