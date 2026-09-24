@@ -37,12 +37,23 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 
 ## Kategori Dokumentasi (docs.json) — 09/2026
 
-Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `downloader`, `nonton/baca`, `search`, `tools`.
+Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `agent-tools`, `downloader`, `nonton/baca`, `search`, `tools`, `uploader`.
+
+- **agent-tools**: `agent-tools/find-skills`, `agent-tools/install-skills` (folder default) + `search/web` (di-override dari `search`, karena web search adalah tool utama AI agent).
 
 - **AI**: chat/completions, chess/maia, deepseek/*, models, text2image.
 - **tools** (gabungan `tools-image` + folder tools lain): seluruh `tools-image/*` (upscaler, remove-background, html-to-image) di-map ke `tools` via `CATEGORY_OVERRIDES`. Folder default tetap `tools-image`.
 - **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search) + seluruh purtv (home, detail, series, schedule, search, genres, list).
-- Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench`.
+- Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench` (`agent-tools` ikut `tools` via substring match).
+
+## Agent Tools — skills.sh (09/2026)
+
+`app/api/agent-tools/*` + `lib/skills-sh.js`. Reverse engineer CLI `vercel-labs/skills` (`src/find.ts`):
+
+- `npx skills find <query>` → `GET https://skills.sh/api/search?q=&limit=20[&owner=]` → `{ skills: [{ id, source, skillId, name, installs }] }` (`id` = slug URL `skills.sh/<slug>`). Detail API butuh auth → tidak dipakai.
+- `npx skills add <owner/repo> --skill <nama>` → clone git + cari SKILL.md (frontmatter `name`/`description`) + symlink ke folder agent. Install berjalan di MESIN CLIENT, jadi endpoint install bersifat resolver + panduan.
+- Endpoints: `/api/agent-tools/find-skills?query=&limit=&owner=` (proxy search, tiap hasil ada `install_command` + `url`) dan `/api/agent-tools/install-skills?source=owner/repo&skill=&agent=` (GET+POST; validasi repo/skill via GitHub git-trees API + baca frontmatter SKILL.md, maks 30 file; skill tak cocok → 404 + `available_skills`; respons berisi `install_command`, `steps`, `agent_skill_paths` dari `AGENT_SKILL_PATHS` — 12 agent umum).
+- Uji: `node temp/test-agent-tools.mjs` (10 asersi: find valid/400/owner-filter, install valid/404/400/POST, search/web regresi).
 
 ## Scraper Komiku (09/2026)
 
