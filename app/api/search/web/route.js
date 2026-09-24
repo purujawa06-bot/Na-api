@@ -1,12 +1,16 @@
 /**
  * @title Web Search
- * @summary Cari web via Bing + fallback Wikipedia (tanpa API key).
- * @description Mencari di mesin pencari Bing tanpa API key. Endpoint tunggal
- *              pengganti /api/search/duckduckgo, /api/search/yahoo, dan
- *              /api/search/bing yang sudah dihapus. Bila hasil Bing nihil/tak
- *              relevan (termasuk typo huruf ganda yang dikoreksi otomatis),
- *              fallback ke Wikipedia (flag `fallback: 'wikipedia'`, koreksi
- *              ditandai `corrected_from`). Respons JSON biasa.
+ * @summary Cari web via SearXNG multi-instance + fallback Wikipedia (tanpa API key).
+ * @description Mencari via beberapa instance SearXNG publik yang dipanggil
+ *              bersamaan (Promise.all, timeout 5 detik per instance).
+ *              Hasil digabung, diverifikasi, didedupe, dan di-ranking
+ *              sehingga yang paling relevan di paling atas (maks 10 URL);
+ *              hasil di-cache di memori selama proses Vercel masih jalan.
+ *              Bila semua instance gagal/tak relevan (termasuk typo huruf
+ *              ganda yang dikoreksi otomatis), fallback ke Wikipedia
+ *              (flag `fallback: 'wikipedia'`, koreksi ditandai
+ *              `corrected_from`). Respons JSON biasa. Default bahasa
+ *              Indonesia.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
@@ -18,7 +22,7 @@
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchBing } from '../../../../lib/bing-search.js';
+import { searchSearxng } from '../../../../lib/searxng.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,10 +48,9 @@ function parseQuery(searchParams) {
 }
 
 async function runSearch(params) {
-  const result = await searchBing(params.query, {
+  const result = await searchSearxng(params.query, {
     limit: params.limit,
     lang: params.lang,
-    onRetry: () => {},
   });
   return Response.json({ success: true, status: 'success', ...result });
 }

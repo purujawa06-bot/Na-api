@@ -53,7 +53,15 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - `npx skills find <query>` → `GET https://skills.sh/api/search?q=&limit=20[&owner=]` → `{ skills: [{ id, source, skillId, name, installs }] }` (`id` = slug URL `skills.sh/<slug>`). Detail API butuh auth → tidak dipakai.
 - `npx skills add <owner/repo> --skill <nama>` → clone git + cari SKILL.md (frontmatter `name`/`description`) + symlink ke folder agent. Install berjalan di MESIN CLIENT, jadi endpoint install bersifat resolver + panduan.
 - Endpoints: `/api/agent-tools/find-skills?query=&limit=&owner=` (proxy search, tiap hasil ada `install_command` + `url`) dan `/api/agent-tools/install-skills?source=owner/repo&skill=` (GET+POST; respons = isi file `SKILL.md` mentah `text/markdown`, setara `npx skills use`; validasi repo/skill via GitHub git-trees API + frontmatter, fast path cocok nama direktori agar hemat kuota API; skill tak cocok → 404 + `available_skills`; header `X-Install-Command` untuk install permanen di mesin client).
-- Uji: `node temp/test-agent-tools.mjs` (find + regresi search/web), `node temp/test-install-md.mjs` (install markdown), `node temp/test-search-web.mjs` (typo + fallback Wikipedia + regresi Bing). Catatan: uji install boros kuota GitHub API anonim (60/jam); ada `GITHUB_TOKEN` opsional di env untuk menaikkan limit.
+- Uji: `node temp/test-agent-tools.mjs` (find + regresi search/web), `node temp/test-install-md.mjs` (install markdown), `node temp/test-search-searxng.mjs` (typo + cache + regresi SearXNG, 10/10). Catatan: uji install boros kuota GitHub API anonim (60/jam); ada `GITHUB_TOKEN` opsional di env untuk menaikkan limit.
+
+## Search Web — SearXNG multi-instance (09/2026)
+
+`app/api/search/web/route.js` + `lib/searxng.js` (pengganti Bing yang tak stabil dari IP datacenter). Sesuai docs https://docs.searxng.org/dev/search_api.html (`GET {instance}/search?q=&format=json&language=`):
+
+- 5 instance paralel via `Promise.all` (`search.mectov.my.id`, `searx.dresden.network`, `search.lumy.live`, `etsi.me`, `sx.xo.st`); timeout 5 detik per request; satu gagal tak menggagalkan lain.
+- Hasil digabung + verifikasi (URL http(s) + title), dedupe normalisasi URL, ranking skor kata + bonus kemunculan multi-instance; 10 URL teratas. Cache memori (TTL 30 mnt, cap 300, flag `cached`) selama proses Vercel jalan. Default `lang=id`. Respons ada `instances_used/instances_total`.
+- Pemulih: retry auto-koreksi typo 1x (`corrected_from`), lalu fallback Wikipedia (`fallback:'wikipedia'`; helper `scoreResult`/`suggestCorrection`/`searchWikipediaFallback` di-export dari `lib/bing-search.js`).
 
 ## Scraper Komiku (09/2026)
 

@@ -384,8 +384,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Cari web via Bing + fallback Wikipedia (tanpa API key).",
-      "description": "Mencari di mesin pencari Bing tanpa API key. Endpoint tunggal\r              pengganti /api/search/duckduckgo, /api/search/yahoo, dan\r              /api/search/bing yang sudah dihapus. Bila hasil Bing nihil/tak\r              relevan (termasuk typo huruf ganda yang dikoreksi otomatis),\r              fallback ke Wikipedia (flag `fallback: 'wikipedia'`, koreksi\r              ditandai `corrected_from`). Respons JSON biasa.",
+      "summary": "Cari web via SearXNG multi-instance + fallback Wikipedia (tanpa API key).",
+      "description": "Mencari via beberapa instance SearXNG publik yang dipanggil\r              bersamaan (Promise.all, timeout 5 detik per instance).\r              Hasil digabung, diverifikasi, didedupe, dan di-ranking\r              sehingga yang paling relevan di paling atas (maks 10 URL);\r              hasil di-cache di memori selama proses Vercel masih jalan.\r              Bila semua instance gagal/tak relevan (termasuk typo huruf\r              ganda yang dikoreksi otomatis), fallback ke Wikipedia\r              (flag `fallback: 'wikipedia'`, koreksi ditandai\r              `corrected_from`). Respons JSON biasa. Default bahasa\r              Indonesia.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",
