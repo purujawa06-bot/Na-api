@@ -55,15 +55,17 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Endpoints: `/api/agent-tools/find-skills?query=&limit=&owner=` (proxy search, tiap hasil ada `install_command` + `url`) dan `/api/agent-tools/install-skills?source=owner/repo&skill=` (GET+POST; respons = isi file `SKILL.md` mentah `text/markdown`, setara `npx skills use`; validasi repo/skill via GitHub git-trees API + frontmatter, fast path cocok nama direktori agar hemat kuota API; skill tak cocok → 404 + `available_skills`; header `X-Install-Command` untuk install permanen di mesin client).
 - Uji: `node temp/test-agent-tools.mjs` (find + regresi search/web), `node temp/test-install-md.mjs` (install markdown), `node temp/test-search-provider.mjs` (provider yahoo/baidu + fallback, 6/6). Catatan: uji install boros kuota GitHub API anonim (60/jam); ada `GITHUB_TOKEN` opsional di env untuk menaikkan limit.
 
-## Search Web — scraping Yahoo / Baidu (09/2026)
+## Search Web — scraping Yahoo + Baidu gabungan (09/2026)
 
-`app/api/search/web/route.js` + `lib/yahoo-scrape.js` + `lib/baidu-scrape.js` + `lib/cookie-store.js` (menggantikan SearXNG/Wikipedia; file lama `lib/searxng.js`/`lib/bing-search.js` tak dipakai route). Provider dipilih via param `provider` (`yahoo` default | `baidu`).
+`app/api/search/web/route.js` + `lib/yahoo-scrape.js` + `lib/baidu-scrape.js` + `lib/cookie-store.js` (menggantikan SearXNG/Wikipedia; file lama `lib/searxng.js`/`lib/bing-search.js` tak dipakai route, kecuali helper `suggestCorrection`).
 
+- Tanpa pilih provider, tanpa fallback: Yahoo & Baidu SELALU ditembak bersamaan via `Promise.all`; masing-masing menyumbang maks `limit` hasil (default 5 -> total maks 10, cap 20) yang digabung selang-seling (peringkat 1 Yahoo, 1 Baidu, 2 Yahoo, ...) ke SATU array (dedupe URL, `rank` ulang; tiap item ada `engine: yahoo|baidu`). Satu provider diblokir tak menggagalkan yang lain.
+- Typo: bila hasil nihil/tak relevan + ada koreksi huruf ganda -> retry keduanya 1x (`corrected_from`).
 - Bypass guard "sempurna & awet": cookie sesi PERSISTEN di Firebase RTDB (`yahoo_cookies` = A1/A3/dll, `baidu_cookies` = BAIDUID/dll; URL DB hardcode, TTL 24 jam, cache baca 10 menit) -> dipakai ulang lintas restart/proses; respons invalid -> refresh via homepage -> simpan -> retry 1x + jeda sopan 1.5 detik; rotasi 3 UA desktop; validasi HTML (panjang min + penanda blok hasil + tanpa keyword verifikasi/captcha). Request polos tanpa cookie ditolak (Yahoo: HTTP 500 kosong).
 - Yahoo: `id.search.yahoo.com` (lang=id) / `search.yahoo.com`; blok organik `dd algo`, URL asli dari wrapper `r.search.yahoo.com/.../RU=...`; blok "pencarian terkait" + link internal dibuang.
-- Baidu: `www.baidu.com/s?wd=&rn=20&ie=utf-8`; URL asli dari atribut `mu=` (tanpa buka redirect `/link?url=` terenkripsi); parsing tahan hashed-class (jangkar `result c-container`, `<!--s-text-->`, node teks terpanjang); kartu `result-op` + iklan dilewati.
-- Route: provider pilihan dulu -> retry typo 1x (`corrected_from`, helper `suggestCorrection` dari `lib/bing-search.js`) -> bila buntu otomatis provider satunya (`fallback_provider`); gagal total -> 502. Respons: `provider` + `source` + `results[{title,url,snippet,source,engine,rank}]`, cache memori 30 mnt cap 300.
-- Uji: `node temp/test-search-provider.mjs` (6/6: baidu valid, yahoo+fallback, default, provider ngawur, POST), `node temp/test-search-yahoo.mjs`.
+- Baidu: `www.baidu.com/s?wd=&rn=20&ie=utf-8`; URL asli dari atribut `mu=` (tanpa buka redirect `/link?url=` terenkripsi); parsing tahan hashed-class (jangkar `result c-container`, `<!--s-text-->`, node teks terpanjang); kartu `result-op` + iklan + judul cuma domain dilewati.
+- Respons: `source:'mixed'`, `providers:[...]`, `limit_per_provider`, `results[{title,url,snippet,source,engine,rank}]`; gagal total -> 502. Cache memori per provider 30 mnt cap 300.
+- Uji: `node temp/test-search-mixed.mjs` (11/11: array tunggal, cap 2x limit, dedupe, typo, limit, 400, POST).
 
 ## Scraper Komiku (09/2026)
 

@@ -1,25 +1,23 @@
 /**
  * @title Web Search
- * @summary Cari web murni via scraping Yahoo / Baidu (tanpa API key).
+ * @summary Cari web murni via scraping Yahoo + Baidu sekaligus (tanpa API key).
  * @description Murni scraping halaman hasil dengan bypass guard
  *              (cookie sesi persisten di Firebase + refresh otomatis
  *              bila invalid, rotasi UA, jeda sopan, retry 1x).
- *              Provider dipilih via param `provider` (yahoo | baidu,
- *              default yahoo); bila provider pilihan buntu (diblokir/
- *              kosong), otomatis dicoba provider satunya
- *              (ditandai `fallback_provider`). Blok hasil organik
- *              di-parse (judul, URL asli, snippet, nama situs),
- *              didedupe, lalu diambil N teratas sesuai urutan ranking
- *              asli provider (maks 10 URL); hasil di-cache di memori
- *              selama proses Vercel masih jalan. Typo huruf ganda
+ *              Yahoo & Baidu selalu ditembak BERSAMAAN via Promise.all;
+ *              masing-masing menyumbang maksimal `limit` hasil yang
+ *              digabung selang-seling ke dalam SATU array (dedupe URL,
+ *              total maks 2x limit). Blok hasil organik di-parse
+ *              (judul, URL asli, snippet, nama situs; tiap item ada
+ *              field `engine`: yahoo | baidu). Typo huruf ganda
  *              dikoreksi otomatis 1x retry (ditandai `corrected_from`).
+ *              Satu provider diblokir tak menggagalkan yang lain.
  *              Default bahasa Indonesia.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
- * @param {string} [query.provider] - Provider: yahoo | baidu (default yahoo).
  * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Yahoo).
- * @param {number} [query.limit] - Jumlah hasil maks (default 5, maks 20, alias: result, count).
+ * @param {number} [query.limit] - Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/search/web?query=nodejs+tutorial&lang=id&limit=5')
@@ -48,52 +46,113 @@ function parseQuery(searchParams) {
   const rawLimit = searchParams.get('limit') ?? searchParams.get('result') ?? searchParams.get('count') ?? '5';
   let limit = parseInt(rawLimit, 10);
   if (Number.isNaN(limit)) limit = 5;
-  limit = Math.min(Math.max(limit, 1), 20);
+  limit = Math.min(Math.max(limit, 1), 10);
 
-  // Provider: yahoo | baidu (selain itu default yahoo).
-  const rawProvider = (searchParams.get('provider') || 'yahoo').trim().toLowerCase();
-  const provider = rawProvider === 'baidu' ? 'baidu' : 'yahoo';
-
-  return { params: { query, lang, limit, provider } };
+  return { params: { query, lang, limit } };
 }
 
-const SEARCHERS = { yahoo: searchYahoo, baidu: searchBaidu };
+/** Normalisasi URL untuk dedupe gabungan. */
+function normalizeMix(u) {
+  try {
+    const p = new URL(u);
+    const host = p.hostname.toLowerCase().replace(/^www\./, '');
+    let path = p.pathname.replace(/\/+$/, '');
+    if (path === '') path = '/';
+    return `${host}${path}`.toLowerCase();
+  } catch {
+    return String(u).trim().toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+/**
+ * Gabung hasil kedua provider selang-seling ke SATU array:
+ * peringkat 1 Yahoo, 1 Baidu, 2 Yahoo, 2 Baidu, dst. (dedupe URL,
+ * total maks 2x limit). Satu provider gagal = kontribusi nol,
+ * provider lain tetap jalan.
+ */
+function mergeMixed(yahoo, baidu, cap) {
+  const lists = [yahoo?.results || [], baidu?.results || []];
+  const merged = [];
+  const seen = new Set();
+  const maxLen = Math.max(lists[0].length, lists[1].length);
+  for (let i = 0; i < maxLen && merged.length < cap; i++) {
+    for (const list of lists) {
+      const item = list[i];
+      if (!item?.url) continue;
+      const key = normalizeMix(item.url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ ...item, rank: merged.length + 1 });
+      if (merged.length >= cap) break;
+    }
+  }
+  return merged;
+}
+
+/** Relevan bila minimal 1 kata query (huruf, >=4) muncul di judul/snippet. */
+function looksRelevant(results, query) {
+  const words = String(query || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((w) => /^[a-z]+$/.test(w) && w.length >= 4);
+  if (!words.length) return true;
+  const blob = results
+    .map((r) => `${r.title || ''} ${r.snippet || ''}`.toLowerCase())
+    .join(' ');
+  return words.some((w) => blob.includes(w));
+}
 
 async function runSearch(params) {
-  const primary = params.provider;
-  const secondary = primary === 'yahoo' ? 'baidu' : 'yahoo';
   const opts = { limit: params.limit, lang: params.lang };
+  const cap = Math.min(params.limit * 2, 20);
 
-  // 1. Provider pilihan.
-  let result = await SEARCHERS[primary](params.query, opts);
-
-  // 2. Pemulih typo: koreksi huruf ganda (mis. "penemuu" -> "penemu") lalu retry 1x.
-  if (!result.success && result.error === 'no_results') {
-    const fixed = suggestCorrection(params.query);
-    if (fixed && fixed !== params.query) {
-      const retried = await SEARCHERS[primary](fixed, opts);
-      if (retried.success) result = { ...retried, corrected_from: params.query };
-    }
+  // 1. Tembak keduanya bersamaan; masing-masing nyumbang maks `limit`.
+  let [yahoo, baidu] = await Promise.all([
+    searchYahoo(params.query, opts),
+    searchBaidu(params.query, opts),
+  ]);
+  // 2. Pemulih typo: bila hasil nihil ATAU tak relevan (mis. Baidu
+  //    mengembalikan hasil asal untuk query typo "penemuu"), koreksi
+  //    huruf ganda lalu retry keduanya 1x.
+  let correctedFrom = null;
+  const fixed = suggestCorrection(params.query);
+  const needsFix =
+    fixed &&
+    fixed !== params.query &&
+    (!yahoo.success ||
+      !baidu.success ||
+      !looksRelevant(mergeMixed(yahoo, baidu, cap), params.query));
+  if (needsFix) {
+    [yahoo, baidu] = await Promise.all([searchYahoo(fixed, opts), searchBaidu(fixed, opts)]);
+    if (yahoo.success || baidu.success) correctedFrom = params.query;
   }
 
-  // 3. Provider pilihan buntu (diblokir/kosong) -> otomatis coba provider satunya.
-  if (!result.success) {
-    const alt = await SEARCHERS[secondary](params.query, opts);
-    if (alt.success) {
-      result = { ...alt, fallback_provider: secondary };
-    }
-  }
-
-  if (!result.success) {
+  const results = mergeMixed(yahoo, baidu, cap);
+  if (!results.length) {
+    const blocked = /_blocked$/.test(yahoo.error || '') && /_blocked$/.test(baidu.error || '');
     const err = new Error(
-      /_blocked$/.test(result.error || '')
+      blocked
         ? 'Yahoo & Baidu memblokir permintaan (guard), coba lagi nanti'
         : 'Tidak ada hasil dari Yahoo/Baidu untuk query tersebut',
     );
     err.status = 502;
     throw err;
   }
-  return Response.json({ success: true, status: 'success', provider: result.source, ...result });
+  const used = [
+    ...(yahoo.success ? ['yahoo'] : []),
+    ...(baidu.success ? ['baidu'] : []),
+  ];
+  return Response.json({
+    success: true,
+    status: 'success',
+    query: params.query,
+    count: results.length,
+    results,
+    source: 'mixed',
+    providers: used,
+    limit_per_provider: params.limit,
+    ...(correctedFrom ? { corrected_from: correctedFrom } : {}),
+  });
 }
 
 export async function GET(req) {
@@ -115,11 +174,10 @@ export async function POST(req) {
   try {
     body = await req.json();
   } catch {
-    return Response.json({ success: false, error: 'Body harus JSON: {"query": "...", "provider": "yahoo|baidu", "lang": "id", "limit": 5}' }, { status: 400 });
+    return Response.json({ success: false, error: 'Body harus JSON: {"query": "...", "lang": "id", "limit": 5}' }, { status: 400 });
   }
   const sp = new URLSearchParams();
   if (body?.query ?? body?.q) sp.set('query', body.query ?? body.q);
-  if (body?.provider != null) sp.set('provider', String(body.provider));
   if (body?.lang != null) sp.set('lang', String(body.lang));
   if (body?.limit ?? body?.result ?? body?.count) sp.set('limit', String(body.limit ?? body.result ?? body.count));
   const parsed = parseQuery(sp);

@@ -384,8 +384,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Cari web murni via scraping Yahoo / Baidu (tanpa API key).",
-      "description": "Murni scraping halaman hasil dengan bypass guard\r              (cookie sesi persisten di Firebase + refresh otomatis\r              bila invalid, rotasi UA, jeda sopan, retry 1x).\r              Provider dipilih via param `provider` (yahoo | baidu,\r              default yahoo); bila provider pilihan buntu (diblokir/\r              kosong), otomatis dicoba provider satunya\r              (ditandai `fallback_provider`). Blok hasil organik\r              di-parse (judul, URL asli, snippet, nama situs),\r              didedupe, lalu diambil N teratas sesuai urutan ranking\r              asli provider (maks 10 URL); hasil di-cache di memori\r              selama proses Vercel masih jalan. Typo huruf ganda\r              dikoreksi otomatis 1x retry (ditandai `corrected_from`).\r              Default bahasa Indonesia.",
+      "summary": "Cari web murni via scraping Yahoo + Baidu sekaligus (tanpa API key).",
+      "description": "Murni scraping halaman hasil dengan bypass guard\r              (cookie sesi persisten di Firebase + refresh otomatis\r              bila invalid, rotasi UA, jeda sopan, retry 1x).\r              Yahoo & Baidu selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung selang-seling ke dalam SATU array (dedupe URL,\r              total maks 2x limit). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: yahoo | baidu). Typo huruf ganda\r              dikoreksi otomatis 1x retry (ditandai `corrected_from`).\r              Satu provider diblokir tak menggagalkan yang lain.\r              Default bahasa Indonesia.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",
@@ -399,13 +399,6 @@
           "required": true
         },
         {
-          "name": "provider",
-          "in": "query",
-          "type": "string",
-          "description": "Provider: yahoo | baidu (default yahoo).",
-          "required": false
-        },
-        {
           "name": "lang",
           "in": "query",
           "type": "string",
@@ -416,7 +409,7 @@
           "name": "limit",
           "in": "query",
           "type": "number",
-          "description": "Jumlah hasil maks (default 5, maks 20, alias: result, count).",
+          "description": "Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).",
           "required": false
         }
       ]
