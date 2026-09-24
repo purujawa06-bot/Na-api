@@ -37,12 +37,37 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 
 ## Kategori Dokumentasi (docs.json) — 09/2026
 
-Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `downloader`, `nonton/baca`, `search`, `tools`.
+Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `agent-tools`, `downloader`, `nonton/baca`, `search`, `tools`, `uploader`.
+
+- **agent-tools**: `agent-tools/find-skills`, `agent-tools/install-skills` (folder default) + `search/web` (di-override dari `search`, karena web search adalah tool utama AI agent).
 
 - **AI**: chat/completions, chess/maia, deepseek/*, models, text2image.
 - **tools** (gabungan `tools-image` + folder tools lain): seluruh `tools-image/*` (upscaler, remove-background, html-to-image) di-map ke `tools` via `CATEGORY_OVERRIDES`. Folder default tetap `tools-image`.
 - **nonton/baca** (berisi `/` — aman sebagai key label): seluruh dramabox (home, category, detail, search, stream) + seluruh komiku (home, pustaka, detail, chapter, genre, search) + seluruh purtv (home, detail, series, schedule, search, genres, list).
-- Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench`.
+- Ikon kategori di `components/DocsClient.jsx` (`CATEGORY_ICONS`); `nonton` → `fa-tv`, `ai` → `fa-robot`, `tools` → `fa-wrench` (`agent-tools` ikut `tools` via substring match).
+
+## Agent Tools — skills.sh (09/2026)
+
+`app/api/agent-tools/*` + `lib/skills-sh.js`. Reverse engineer CLI `vercel-labs/skills` (`src/find.ts`):
+
+- `npx skills find <query>` → `GET https://skills.sh/api/search?q=&limit=20[&owner=]` → `{ skills: [{ id, source, skillId, name, installs }] }` (`id` = slug URL `skills.sh/<slug>`). Detail API butuh auth → tidak dipakai.
+- `npx skills add <owner/repo> --skill <nama>` → clone git + cari SKILL.md (frontmatter `name`/`description`) + symlink ke folder agent. Install berjalan di MESIN CLIENT, jadi endpoint install bersifat resolver + panduan.
+- Endpoints: `/api/agent-tools/find-skills?query=&limit=&owner=` (proxy search, tiap hasil ada `install_command` + `url`) dan `/api/agent-tools/install-skills?source=owner/repo&skill=` (GET+POST; respons = isi file `SKILL.md` mentah `text/markdown`, setara `npx skills use`; validasi repo/skill via GitHub git-trees API + frontmatter, fast path cocok nama direktori agar hemat kuota API; skill tak cocok → 404 + `available_skills`; header `X-Install-Command` untuk install permanen di mesin client).
+- Uji: `node temp/test-agent-tools.mjs` (find + regresi search/web), `node temp/test-install-md.mjs` (install markdown), `node temp/test-search-provider.mjs` (provider yahoo/baidu + fallback, 6/6). Catatan: uji install boros kuota GitHub API anonim (60/jam); ada `GITHUB_TOKEN` opsional di env untuk menaikkan limit.
+
+## Search Web — Baidu + Bing + Wikipedia gabungan (09/2026)
+
+`app/api/search/web/route.js` + `lib/baidu-scrape.js` + `lib/bing-scrape.js` + `lib/wikipedia-search.js` + `lib/cookie-store.js` (Yahoo & Startpage DIHAPUS 09/2026: Yahoo diblokir total di level IP — koneksi di-reset bahkan untuk browser asli; Startpage Anubis PoW + cookie TLS-bound tak feasible server-side. File lama `lib/searxng.js`/`lib/bing-search.js` tak dipakai route, kecuali helper `suggestCorrection`).
+
+- Tanpa pilih provider, tanpa fallback: ketiga provider SELALU ditembak bersamaan via `Promise.all`; masing-masing menyumbang maks `limit` hasil (default 5 -> total maks 3x limit, cap 20) yang digabung ke SATU array lalu DIURUTKAN berdasar skor relevansi terhadap query (frasa utuh di judul +30, token di judul +10, semua token di judul +15, token di snippet +4, token di URL +2; dedupe URL, `rank` ulang; tiap item ada `engine: baidu|bing|wikipedia`). Skor seri mempertahankan urutan selang-seling agar beragam. Provider diblokir tak menggagalkan yang lain.
+- Typo: bila hasil nihil/tak relevan + ada koreksi huruf ganda -> retry semuanya 1x (`corrected_from`).
+- Bypass guard: cookie sesi PERSISTEN di Firebase RTDB (`baidu_cookies` = BAIDUID/dll, `bing_cookies` = MUID/SRCHD/SRCHUSR/dll; URL DB hardcode, TTL 24 jam, cache baca 10 menit) -> dipakai ulang lintas restart/proses; respons invalid -> refresh via homepage -> retry 1x + jeda sopan 1.5 detik; rotasi 3 UA desktop. **Anti-racun store: cookie hasil refresh HANYA di-persist bila retry TERBUKTI lolos.**
+- Baidu: `www.baidu.com/s?wd=&rn=20&ie=utf-8`; URL asli dari atribut `mu=`; parsing tahan hashed-class (jangkar `result c-container`, `<!--s-text-->`, node teks terpanjang); kartu `result-op` + iklan + judul cuma domain dilewati.
+- Bing: `www.bing.com/search?q=` (URL POLOS disengaja — parameter setlang/cc/count terbukti memicu 0 blok hasil dari fetch server); blok `<li class="b_algo">`, URL asli = base64-decode param `u=a1...` redirect `/ck/a` (prefix `a1` dibuang), judul `<h2>`, snippet `<div class="b_caption"><p>`. **Guard khas Bing = mode degradasi (HTTP 200 + b_algo valid tapi isi generik: YouTube/Chrome) untuk sesi bot** -> ditolak via cek relevansi (min. 1 token query >=4 huruf muncul di 3 hasil pertama). Cookie awal di-seed dari Brave via CDP (`temp/dump-bing-cookies.mjs` + `temp/seed-cookies-bing.mjs`).
+- Wikipedia: MediaWiki API resmi tanpa guard (`action=opensearch` title-match + `action=query&list=search` fulltext snippet; host id/en.wikipedia.org ikut `lang`); halaman non-artikel (`:`, Halaman Utama) dibuang.
+- Respons: `source:'mixed'`, `providers:[...]`, `limit_per_provider`, `results[{title,url,snippet,source,engine,rank}]`; gagal total -> 502. Cache memori per provider 30 mnt cap 300.
+- CDP Brave (`127.0.0.1:9222`, helper `temp/cdp-fetch.cjs`) dipakai untuk debugging + panen cookie awal, BUKAN untuk serving produksi (Vercel tak bisa menjangkau CDP lokal).
+- Uji: `node temp/test-search-web3.mjs [query]` (GET 2 query + 400 + POST). Teruji: 3/3 provider aktif, typo `penemuu lampu` -> `corrected_from`.
 
 ## Scraper Komiku (09/2026)
 

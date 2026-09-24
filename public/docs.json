@@ -3,11 +3,11 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via MorphXML protocol (XML element per tool, via @ai-sdk-tool/parser;\n              body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).\n              Bukan untuk tugas coding kompleks.\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\r              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\r              FUNCTION CALLING (body.tools) untuk semua model — tool calls\r              diemulasi via MorphXML protocol (XML element per tool, via @ai-sdk-tool/parser;\r              body.tool_choice diabaikan),\r              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\r              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).\r              Bukan untuk tugas coding kompleks.\r              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\r              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\r     })\r }).then(res => res.json()).then(console.log);\n\nStreaming SSE\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         stream: true,\r         messages: [\r             { role: 'system', content: 'Jawab singkat.' },\r             { role: 'user', content: 'Jelaskan fotosintesis' }\r         ]\r     })\r }).then(res => {\r     const reader = res.body.getReader();\r     const dec = new TextDecoder();\r     (async () => {\r         while (true) {\r             const { done, value } = await reader.read();\r             if (done) break;\r             console.log(dec.decode(value));\r         }\r     })();\r });\n\nFunction calling (tools) — balasan berisi message.tool_calls\r fetch('https://puruboy-api.vercel.app/api/chat/completions', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         model: 'auto',\r         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\r         tools: [{\r             type: 'function',\r             function: {\r                 name: 'getWeather',\r                 description: 'Cuaca sebuah kota',\r                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\r             }\r         }]\r     })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
@@ -294,11 +294,11 @@
     {
       "title": "AI Text-to-Image (Vheer) — SSE Stream",
       "summary": "Generate gambar dari teks via vheer.com, result di-stream via SSE.",
-      "description": "POST /api/text2image mengembalikan text/event-stream (SSE).\n              Client menerima event_progress (status steps) lalu event_done\n              atau event_error di akhir.\n\n              Dengan `export const maxDuration`, timeout Vercel bisa diatur\n              lebih dari 60s (tergantung plan: Pro max 300s, Enterprise max 900s).",
+      "description": "POST /api/text2image mengembalikan text/event-stream (SSE).\r              Client menerima event_progress (status steps) lalu event_done\r              atau event_error di akhir.\r\r              Dengan `export const maxDuration`, timeout Vercel bisa diatur\r              lebih dari 60s (tergantung plan: Pro max 300s, Enterprise max 900s).",
       "method": "POST",
       "path": "/api/text2image",
       "responseType": "json",
-      "example": "const res = await fetch('/api/text2image', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ prompt: 'fox in snowy forest', size: '1:1', num_images: 1 })\n });\n const reader = res.body.getReader();\n const decoder = new TextDecoder();\n while (true) {\n   const { done, value } = await reader.read();\n   if (done) break;\n   console.log(decoder.decode(value));\n }",
+      "example": "const res = await fetch('/api/text2image', {\r   method: 'POST',\r   headers: { 'Content-Type': 'application/json' },\r   body: JSON.stringify({ prompt: 'fox in snowy forest', size: '1:1', num_images: 1 })\r });\r const reader = res.body.getReader();\r const decoder = new TextDecoder();\r while (true) {\r   const { done, value } = await reader.read();\r   if (done) break;\r   console.log(decoder.decode(value));\r }",
       "params": [
         {
           "name": "prompt",
@@ -319,6 +319,97 @@
           "in": "body",
           "type": "number",
           "description": "Jumlah gambar (1–4). Default: 1.",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "agent-tools": [
+    {
+      "title": "Find Agent Skills",
+      "summary": "Cari skills di direktori skills.sh (setara npx skills find).",
+      "description": "Mencari reusable agent skills (SKILL.md) di direktori terbuka\n              skills.sh — backend yang sama dipakai perintah `npx skills find`.\n              Tiap hasil memuat nama skill, repo sumber (owner/repo), jumlah\n              install, perintah install siap salin, dan URL halaman skill.\n              Install asli (`npx skills add`) berjalan di mesin client karena\n              butuh akses folder agent lokal; gunakan endpoint install-skills\n              untuk validasi + panduan install per-agent.",
+      "method": "GET",
+      "path": "/api/agent-tools/find-skills",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/find-skills?query=web+design&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
+      "params": [
+        {
+          "name": "query",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian skill, min 2 karakter (wajib, alias: q).",
+          "required": true
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "description": "Jumlah hasil maks (default 10, maks 20, alias: count).",
+          "required": false
+        },
+        {
+          "name": "owner",
+          "in": "query",
+          "type": "string",
+          "description": "Filter owner GitHub (mis. vercel-labs, setara --owner).",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "Install Agent Skills",
+      "summary": "Ambil file SKILL.md langsung (setara npx skills use).",
+      "description": "Mengambil isi file SKILL.md satu skill langsung sebagai respons\n              markdown (Content-Type text/markdown) — setara `npx skills use\n              <owner/repo@skill>` — sehingga agent bisa membaca & memakai skill\n              tanpa install ke folder lokal. Repo sumber divalidasi via GitHub\n              API dan nama skill dicocokkan dengan frontmatter SKILL.md. Jika\n              nama skill tidak cocok, respons 404 JSON berisi daftar skill yang\n              tersedia di repo tersebut. Untuk install permanen ke folder agent,\n              jalankan perintah pada header X-Install-Command di mesin client.\n              Juga mendukung method POST dengan body JSON {\"source\": \"...\", \"skill\": \"...\"}.",
+      "method": "GET",
+      "path": "/api/agent-tools/install-skills",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\n     .then(res => res.text())\n     .then(data => console.log(data));",
+      "params": [
+        {
+          "name": "source",
+          "in": "query",
+          "type": "string",
+          "description": "Repo sumber format owner/repo, mis. vercel-labs/agent-skills (wajib).",
+          "required": true
+        },
+        {
+          "name": "skill",
+          "in": "query",
+          "type": "string",
+          "description": "Nama skill, mis. web-design-guidelines (wajib).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "Web Search",
+      "summary": "Cari web murni via Baidu + Bing + Wikipedia sekaligus (tanpa API key).",
+      "description": "Baidu/Bing murni scraping halaman hasil dengan\r              bypass guard (cookie sesi persisten di Firebase + refresh\r              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x;\r              Bing juga menolak mode degradasi via cek relevansi);\r              Wikipedia via MediaWiki API resmi (tanpa guard).\r              Ketiga provider selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung ke dalam SATU array lalu DIURUTKAN berdasar\r              skor relevansi terhadap query (dedupe URL, total maks\r              3x limit, cap 20; skor seri mempertahankan urutan\r              selang-seling agar beragam). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: baidu | bing | wikipedia).\r              Typo huruf ganda dikoreksi otomatis 1x retry\r              (ditandai `corrected_from`). Satu/lebih provider diblokir\r              tak menggagalkan yang lain. Default bahasa Indonesia.",
+      "method": "GET",
+      "path": "/api/search/web",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/search/web?query=nodejs+tutorial&lang=id&limit=5')\r     .then(res => res.json())\r     .then(data => console.log(data));",
+      "params": [
+        {
+          "name": "query",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian (wajib, alias: q).",
+          "required": true
+        },
+        {
+          "name": "lang",
+          "in": "query",
+          "type": "string",
+          "description": "Bahasa hasil: id | en (default id; khusus Wikipedia).",
+          "required": false
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "description": "Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).",
           "required": false
         }
       ]
@@ -896,11 +987,11 @@
     {
       "title": "Komiku Chapter",
       "summary": "Reader chapter komik — daftar URL gambar dari komiku.org.",
-      "description": "Mengambil daftar URL gambar satu chapter beserta info (id,\r              series, nomor chapter, jumlah gambar, link series, prev/next\r              chapter). Parameter url = permalink chapter usai domain, mis.\r              \"my-wife-waited-for-me-in-the-wheat-field-chapter-27\".",
+      "description": "Mengambil daftar URL gambar satu chapter beserta info (id,\n              series, nomor chapter, jumlah gambar, link series, prev/next\n              chapter). Parameter url = permalink chapter usai domain, mis.\n              \"my-wife-waited-for-me-in-the-wheat-field-chapter-27\".",
       "method": "GET",
       "path": "/api/komiku/chapter",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -914,11 +1005,11 @@
     {
       "title": "Komiku Detail",
       "summary": "Detail komik + daftar chapter + komik serupa dari komiku.org.",
-      "description": "Mengambil info lengkap sebuah komik (judul, judul alternatif,\r              tipe, tema, genre, author, rating, pembaca, sinopsis), daftar\r              chapter terurut, serta komik serupa. Parameter slug = bagian\r              URL setelah /manga/, mis. \"my-wife-waited-for-me-in-the-wheat-field\".",
+      "description": "Mengambil info lengkap sebuah komik (judul, judul alternatif,\n              tipe, tema, genre, author, rating, pembaca, sinopsis), daftar\n              chapter terurut, serta komik serupa. Parameter slug = bagian\n              URL setelah /manga/, mis. \"my-wife-waited-for-me-in-the-wheat-field\".",
       "method": "GET",
       "path": "/api/komiku/detail",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "slug",
@@ -932,11 +1023,11 @@
     {
       "title": "Komiku Genre",
       "summary": "Daftar komik per genre + daftar semua genre komiku.org.",
-      "description": "Mengambil komik dalam sebuah genre (slug, mis. \"isekai\",\r              \"fantasy\", \"romance\") dengan pagination. Tanpa parameter genre\r              default \"isekai\". Respons juga memuat daftar semua genre yang\r              tersedia. Tanpa browser — cukup HTTPS.",
+      "description": "Mengambil komik dalam sebuah genre (slug, mis. \"isekai\",\n              \"fantasy\", \"romance\") dengan pagination. Tanpa parameter genre\n              default \"isekai\". Respons juga memuat daftar semua genre yang\n              tersedia. Tanpa browser — cukup HTTPS.",
       "method": "GET",
       "path": "/api/komiku/genre",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/genre?genre=isekai')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/genre?genre=isekai')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "genre",
@@ -957,21 +1048,21 @@
     {
       "title": "Komiku Home",
       "summary": "Beranda komiku.org — peringkat, populer, terbaru, baru ditambahkan.",
-      "description": "Mengambil seksi beranda komiku.org: Peringkat Komiku (mingguan\r              & harian), Komik Populer Update, Baca Komik Terbaru, dan Baru\r              Ditambahkan. Informasi tiap komik mencakup judul, cover, tema,\r              dan chapter terbaru. Tanpa browser — cukup HTTPS.",
+      "description": "Mengambil seksi beranda komiku.org: Peringkat Komiku (mingguan\n              & harian), Komik Populer Update, Baca Komik Terbaru, dan Baru\n              Ditambahkan. Informasi tiap komik mencakup judul, cover, tema,\n              dan chapter terbaru. Tanpa browser — cukup HTTPS.",
       "method": "GET",
       "path": "/api/komiku/home",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/home')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/home')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     },
     {
       "title": "Komiku Pustaka",
       "summary": "Listing perpustakaan komiku.org dengan filter tipe, orderby, genre, status.",
-      "description": "Mengambil daftar komik dari pustaka komiku.org (manga, manhwa,\r              manhua, atau semua). Mendukung pagination serta filter tipe,\r              orderby (modified/date/meta_value_num/rand), genre 1 & 2, dan\r              status (ongoing/end). Tanpa browser — cukup HTTPS.",
+      "description": "Mengambil daftar komik dari pustaka komiku.org (manga, manhwa,\n              manhua, atau semua). Mendukung pagination serta filter tipe,\n              orderby (modified/date/meta_value_num/rand), genre 1 & 2, dan\n              status (ongoing/end). Tanpa browser — cukup HTTPS.",
       "method": "GET",
       "path": "/api/komiku/pustaka",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/pustaka?tipe=manhwa&page=2')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/pustaka?tipe=manhwa&page=2')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "tipe",
@@ -1062,11 +1153,11 @@
     {
       "title": "Komiku Search",
       "summary": "Cari komik di komiku.org (post_type=manga).",
-      "description": "Mencari komik berdasarkan kata kunci (mis. \"boruto\") dengan\r              pagination. Hasil memuat judul, cover, tipe, genre/tema, dan\r              chapter awal/terbaru. Tanpa browser — cukup HTTPS.",
+      "description": "Mencari komik berdasarkan kata kunci (mis. \"boruto\") dengan\n              pagination. Hasil memuat judul, cover, tipe, genre/tema, dan\n              chapter awal/terbaru. Tanpa browser — cukup HTTPS.",
       "method": "GET",
       "path": "/api/komiku/search",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/search?q=boruto')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/search?q=boruto')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -1087,11 +1178,11 @@
     {
       "title": "PurTV Detail Episode",
       "summary": "Detail episode — gabungan donghua (anichin) + anime (samehadaku).",
-      "description": "Mengambil detail halaman episode. URL from anichin.cafe → donghua;\r              URL dari v2.samehadaku.how → anime. Mencakup judul, seri induk,\r              sinopsis, player default, daftar server video (base64 di-decode utk\r              donghua), link download (jika ada), navigasi episode, dan\r              `purtv_pagenation`. For anime, server disertakan beserta post/nume/type.",
+      "description": "Mengambil detail halaman episode. URL dari anichin.com.co → donghua;\r              URL dari v2.samehadaku.how → anime. Mencakup judul, seri induk,\r              sinopsis, player default, daftar server video (halaman mirror\r              /v/N/ di-resolve ke iframe utk donghua), navigasi episode, dan\r              `purtv_pagenation`. Situs baru tidak menyediakan link download\r              (downloadLinks kosong). For anime, server disertakan beserta post/nume/type.",
       "method": "GET",
       "path": "/api/purtv/detail",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/detail?url=https://anichin.cafe/soul-land-episode-1/')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/detail?url=https://anichin.com.co/soul-land-episode-1/')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -1105,7 +1196,7 @@
     {
       "title": "PurTV Genres",
       "summary": "Daftar genre untuk navigasi dua sumber.",
-      "description": "Mengambil daftar genre dari sumber PurTV (anichin.cafe /seri/).\r              Slug yang sama dipakai juga utk navigasi genre anime samehadaku\r              pada /api/purtv/list. Menyertakan `purtv_pagenation`.",
+      "description": "Mengambil daftar genre dari sumber PurTV (anichin.com.co /series/).\r              Slug yang sama dipakai juga utk navigasi genre anime samehadaku\r              pada /api/purtv/list. Menyertakan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/genres",
       "responseType": "json",
@@ -1115,7 +1206,7 @@
     {
       "title": "PurTV Home",
       "summary": "Beranda purtv.vercel.app — gabungan donghua + anime.",
-      "description": "Mengambil data halaman beranda sumber PurTV (anichin.cafe) dan\r              anime (samehadaku): featured slider, populer, terbaru, ongoing,\r              rekomendasi per genre, plus anime terbaru & populer. Setiap respon\r              menyertakan `purtv_pagenation`.",
+      "description": "Mengambil data halaman beranda sumber PurTV (anichin.com.co) dan\r              anime (samehadaku): featured slider, populer, terbaru, ongoing,\r              rekomendasi per genre, plus anime terbaru & populer. Setiap respon\r              menyertakan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/home",
       "responseType": "json",
@@ -1125,7 +1216,7 @@
     {
       "title": "PurTV List Genre",
       "summary": "Listing per genre — gabungan donghua (anichin) + anime (samehadaku).",
-      "description": "Menampilkan daftar donghua dan anime yang difilter berdasarkan\r              genre dan halaman, mengikuti pola PurTV: anichin\r              (`/seri/?genre[]=<slug>&page=N`) + samehadaku\r              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda\r              `source` ('anichin'/'samehadaku'). Halaman di luar daftar\r              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan\r              `purtv_pagenation`.",
+      "description": "Menampilkan daftar donghua dan anime yang difilter berdasarkan\r              genre dan halaman, mengikuti pola PurTV: anichin\r              (`/series/?genre[]=<slug>&page=N`) + samehadaku\r              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda\r              `source` ('anichin'/'samehadaku'). Halaman di luar daftar\r              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan\r              `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/list",
       "responseType": "json",
@@ -1142,12 +1233,12 @@
     },
     {
       "title": "PurTV Player Resolver",
-      "summary": "Resolve samehadaku player_ajax -> iframe src",
-      "description": "POST ke admin-ajax.php samehadaku untuk mendapatkan iframe embed. Dipakai untuk anime (samehadaku) yang player-nya di-load via AJAX. Coba direct fetch dulu, fallback ke proxy jika kena Cloudflare 403.",
+      "summary": "Resolve samehadaku player_ajax → iframe src",
+      "description": "POST ke admin-ajax.php samehadaku untuk mendapatkan iframe embed.\r              Dipakai untuk anime (samehadaku) yang player-nya di-load via AJAX.\r              Coba direct fetch dulu, fallback ke proxy jika kena Cloudflare 403.",
       "method": "GET",
       "path": "/api/purtv/player",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/player?post=12345&nume=1&type=schtml&slug=one-piece-episode-1000').then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/player?post=12345&nume=1&type=schtml&slug=one-piece-episode-1000')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "post",
@@ -1164,13 +1255,6 @@
           "required": true
         },
         {
-          "name": "type",
-          "in": "query",
-          "type": "string",
-          "description": "data-type",
-          "required": false
-        },
-        {
           "name": "slug",
           "in": "query",
           "type": "string",
@@ -1181,8 +1265,8 @@
     },
     {
       "title": "PurTV Jadwal",
-      "summary": "Jadwal rilis donghua per hari.",
-      "description": "Mengambil jadwal rilis mingguan donghua dari sumber PurTV\r              (anichin.cafe /schedule/) — dikelompokkan per hari (Senin-Minggu)\r              dengan jam rilis & episode berikutnya. Menyertakan `purtv_pagenation`.",
+      "summary": "Jadwal rilis anime per hari (Senin–Minggu) + donghua terbaru.",
+      "description": "Anime dari REST API resmi samehadaku\r              (wp-json/custom/v1/all-schedule). Donghua dari beranda\r              anichin.com.co (rilis terbaru) karena anichin tidak\r              menyediakan halaman jadwal. Bentuk: schedule: [{ day, dayEn, list }],\r              donghuaSchedule: [{ day, dayEn, list }].\r              Menyertakan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/schedule",
       "responseType": "json",
@@ -1192,11 +1276,11 @@
     {
       "title": "PurTV Pencarian",
       "summary": "Cari donghua (anichin) + anime (samehadaku).",
-      "description": "Mencari berdasarkan kata kunci, sama seperti kotak pencarian di\r              purtv.vercel.app — hasil digabung dari dua sumber. Mendukung\r              paginasi, tiap item diberi penanda `source`, dan respon menyertakan\r              `purtv_pagenation`.",
+      "description": "Mencari berdasarkan kata kunci, sama seperti kotak pencarian di\n              purtv.vercel.app — hasil digabung dari dua sumber. Mendukung\n              paginasi, tiap item diberi penanda `source`, dan respon menyertakan\n              `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/search",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/search?q=soul+land')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/search?q=soul+land')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -1210,11 +1294,11 @@
     {
       "title": "PurTV Series",
       "summary": "Halaman seri — gabungan donghua (anichin) + anime (samehadaku).",
-      "description": "Mengambil halaman seri. URL `/seri/<slug>/` (anichin.cafe) → donghua;\r              URL `/anime/<slug>/` (v2.samehadaku.how) → anime. Menyertakan judul,\r              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.",
+      "description": "Mengambil halaman seri. URL `/series/<slug>/` (anichin.com.co) → donghua;\r              URL `/anime/<slug>/` (v2.samehadaku.how) → anime. Menyertakan judul,\r              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/series",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.cafe/seri/soul-land/')\r     .then(res => res.json())\r     .then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')\r     .then(res => res.json())\r     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -1227,31 +1311,6 @@
     }
   ],
   "search": [
-    {
-      "title": "Web Search (Bing)",
-      "summary": "Cari di Bing tanpa API key.",
-      "description": "Mencari di mesin pencari Bing tanpa API key. Menggunakan\n              scraping HTML Bing yang reliable dari serverless/Vercel.\n              Retry 3x dengan backoff eksponensial jika terkena rate-limit.\n              Respons berupa JSON biasa (bukan SSE/streaming).",
-      "method": "GET",
-      "path": "/api/search/duckduckgo",
-      "responseType": "json",
-      "example": "fetch('https://nexta-api.vercel.app/api/search/duckduckgo?q=nodejs+tutorial&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
-      "params": [
-        {
-          "name": "q",
-          "in": "query",
-          "type": "string",
-          "description": "Kata kunci pencarian (wajib).",
-          "required": true
-        },
-        {
-          "name": "limit",
-          "in": "query",
-          "type": "number",
-          "description": "Jumlah hasil maks (default 10, maks 20).",
-          "required": false
-        }
-      ]
-    },
     {
       "title": "SoundCloud Search",
       "summary": "Cari track, playlist, album, dan user di SoundCloud.",
@@ -1309,38 +1368,6 @@
           "in": "query",
           "type": "number",
           "description": "Offset paginasi (default 0). Pakai nilai",
-          "required": false
-        }
-      ]
-    },
-    {
-      "title": "Yahoo Search",
-      "summary": "Cari di Yahoo (id.search.yahoo.com) dengan cookie jar & retry 5x.",
-      "description": "Mencari di mesin pencari Yahoo tanpa browser. Memakai cookie\n              jar sesi + retry hingga 5x agar lolos challenge anti-bot,\n              lalu mengembalikan judul, URL, dan snippet. Respons berupa\n              JSON biasa (bukan SSE/streaming).",
-      "method": "GET",
-      "path": "/api/search/yahoo",
-      "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/search/yahoo?q=nodejs+tutorial&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
-      "params": [
-        {
-          "name": "q",
-          "in": "query",
-          "type": "string",
-          "description": "Kata kunci pencarian (wajib).",
-          "required": true
-        },
-        {
-          "name": "page",
-          "in": "query",
-          "type": "number",
-          "description": "Nomor halaman (default 1, 10 hasil/halaman).",
-          "required": false
-        },
-        {
-          "name": "limit",
-          "in": "query",
-          "type": "number",
-          "description": "Jumlah hasil maks (default 10, maks 20).",
           "required": false
         }
       ]
@@ -1419,6 +1446,26 @@
           "type": "number",
           "description": "Faktor skala (2, 3, atau 4). Default 2.",
           "required": false
+        }
+      ]
+    }
+  ],
+  "uploader": [
+    {
+      "title": "ImgBB Hosting",
+      "summary": "Upload gambar gratis ke imgbb.com via file langsung.",
+      "description": "Mengupload file gambar (multipart field `file`, maks 32 MB) ke\r              imgbb.com tanpa API key (token diambil otomatis dari homepage).\r              Respon berisi direct link (i.ibb.co), thumbnail, medium, viewer & delete URL.",
+      "method": "POST",
+      "path": "/api/uploader/imggbb",
+      "responseType": "json",
+      "example": "const fd = new FormData();\r fd.append('file', fileInput.files[0]);\r fetch('https://puruboy-api.vercel.app/api/uploader/imggbb', { method: 'POST', body: fd })\r     .then(res => res.json())\r     .then(console.log);",
+      "params": [
+        {
+          "name": "file",
+          "in": "formData",
+          "type": "file",
+          "description": "File gambar (jpeg/png/gif/webp/bmp/tiff/heic, maks 32 MB) (wajib).",
+          "required": true
         }
       ]
     }
