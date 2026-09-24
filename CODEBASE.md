@@ -59,7 +59,8 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 
 `app/api/search/web/route.js` + `lib/searxng.js` (pengganti Bing yang tak stabil dari IP datacenter). Sesuai docs https://docs.searxng.org/dev/search_api.html (`GET {instance}/search?q=&format=json&language=`):
 
-- 5 instance paralel via `Promise.all` (`search.mectov.my.id`, `searx.dresden.network`, `search.lumy.live`, `etsi.me`, `sx.xo.st`); timeout 5 detik per request; satu gagal tak menggagalkan lain.
+- Instance MURNI DINAMIS dari searx.space (tanpa URL hardcode): top 15 kandidat (https + success ≥ 80%) di-probe berkala (working set maks 10, refresh 6 jam; daftar kandidat cache 24 jam).
+- 10 request paralel via `Promise.all` (`GET {instance}/search?q=&format=json&language=`); timeout 5 detik per request; satu gagal tak menggagalkan lain.
 - Hasil digabung + verifikasi (URL http(s) + title), dedupe normalisasi URL, ranking skor kata + bonus kemunculan multi-instance; 10 URL teratas. Cache memori (TTL 30 mnt, cap 300, flag `cached`) selama proses Vercel jalan. Default `lang=id`. Respons ada `instances_used/instances_total`.
 - Pemulih: retry auto-koreksi typo 1x (`corrected_from`), lalu fallback Wikipedia (`fallback:'wikipedia'`; helper `scoreResult`/`suggestCorrection`/`searchWikipediaFallback` di-export dari `lib/bing-search.js`).
 
