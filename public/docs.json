@@ -359,12 +359,12 @@
     },
     {
       "title": "Install Agent Skills",
-      "summary": "Validasi skill + panduan install npx skills add per-agent.",
-      "description": "Resolver untuk `npx skills add <owner/repo> --skill <nama>`: memvalidasi\n              repo sumber via GitHub API, memastikan nama skill ada (frontmatter\n              SKILL.md), lalu mengembalikan perintah install siap salin beserta\n              path folder skills tiap agent (claude-code, cursor, codex, opencode,\n              dsb). Install asli tetap dijalankan di mesin client karena CLI butuh\n              akses tulis ke folder agent lokal — endpoint ini tidak bisa install\n              langsung dari server. Jika nama skill tidak cocok, respons 404 berisi\n              daftar skill yang tersedia di repo tersebut. Juga mendukung method\n              POST dengan body JSON {\"source\": \"...\", \"skill\": \"...\", \"agent\": \"...\"}.",
+      "summary": "Ambil file SKILL.md langsung (setara npx skills use).",
+      "description": "Mengambil isi file SKILL.md satu skill langsung sebagai respons\n              markdown (Content-Type text/markdown) — setara `npx skills use\n              <owner/repo@skill>` — sehingga agent bisa membaca & memakai skill\n              tanpa install ke folder lokal. Repo sumber divalidasi via GitHub\n              API dan nama skill dicocokkan dengan frontmatter SKILL.md. Jika\n              nama skill tidak cocok, respons 404 JSON berisi daftar skill yang\n              tersedia di repo tersebut. Untuk install permanen ke folder agent,\n              jalankan perintah pada header X-Install-Command di mesin client.\n              Juga mendukung method POST dengan body JSON {\"source\": \"...\", \"skill\": \"...\"}.",
       "method": "GET",
       "path": "/api/agent-tools/install-skills",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines&agent=opencode')\n     .then(res => res.json())\n     .then(data => console.log(data));",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\n     .then(res => res.text())\n     .then(data => console.log(data));",
       "params": [
         {
           "name": "source",
@@ -379,13 +379,6 @@
           "type": "string",
           "description": "Nama skill, mis. web-design-guidelines (wajib).",
           "required": true
-        },
-        {
-          "name": "agent",
-          "in": "query",
-          "type": "string",
-          "description": "Target agent: claude-code | cursor | codex | opencode | windsurf | gemini-cli | github-copilot | cline | kiro-cli | roo | trae | amp.",
-          "required": false
         }
       ]
     },
