@@ -1,20 +1,24 @@
 /**
  * @title Web Search
- * @summary Cari web via SearXNG multi-instance + fallback Wikipedia (tanpa API key).
- * @description Mencari via beberapa instance SearXNG publik yang dipanggil
- *              bersamaan (Promise.all, timeout 5 detik per instance).
- *              Hasil digabung, diverifikasi, didedupe, dan di-ranking
- *              sehingga yang paling relevan di paling atas (maks 10 URL);
- *              hasil di-cache di memori selama proses Vercel masih jalan.
- *              Bila semua instance gagal/tak relevan (termasuk typo huruf
- *              ganda yang dikoreksi otomatis), fallback ke Wikipedia
- *              (flag `fallback: 'wikipedia'`, koreksi ditandai
- *              `corrected_from`). Respons JSON biasa. Default bahasa
- *              Indonesia.
+ * @summary Cari web murni via scraping Yahoo / Baidu (tanpa API key).
+ * @description Murni scraping halaman hasil dengan bypass guard
+ *              (cookie sesi persisten di Firebase + refresh otomatis
+ *              bila invalid, rotasi UA, jeda sopan, retry 1x).
+ *              Provider dipilih via param `provider` (yahoo | baidu,
+ *              default yahoo); bila provider pilihan buntu (diblokir/
+ *              kosong), otomatis dicoba provider satunya
+ *              (ditandai `fallback_provider`). Blok hasil organik
+ *              di-parse (judul, URL asli, snippet, nama situs),
+ *              didedupe, lalu diambil N teratas sesuai urutan ranking
+ *              asli provider (maks 10 URL); hasil di-cache di memori
+ *              selama proses Vercel masih jalan. Typo huruf ganda
+ *              dikoreksi otomatis 1x retry (ditandai `corrected_from`).
+ *              Default bahasa Indonesia.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
- * @param {string} [query.lang] - Bahasa hasil: id | en (default id).
+ * @param {string} [query.provider] - Provider: yahoo | baidu (default yahoo).
+ * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Yahoo).
  * @param {number} [query.limit] - Jumlah hasil maks (default 5, maks 20, alias: result, count).
  * @response json
  * @example
@@ -22,7 +26,9 @@
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchSearxng } from '../../../../lib/searxng.js';
+import { searchYahoo } from '../../../../lib/yahoo-scrape.js';
+import { searchBaidu } from '../../../../lib/baidu-scrape.js';
+import { suggestCorrection } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,15 +50,50 @@ function parseQuery(searchParams) {
   if (Number.isNaN(limit)) limit = 5;
   limit = Math.min(Math.max(limit, 1), 20);
 
-  return { params: { query, lang, limit } };
+  // Provider: yahoo | baidu (selain itu default yahoo).
+  const rawProvider = (searchParams.get('provider') || 'yahoo').trim().toLowerCase();
+  const provider = rawProvider === 'baidu' ? 'baidu' : 'yahoo';
+
+  return { params: { query, lang, limit, provider } };
 }
 
+const SEARCHERS = { yahoo: searchYahoo, baidu: searchBaidu };
+
 async function runSearch(params) {
-  const result = await searchSearxng(params.query, {
-    limit: params.limit,
-    lang: params.lang,
-  });
-  return Response.json({ success: true, status: 'success', ...result });
+  const primary = params.provider;
+  const secondary = primary === 'yahoo' ? 'baidu' : 'yahoo';
+  const opts = { limit: params.limit, lang: params.lang };
+
+  // 1. Provider pilihan.
+  let result = await SEARCHERS[primary](params.query, opts);
+
+  // 2. Pemulih typo: koreksi huruf ganda (mis. "penemuu" -> "penemu") lalu retry 1x.
+  if (!result.success && result.error === 'no_results') {
+    const fixed = suggestCorrection(params.query);
+    if (fixed && fixed !== params.query) {
+      const retried = await SEARCHERS[primary](fixed, opts);
+      if (retried.success) result = { ...retried, corrected_from: params.query };
+    }
+  }
+
+  // 3. Provider pilihan buntu (diblokir/kosong) -> otomatis coba provider satunya.
+  if (!result.success) {
+    const alt = await SEARCHERS[secondary](params.query, opts);
+    if (alt.success) {
+      result = { ...alt, fallback_provider: secondary };
+    }
+  }
+
+  if (!result.success) {
+    const err = new Error(
+      /_blocked$/.test(result.error || '')
+        ? 'Yahoo & Baidu memblokir permintaan (guard), coba lagi nanti'
+        : 'Tidak ada hasil dari Yahoo/Baidu untuk query tersebut',
+    );
+    err.status = 502;
+    throw err;
+  }
+  return Response.json({ success: true, status: 'success', provider: result.source, ...result });
 }
 
 export async function GET(req) {
@@ -74,10 +115,11 @@ export async function POST(req) {
   try {
     body = await req.json();
   } catch {
-    return Response.json({ success: false, error: 'Body harus JSON: {"query": "...", "lang": "id", "limit": 5}' }, { status: 400 });
+    return Response.json({ success: false, error: 'Body harus JSON: {"query": "...", "provider": "yahoo|baidu", "lang": "id", "limit": 5}' }, { status: 400 });
   }
   const sp = new URLSearchParams();
   if (body?.query ?? body?.q) sp.set('query', body.query ?? body.q);
+  if (body?.provider != null) sp.set('provider', String(body.provider));
   if (body?.lang != null) sp.set('lang', String(body.lang));
   if (body?.limit ?? body?.result ?? body?.count) sp.set('limit', String(body.limit ?? body.result ?? body.count));
   const parsed = parseQuery(sp);
