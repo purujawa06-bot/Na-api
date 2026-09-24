@@ -384,8 +384,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Cari web via Bing (backend tunggal).",
-      "description": "Mencari di mesin pencari Bing tanpa API key. Endpoint tunggal\r              pengganti /api/search/duckduckgo, /api/search/yahoo, dan\r              /api/search/bing yang sudah dihapus. Respons JSON biasa.",
+      "summary": "Cari web via Bing + fallback Wikipedia (tanpa API key).",
+      "description": "Mencari di mesin pencari Bing tanpa API key. Endpoint tunggal\r              pengganti /api/search/duckduckgo, /api/search/yahoo, dan\r              /api/search/bing yang sudah dihapus. Bila hasil Bing nihil/tak\r              relevan (termasuk typo huruf ganda yang dikoreksi otomatis),\r              fallback ke Wikipedia (flag `fallback: 'wikipedia'`, koreksi\r              ditandai `corrected_from`). Respons JSON biasa.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",

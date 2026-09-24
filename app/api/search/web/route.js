@@ -1,9 +1,12 @@
 /**
  * @title Web Search
- * @summary Cari web via Bing (backend tunggal).
+ * @summary Cari web via Bing + fallback Wikipedia (tanpa API key).
  * @description Mencari di mesin pencari Bing tanpa API key. Endpoint tunggal
  *              pengganti /api/search/duckduckgo, /api/search/yahoo, dan
- *              /api/search/bing yang sudah dihapus. Respons JSON biasa.
+ *              /api/search/bing yang sudah dihapus. Bila hasil Bing nihil/tak
+ *              relevan (termasuk typo huruf ganda yang dikoreksi otomatis),
+ *              fallback ke Wikipedia (flag `fallback: 'wikipedia'`, koreksi
+ *              ditandai `corrected_from`). Respons JSON biasa.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
