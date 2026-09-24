@@ -59,7 +59,9 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 
 `app/api/search/web/route.js` + `lib/searxng.js` (pengganti Bing yang tak stabil dari IP datacenter). Sesuai docs https://docs.searxng.org/dev/search_api.html (`GET {instance}/search?q=&format=json&language=`):
 
-- Instance MURNI DINAMIS dari searx.space (tanpa URL hardcode): top 15 kandidat (https + success ≥ 80%) di-probe berkala (working set maks 10, refresh 6 jam; daftar kandidat cache 24 jam).
+- Instance MURNI DINAMIS dari searx.space (tanpa URL hardcode): top 20 kandidat (https + success ≥ 80%) di-probe berkala (working set maks 10, refresh 6 jam; daftar kandidat cache 24 jam).
+- Blacklist persisten di Firebase RTDB (`https://puru-69425-default-rtdb.firebaseio.com/searxng_blacklist`, URL hardcode): instance error/mati/non-JSON/HTTP error/timeout & lemot >5 detik dicatat `{at, reason}` + difilter dari kandidat sehingga digantikan kandidat sehat lain; TTL 24 jam (pulih otomatis), baca cache 10 menit.
+- Catatan: instance non-JSON SENGAJA tidak di-scrape — terbukti mengembalikan halaman bot-check Anubis/security-check (bukan hasil), dan HTML SearXNG baru me-render hasil via JS client-side (SSR cuma shell); `format=rss` juga diblokir. JSON satu-satunya format machine-readable yang viable.
 - 10 request paralel via `Promise.all` (`GET {instance}/search?q=&format=json&language=`); timeout 5 detik per request; satu gagal tak menggagalkan lain.
 - Hasil digabung + verifikasi (URL http(s) + title), dedupe normalisasi URL, ranking skor kata + bonus kemunculan multi-instance; 10 URL teratas. Cache memori (TTL 30 mnt, cap 300, flag `cached`) selama proses Vercel jalan. Default `lang=id`. Respons ada `instances_used/instances_total`.
 - Pemulih: retry auto-koreksi typo 1x (`corrected_from`), lalu fallback Wikipedia (`fallback:'wikipedia'`; helper `scoreResult`/`suggestCorrection`/`searchWikipediaFallback` di-export dari `lib/bing-search.js`).
