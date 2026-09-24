@@ -384,8 +384,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Cari web murni via scraping Yahoo + Baidu sekaligus (tanpa API key).",
-      "description": "Murni scraping halaman hasil dengan bypass guard\r              (cookie sesi persisten di Firebase + refresh otomatis\r              bila invalid, rotasi UA, jeda sopan, retry 1x).\r              Yahoo & Baidu selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung selang-seling ke dalam SATU array (dedupe URL,\r              total maks 2x limit). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: yahoo | baidu). Typo huruf ganda\r              dikoreksi otomatis 1x retry (ditandai `corrected_from`).\r              Satu provider diblokir tak menggagalkan yang lain.\r              Default bahasa Indonesia.",
+      "summary": "Cari web murni via Yahoo + Baidu + Startpage + Wikipedia sekaligus (tanpa API key).",
+      "description": "Yahoo/Baidu/Startpage murni scraping halaman hasil dengan\r              bypass guard (cookie sesi persisten di Firebase + refresh\r              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x);\r              Wikipedia via MediaWiki API resmi (tanpa guard).\r              Keempat provider selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung selang-seling ke dalam SATU array (dedupe URL,\r              total maks 4x limit, cap 20). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: yahoo | baidu | startpage | wikipedia).\r              Typo huruf ganda dikoreksi otomatis 1x retry\r              (ditandai `corrected_from`). Satu/lebih provider diblokir\r              tak menggagalkan yang lain. Default bahasa Indonesia.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",
@@ -402,7 +402,7 @@
           "name": "lang",
           "in": "query",
           "type": "string",
-          "description": "Bahasa hasil: id | en (default id; khusus Yahoo).",
+          "description": "Bahasa hasil: id | en (default id; khusus Yahoo & Wikipedia).",
           "required": false
         },
         {

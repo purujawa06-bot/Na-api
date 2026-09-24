@@ -1,22 +1,23 @@
 /**
  * @title Web Search
- * @summary Cari web murni via scraping Yahoo + Baidu sekaligus (tanpa API key).
- * @description Murni scraping halaman hasil dengan bypass guard
- *              (cookie sesi persisten di Firebase + refresh otomatis
- *              bila invalid, rotasi UA, jeda sopan, retry 1x).
- *              Yahoo & Baidu selalu ditembak BERSAMAAN via Promise.all;
+ * @summary Cari web murni via Yahoo + Baidu + Startpage + Wikipedia sekaligus (tanpa API key).
+ * @description Yahoo/Baidu/Startpage murni scraping halaman hasil dengan
+ *              bypass guard (cookie sesi persisten di Firebase + refresh
+ *              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x);
+ *              Wikipedia via MediaWiki API resmi (tanpa guard).
+ *              Keempat provider selalu ditembak BERSAMAAN via Promise.all;
  *              masing-masing menyumbang maksimal `limit` hasil yang
  *              digabung selang-seling ke dalam SATU array (dedupe URL,
- *              total maks 2x limit). Blok hasil organik di-parse
+ *              total maks 4x limit, cap 20). Blok hasil organik di-parse
  *              (judul, URL asli, snippet, nama situs; tiap item ada
- *              field `engine`: yahoo | baidu). Typo huruf ganda
- *              dikoreksi otomatis 1x retry (ditandai `corrected_from`).
- *              Satu provider diblokir tak menggagalkan yang lain.
- *              Default bahasa Indonesia.
+ *              field `engine`: yahoo | baidu | startpage | wikipedia).
+ *              Typo huruf ganda dikoreksi otomatis 1x retry
+ *              (ditandai `corrected_from`). Satu/lebih provider diblokir
+ *              tak menggagalkan yang lain. Default bahasa Indonesia.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
- * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Yahoo).
+ * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Yahoo & Wikipedia).
  * @param {number} [query.limit] - Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).
  * @response json
  * @example
@@ -26,6 +27,8 @@
  */
 import { searchYahoo } from '../../../../lib/yahoo-scrape.js';
 import { searchBaidu } from '../../../../lib/baidu-scrape.js';
+import { searchStartpage } from '../../../../lib/startpage-scrape.js';
+import { searchWikipedia } from '../../../../lib/wikipedia-search.js';
 import { suggestCorrection } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
@@ -65,16 +68,16 @@ function normalizeMix(u) {
 }
 
 /**
- * Gabung hasil kedua provider selang-seling ke SATU array:
- * peringkat 1 Yahoo, 1 Baidu, 2 Yahoo, 2 Baidu, dst. (dedupe URL,
- * total maks 2x limit). Satu provider gagal = kontribusi nol,
- * provider lain tetap jalan.
+ * Gabung hasil SEMUA provider selang-seling ke SATU array:
+ * peringkat 1 Yahoo, 1 Baidu, 1 Startpage, 1 Wikipedia,
+ * 2 Yahoo, 2 Baidu, dst. (dedupe URL, total maks cap).
+ * Satu provider gagal = kontribusi nol, provider lain tetap jalan.
  */
-function mergeMixed(yahoo, baidu, cap) {
-  const lists = [yahoo?.results || [], baidu?.results || []];
+function mergeMixed(providers, cap) {
+  const lists = (providers || []).map((p) => p?.results || []);
   const merged = [];
   const seen = new Set();
-  const maxLen = Math.max(lists[0].length, lists[1].length);
+  const maxLen = Math.max(0, ...lists.map((l) => l.length));
   for (let i = 0; i < maxLen && merged.length < cap; i++) {
     for (const list of lists) {
       const item = list[i];
@@ -104,44 +107,47 @@ function looksRelevant(results, query) {
 
 async function runSearch(params) {
   const opts = { limit: params.limit, lang: params.lang };
-  const cap = Math.min(params.limit * 2, 20);
+  const cap = Math.min(params.limit * 4, 20);
 
-  // 1. Tembak keduanya bersamaan; masing-masing nyumbang maks `limit`.
-  let [yahoo, baidu] = await Promise.all([
+  // 1. Tembak keempatnya bersamaan; masing-masing nyumbang maks `limit`.
+  let providers = await Promise.all([
     searchYahoo(params.query, opts),
     searchBaidu(params.query, opts),
+    searchStartpage(params.query, opts),
+    searchWikipedia(params.query, opts),
   ]);
   // 2. Pemulih typo: bila hasil nihil ATAU tak relevan (mis. Baidu
   //    mengembalikan hasil asal untuk query typo "penemuu"), koreksi
-  //    huruf ganda lalu retry keduanya 1x.
+  //    huruf ganda lalu retry semuanya 1x.
   let correctedFrom = null;
   const fixed = suggestCorrection(params.query);
   const needsFix =
     fixed &&
     fixed !== params.query &&
-    (!yahoo.success ||
-      !baidu.success ||
-      !looksRelevant(mergeMixed(yahoo, baidu, cap), params.query));
+    (!providers.every((p) => p.success) ||
+      !looksRelevant(mergeMixed(providers, cap), params.query));
   if (needsFix) {
-    [yahoo, baidu] = await Promise.all([searchYahoo(fixed, opts), searchBaidu(fixed, opts)]);
-    if (yahoo.success || baidu.success) correctedFrom = params.query;
+    providers = await Promise.all([
+      searchYahoo(fixed, opts),
+      searchBaidu(fixed, opts),
+      searchStartpage(fixed, opts),
+      searchWikipedia(fixed, opts),
+    ]);
+    if (providers.some((p) => p.success)) correctedFrom = params.query;
   }
 
-  const results = mergeMixed(yahoo, baidu, cap);
+  const results = mergeMixed(providers, cap);
   if (!results.length) {
-    const blocked = /_blocked$/.test(yahoo.error || '') && /_blocked$/.test(baidu.error || '');
+    const guard = providers.every((p) => /_blocked$|_challenge$/.test(p.error || ''));
     const err = new Error(
-      blocked
-        ? 'Yahoo & Baidu memblokir permintaan (guard), coba lagi nanti'
-        : 'Tidak ada hasil dari Yahoo/Baidu untuk query tersebut',
+      guard
+        ? 'Semua provider memblokir permintaan (guard), coba lagi nanti'
+        : 'Tidak ada hasil dari provider untuk query tersebut',
     );
     err.status = 502;
     throw err;
   }
-  const used = [
-    ...(yahoo.success ? ['yahoo'] : []),
-    ...(baidu.success ? ['baidu'] : []),
-  ];
+  const used = providers.filter((p) => p.success).map((p) => p.source);
   return Response.json({
     success: true,
     status: 'success',
