@@ -1,26 +1,37 @@
 /**
  * @title Web Search
- * @summary Cari web via SearXNG Puru (tanpa API key).
- * @description Satu provider tetap: https://searxng-puru.onrender.com/search?q=<query>&format=json
- *              (format JSON SearXNG: { query, results: [{ title, url, content, engine }] }).
- *              Hasil dipetakan ke kontrak lama agar KONSISTEN (bentuk respon tidak berubah):
- *              SATU array yang DIURUTKAN berdasar skor relevansi terhadap query
- *              (frasa utuh di judul +30, token di judul +10, semua token di judul +15,
- *              token di snippet +4, token di URL +2; dedupe URL, total maks 3x limit, cap 20;
- *              tiap item ada field `engine` dari SearXNG).
- *              Default bahasa Indonesia.
+ * @summary Cari web murni via Baidu + Bing + Wikipedia sekaligus (tanpa API key).
+ * @description Baidu/Bing murni scraping halaman hasil dengan
+ *              bypass guard (cookie sesi persisten di Firebase + refresh
+ *              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x;
+ *              Bing juga menolak mode degradasi via cek relevansi);
+ *              Wikipedia via MediaWiki API resmi (tanpa guard).
+ *              Ketiga provider selalu ditembak BERSAMAAN via Promise.all;
+ *              masing-masing menyumbang maksimal `limit` hasil yang
+ *              digabung ke dalam SATU array lalu DIURUTKAN berdasar
+ *              skor relevansi terhadap query (dedupe URL, total maks
+ *              3x limit, cap 20; skor seri mempertahankan urutan
+ *              selang-seling agar beragam). Blok hasil organik di-parse
+ *              (judul, URL asli, snippet, nama situs; tiap item ada
+ *              field `engine`: baidu | bing | wikipedia).
+ *              Typo huruf ganda dikoreksi otomatis 1x retry
+ *              (ditandai `corrected_from`). Satu/lebih provider diblokir
+ *              tak menggagalkan yang lain. Default bahasa Indonesia.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Kata kunci pencarian (wajib, alias: q).
- * @param {string} [query.lang] - Bahasa hasil: id | en (default id; diteruskan sebagai language ke SearXNG).
- * @param {number} [query.limit] - Jumlah hasil maks (default 5, maks 10, alias: result, count).
+ * @param {string} [query.lang] - Bahasa hasil: id | en (default id; khusus Wikipedia).
+ * @param {number} [query.limit] - Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/search/web?query=nodejs+tutorial&lang=id&limit=5')
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchSearxngPuru } from '../../../../lib/searxng-puru.js';
+import { searchBaidu } from '../../../../lib/baidu-scrape.js';
+import { searchBing } from '../../../../lib/bing-scrape.js';
+import { searchWikipedia } from '../../../../lib/wikipedia-search.js';
+import { suggestCorrection } from '../../../../lib/bing-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -45,7 +56,7 @@ function parseQuery(searchParams) {
   return { params: { query, lang, limit } };
 }
 
-/** Normalisasi URL untuk dedupe. */
+/** Normalisasi URL untuk dedupe gabungan. */
 function normalizeMix(u) {
   try {
     const p = new URL(u);
@@ -66,19 +77,28 @@ const STOPWORDS = new Set(
 );
 
 /**
- * Urutkan hasil SearXNG berdasar SKOR RELEVANSI terhadap query
- * (paling relevan di paling atas): dedupe URL -> skor tiap item ->
+ * Gabung hasil SEMUA provider ke SATU array yang diurutkan berdasar
+ * SKOR RELEVANSI terhadap query (paling relevan di paling atas,
+ * bukan selang-seling provider): dedupe URL -> skor tiap item ->
  * sort menurun -> potong `cap` -> `rank` ulang.
+ * Sort stabil: skor seri mempertahankan urutan selang-seling
+ * (1 Baidu, 1 Bing, 1 Wikipedia, 2 Baidu, ...) agar beragam.
+ * Satu provider gagal = kontribusi nol, provider lain tetap jalan.
  */
-function rankResults(items, query, cap) {
-  const seen = new Set();
+function mergeRanked(providers, query, cap) {
+  const lists = (providers || []).map((p) => p?.results || []);
+  const maxLen = Math.max(0, ...lists.map((l) => l.length));
   const pooled = [];
-  for (const item of items || []) {
-    if (!item?.url) continue;
-    const key = normalizeMix(item.url);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    pooled.push(item);
+  const seen = new Set();
+  for (let i = 0; i < maxLen; i++) {
+    for (const list of lists) {
+      const item = list[i];
+      if (!item?.url) continue;
+      const key = normalizeMix(item.url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pooled.push(item);
+    }
   }
   const ql = String(query || '').toLowerCase().trim();
   const tokens = (ql.match(/[a-z\u00c0-\u024f\u1e00-\u1eff]{4,}/g) || []).filter(
@@ -107,28 +127,64 @@ function rankResults(items, query, cap) {
   return scored.slice(0, cap).map(({ item }, i) => ({ ...item, rank: i + 1 }));
 }
 
+/** Relevan bila minimal 1 kata query (huruf, >=4) muncul di judul/snippet. */
+function looksRelevant(results, query) {
+  const words = String(query || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((w) => /^[a-z]+$/.test(w) && w.length >= 4);
+  if (!words.length) return true;
+  const blob = results
+    .map((r) => `${r.title || ''} ${r.snippet || ''}`.toLowerCase())
+    .join(' ');
+  return words.some((w) => blob.includes(w));
+}
+
 async function runSearch(params) {
+  const opts = { limit: params.limit, lang: params.lang };
   const cap = Math.min(params.limit * 3, 20);
 
-  // Satu provider tetap (SearXNG Puru); minta langsung `cap` hasil
-  // agar total hasil sama seperti kontrak lama (maks 3x limit, cap 20).
-  const res = await searchSearxngPuru(params.query, { limit: cap, lang: params.lang });
-  if (!res.success) {
+  // 1. Tembak ketiganya bersamaan; masing-masing nyumbang maks `limit`.
+  let providers = await Promise.all([
+    searchBaidu(params.query, opts),
+    searchBing(params.query, opts),
+    searchWikipedia(params.query, opts),
+  ]);
+  // 2. Pemulih typo: bila hasil nihil ATAU tak relevan (mis. Baidu
+  //    mengembalikan hasil asal untuk query typo "penemuu"), koreksi
+  //    huruf ganda lalu retry semuanya 1x.
+  let correctedFrom = null;
+  let effectiveQuery = params.query;
+  const fixed = suggestCorrection(params.query);
+  const needsFix =
+    fixed &&
+    fixed !== params.query &&
+    (!providers.every((p) => p.success) ||
+      !looksRelevant(mergeRanked(providers, params.query, cap), params.query));
+  if (needsFix) {
+    providers = await Promise.all([
+      searchBaidu(fixed, opts),
+      searchBing(fixed, opts),
+      searchWikipedia(fixed, opts),
+    ]);
+    if (providers.some((p) => p.success)) {
+      correctedFrom = params.query;
+      effectiveQuery = fixed; // skor relevansi memakai ejaan yang benar
+    }
+  }
+
+  const results = mergeRanked(providers, effectiveQuery, cap);
+  if (!results.length) {
+    const guard = providers.every((p) => /_blocked$|_challenge$/.test(p.error || ''));
     const err = new Error(
-      /_blocked$|_challenge$/.test(res.error || '')
+      guard
         ? 'Semua provider memblokir permintaan (guard), coba lagi nanti'
         : 'Tidak ada hasil dari provider untuk query tersebut',
     );
     err.status = 502;
     throw err;
   }
-
-  const results = rankResults(res.results, params.query, cap);
-  if (!results.length) {
-    const err = new Error('Tidak ada hasil dari provider untuk query tersebut');
-    err.status = 502;
-    throw err;
-  }
+  const used = providers.filter((p) => p.success).map((p) => p.source);
   return Response.json({
     success: true,
     status: 'success',
@@ -136,8 +192,9 @@ async function runSearch(params) {
     count: results.length,
     results,
     source: 'mixed',
-    providers: ['searxng'],
+    providers: used,
     limit_per_provider: params.limit,
+    ...(correctedFrom ? { corrected_from: correctedFrom } : {}),
   });
 }
 
