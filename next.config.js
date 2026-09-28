@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false, // Nonaktifkan strict mode untuk menghindari double-invocation pada useEffect di dev (opsional)
+  experimental: {
+    // Jangan bundle `ws` (dipakai lib/bing-cdp.js): bundling merusak
+    // optional native `bufferutil` sehingga production error
+    // "t.mask is not a function". Biarkan require saat runtime.
+    serverComponentsExternalPackages: ['ws'],
+  },
   images: {
     remotePatterns: [
       {

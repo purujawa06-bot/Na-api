@@ -65,6 +65,7 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - Parse: judul dari `<h2><a>`, URL asli = decode redirect `/ck/a?...&u=a1<base64>` (buang prefix `a1`) atau href langsung non-bing; link internal bing/microsoft dibuang; snippet dari `<div class="b_caption"><p>`; ranking = urutan asli Bing, dedupe URL, `rank` ulang.
 - Respons: `source:'bing'`, `results[{title,url,snippet,source,engine:'bing',rank}]`; query kosong -> 400; nol hasil/gagal CDP -> 502. Cache memori 10 mnt cap 300.
 - JSDoc route: `query` + `limit` (default 10, maks 20).
+- Klien WS memakai paket `ws` yang WAJIB eksternal (`serverComponentsExternalPackages` di `next.config.js`): bila ikut ter-bundle, native `bufferutil` rusak dan production 502 `t.mask is not a function` (lokal tetap jalan).
 - Uji: `node temp/test-bing-cdp.mjs [query]`.
 
 ## Scraper Komiku (09/2026)
