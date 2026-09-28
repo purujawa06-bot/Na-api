@@ -56,17 +56,18 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - `app/api/agent-tools/web-fetch/route.js` + `lib/web-fetch.js` — fetch URL publik jadi teks bersih dengan pagination WAJIB (`url` + `offset` + `length`; GET query param & POST JSON; length 1..20000, offset >= 0). HTML di-strip via cheerio (sudah dependency), cap body 2MB, timeout 20s, tolak host lokal/privat (proteksi SSRF). Respons: `{success, url, final_url, content_type, total_length, offset, length, requested_length, has_more, truncated_body, content}`; offset/length kosong → 400; gagal upstream → 502.
 - Uji: `node temp/test-agent-tools.mjs` (find + regresi search/web), `node temp/test-install-md.mjs` (install markdown), `node temp/test-search-provider.mjs` (provider yahoo/baidu + fallback, 6/6). Catatan: uji install boros kuota GitHub API anonim (60/jam); ada `GITHUB_TOKEN` opsional di env untuk menaikkan limit.
 
-## Search Web — Bing via CDP remote (09/2026)
+## Search Web — Bing + DuckDuckGo mixed via CDP remote (09/2026)
 
-`app/api/search/web/route.js` + `lib/bing-cdp.js` (SearXNG-active DIHENTIKAN 09/2026: hasil tak relevan/tak stabil untuk serving produksi).
+`app/api/search/web/route.js` + `lib/search-mixed.js` + `lib/bing-cdp.js` + `lib/duckduckgo-search.js` + `lib/cdp-browser.js` (SearXNG-active DIHENTIKAN: hasil tak relevan/tak stabil).
 
-- Transport: WebSocket CDP ke `BING_CDP_URL` (default `wss://browser-yq20.onrender.com/`, Lightpanda). Alur per search: connect → `Target.createTarget({url:'about:blank'})` → `Target.attachToTarget` → `Page.enable` + `Page.navigate` (URL Bing) → tunggu `Page.loadEventFired` + settle 2.5 dtk → `LP.dump({format:'html'})` → parse `li.b_algo`. Cleanup di `finally`: tutup SEMUA tab page (`Target.getTargets` + `closeTarget` per tab, best-effort) + WS close, agar tak ada tab bocor di browser remote walau request gagal di tengah jalan.
-- URL Bing WAJIB polos (`/search?q=`, tanpa `setlang/cc/count` — parameter region terbukti memicu halaman "tidak ada hasil"); navigasi WAJIB eksplisit via `Page.navigate` (createTarget ber-URL tak selalu navigasi ulang karena tab dipakai ulang di server).
-- Parse: judul dari `<h2><a>`, URL asli = decode redirect `/ck/a?...&u=a1<base64>` (buang prefix `a1`) atau href langsung non-bing; link internal bing/microsoft dibuang; snippet dari `<div class="b_caption"><p>`; ranking = urutan asli Bing, dedupe URL, `rank` ulang.
-- Respons: `source:'bing'`, `results[{title,url,snippet,source,engine:'bing',rank}]`; query kosong -> 400; nol hasil/gagal CDP -> 502. Cache memori 10 mnt cap 300.
-- JSDoc route: `query` + `limit` (default 10, maks 20).
+- Transport: SEMUA via WebSocket CDP (`lib/cdp-browser.js` → `fetchHtmlViaCdp(url)`, default `wss://browser-yq20.onrender.com/`, override `CDP_WS_URL`/`BING_CDP_URL`). Alur: connect → `createTarget(about:blank)` → `attach` → `Page.enable` + `Page.navigate` eksplisit → tunggu `Page.loadEventFired` (timeout 15 dtk, DDG 8 dtk) + settle 2.5 dtk (dilewati bila load tak fire) → `LP.dump({format:'html'})`. Cleanup di `finally`: tutup SEMUA tab page + WS close.
+- Browser remote SATU tab dipakai ulang → render antar-engine WAJIB sequential (Bing dulu, lalu DDG); satu engine gagal tak menggagalkan yang lain, dua-duanya gagal → 502.
+- Bing: URL WAJIB polos (`/search?q=`, tanpa `setlang/cc/count` — parameter region memicu halaman "tidak ada hasil"); parse `li.b_algo`, URL asli = decode redirect `/ck/a?...&u=a1<base64>` (buang prefix `a1`).
+- DDG: endpoint HTML klasik (`html.duckduckgo.com/html/?q=`), parse cheerio (`.result a.result__a`, decode `uddg=`, `.result__snippet`). Diketahui: DDG memblokir IP datacenter di level TCP — dari browser remote navigasi `OperationTimedout`, jadi DDG otomatis ter-skip dan Bing menggendong; parser DDG warisan dari implementasi fetch lama yang terbukti.
+- Gabung: interleave round-robin + dedupe URL, skor relevansi (frasa utuh di judul +30, token di judul +10, semua token di judul +15, token di snippet +4, token di URL +2, +2 per engine tambahan), potong `limit` (default 10, maks 20), `rank` ulang.
+- Respons: `source:'mixed'`, `providers:['bing','duckduckgo']` (hanya engine yang berkontribusi), `results[{title,url,snippet,source,engine,rank}]`; query kosong -> 400. Cache memori 10 mnt cap 300 (per-engine + mixed).
 - Klien WS memakai paket `ws` yang WAJIB eksternal (`serverComponentsExternalPackages` di `next.config.js`): bila ikut ter-bundle, native `bufferutil` rusak dan production 502 `t.mask is not a function` (lokal tetap jalan).
-- Uji: `node temp/test-bing-cdp.mjs [query]`.
+- Uji: `node temp/test-web-mixed.mjs [query] [limit]` (wajib ada hasil `bing`), `node temp/test-bing-cdp.mjs [query]`.
 
 ## Scraper Komiku (09/2026)
 
@@ -206,11 +207,8 @@ di Firebase RTDB public (`https://puru-69425-default-rtdb.firebaseio.com/`, rule
 - Fokus pada tugas; tanpa perombakan di luar cakupan.
 - Verifikasi hasil dengan deploy ke Vercel Production.
 - Dilarang `git commit`/`git push` dan `npm run start`/`dev`/`lint` kecuali diminta eksplisit.
-## Scraper DuckDuckGo Search (09/2026)
+## Scraper DuckDuckGo Search (09/2026) — kini provider di /api/search/web
 
-`app/api/search/duckduckgo/route.js` + `lib/duckduckgo-search.js`:
+Dulu endpoint sendiri (`/api/search/duckduckgo`, vqd + `d.js`, fallback HTML) — DIHAPUS 09/2026 karena DDG agresif memblokir IP datacenter (403/506 dari fetch server, bahkan timeout TCP dari browser CDP remote).
 
-- Endpoint: `/api/search/duckduckgo?q=...&limit=...` (GET & POST), kategori `search` di docs.
-- Alur ganda: (1) ambil token `vqd` dari `https://duckduckgo.com/?q=...` lalu `GET https://links.duckduckgo.com/d.js?q=...&vqd=...&o=json` (JSON: field `t`/`u`/`a`); (2) fallback ke `https://html.duckduckgo.com/html/` di-parse via cheerio (`.result a.result__a`, `a.result__snippet`, decode redirect `uddg=`).
-- Respons streaming NDJSON (pola sama dengan yahoo search): event `processing` tiap ~2s, diakhiri `done`.
-- **Catatan:** DDG agresif memblokir IP datacenter (403/506); retry 5x + UA browser. Di lingkungan yang diblokir total, endpoint mengembalikan error `done` dengan `success:false`.
+Kini DDG hidup sebagai provider di `/api/search/web` (`lib/duckduckgo-search.js` baru, full CDP via `lib/cdp-browser.js`, tanpa fetch polos/vqd): endpoint HTML klasik di-render di browser remote, parse cheerio (`.result a.result__a`, decode `uddg=`, `.result__snippet`). Endpoint `/api/search/duckduckgo` TIDAK ada lagi. Selektor warisan dari implementasi fetch lama yang terbukti.

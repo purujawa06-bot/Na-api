@@ -328,11 +328,11 @@
     {
       "title": "Find Agent Skills",
       "summary": "Cari skills di direktori skills.sh (setara npx skills find).",
-      "description": "Mencari reusable agent skills (SKILL.md) di direktori terbuka\n              skills.sh — backend yang sama dipakai perintah `npx skills find`.\n              Tiap hasil memuat nama skill, repo sumber (owner/repo), jumlah\n              install, perintah install siap salin, dan URL halaman skill.\n              Install asli (`npx skills add`) berjalan di mesin client karena\n              butuh akses folder agent lokal; gunakan endpoint install-skills\n              untuk validasi + panduan install per-agent.",
+      "description": "Mencari reusable agent skills (SKILL.md) di direktori terbuka\r              skills.sh — backend yang sama dipakai perintah `npx skills find`.\r              Tiap hasil memuat nama skill, repo sumber (owner/repo), jumlah\r              install, perintah install siap salin, dan URL halaman skill.\r              Install asli (`npx skills add`) berjalan di mesin client karena\r              butuh akses folder agent lokal; gunakan endpoint install-skills\r              untuk validasi + panduan install per-agent.",
       "method": "GET",
       "path": "/api/agent-tools/find-skills",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/find-skills?query=web+design&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/find-skills?query=web+design&limit=5')\r     .then(res => res.json())\r     .then(data => console.log(data));",
       "params": [
         {
           "name": "query",
@@ -360,11 +360,11 @@
     {
       "title": "Install Agent Skills",
       "summary": "Ambil file SKILL.md langsung (setara npx skills use).",
-      "description": "Mengambil isi file SKILL.md satu skill langsung sebagai respons\n              markdown (Content-Type text/markdown) — setara `npx skills use\n              <owner/repo@skill>` — sehingga agent bisa membaca & memakai skill\n              tanpa install ke folder lokal. Repo sumber divalidasi via GitHub\n              API dan nama skill dicocokkan dengan frontmatter SKILL.md. Jika\n              nama skill tidak cocok, respons 404 JSON berisi daftar skill yang\n              tersedia di repo tersebut. Untuk install permanen ke folder agent,\n              jalankan perintah pada header X-Install-Command di mesin client.\n              Juga mendukung method POST dengan body JSON {\"source\": \"...\", \"skill\": \"...\"}.",
+      "description": "Mengambil isi file SKILL.md satu skill langsung sebagai respons\r              markdown (Content-Type text/markdown) — setara `npx skills use\r              <owner/repo@skill>` — sehingga agent bisa membaca & memakai skill\r              tanpa install ke folder lokal. Repo sumber divalidasi via GitHub\r              API dan nama skill dicocokkan dengan frontmatter SKILL.md. Jika\r              nama skill tidak cocok, respons 404 JSON berisi daftar skill yang\r              tersedia di repo tersebut. Untuk install permanen ke folder agent,\r              jalankan perintah pada header X-Install-Command di mesin client.\r              Juga mendukung method POST dengan body JSON {\"source\": \"...\", \"skill\": \"...\"}.",
       "method": "GET",
       "path": "/api/agent-tools/install-skills",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\n     .then(res => res.text())\n     .then(data => console.log(data));",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\r     .then(res => res.text())\r     .then(data => console.log(data));",
       "params": [
         {
           "name": "source",
@@ -416,8 +416,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Search the web via Bing rendered in a remote CDP browser (no API key).",
-      "description": "Query is rendered as a real Bing search page through\r              the remote CDP browser (wss://browser-yq20.onrender.com),\r              then organic hits (li.b_algo) are parsed server-side.\r              Ranking follows Bing order, de-duplicated by URL.",
+      "summary": "Search the web via Bing + DuckDuckGo in a remote CDP browser (no API key).",
+      "description": "Both engines are rendered as real search pages through\r              the remote CDP browser (wss://browser-yq20.onrender.com),\r              then organic hits are parsed server-side, merged,\r              de-duplicated by URL, and sorted by relevance score\r              so the most relevant hits move to the top.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",

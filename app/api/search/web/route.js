@@ -1,10 +1,11 @@
 /**
  * @title Web Search
- * @summary Search the web via Bing rendered in a remote CDP browser (no API key).
- * @description Query is rendered as a real Bing search page through
+ * @summary Search the web via Bing + DuckDuckGo in a remote CDP browser (no API key).
+ * @description Both engines are rendered as real search pages through
  *              the remote CDP browser (wss://browser-yq20.onrender.com),
- *              then organic hits (li.b_algo) are parsed server-side.
- *              Ranking follows Bing order, de-duplicated by URL.
+ *              then organic hits are parsed server-side, merged,
+ *              de-duplicated by URL, and sorted by relevance score
+ *              so the most relevant hits move to the top.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Search keywords (required, alias: q).
@@ -15,7 +16,7 @@
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchBingCdp } from '../../../../lib/bing-cdp.js';
+import { searchWebMixed } from '../../../../lib/search-mixed.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,7 +40,7 @@ function parseQuery(searchParams) {
 }
 
 async function runSearch(params) {
-  const searched = await searchBingCdp(params.query, { limit: params.limit });
+  const searched = await searchWebMixed(params.query, { limit: params.limit });
   return Response.json({
     success: true,
     status: 'success',
@@ -47,6 +48,7 @@ async function runSearch(params) {
     count: searched.count,
     results: searched.results,
     source: searched.source,
+    providers: searched.providers,
     limit: params.limit,
   });
 }
