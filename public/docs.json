@@ -383,33 +383,58 @@
       ]
     },
     {
+      "title": "Web Fetch Paginated",
+      "summary": "Ambil isi halaman web sebagai teks dengan pagination wajib (offset + length).",
+      "description": "Fetch URL publik (http/https) lalu ubah jadi teks bersih\r              (HTML di-strip via cheerio, whitespace dirapikan) dan diiris\r              pakai offset + length yang WAJIB diisi — agar halaman besar\r              bisa dibaca bertahap tanpa jebol konteks AI agent. Host\r              lokal/privat ditolak (proteksi SSRF). Mendukung method GET\r              (query param) dan POST (body JSON {url, offset, length}).",
+      "method": "GET",
+      "path": "/api/agent-tools/web-fetch",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/web-fetch?url=https%3A%2F%2Fexample.com&offset=0&length=5000')\r     .then(res => res.json())\r     .then(data => console.log(data));",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL publik http/https yang mau di-fetch (wajib).",
+          "required": true
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "type": "number",
+          "description": "Posisi awal karakter (wajib, integer >= 0).",
+          "required": true
+        },
+        {
+          "name": "length",
+          "in": "query",
+          "type": "number",
+          "description": "Jumlah karakter yang diminta (wajib, integer 1..20000).",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "Web Search",
-      "summary": "Cari web murni via Baidu + Bing + Wikipedia sekaligus (tanpa API key).",
-      "description": "Baidu/Bing murni scraping halaman hasil dengan\r              bypass guard (cookie sesi persisten di Firebase + refresh\r              otomatis bila invalid, rotasi UA, jeda sopan, retry 1x;\r              Bing juga menolak mode degradasi via cek relevansi);\r              Wikipedia via MediaWiki API resmi (tanpa guard).\r              Ketiga provider selalu ditembak BERSAMAAN via Promise.all;\r              masing-masing menyumbang maksimal `limit` hasil yang\r              digabung ke dalam SATU array lalu DIURUTKAN berdasar\r              skor relevansi terhadap query (dedupe URL, total maks\r              3x limit, cap 20; skor seri mempertahankan urutan\r              selang-seling agar beragam). Blok hasil organik di-parse\r              (judul, URL asli, snippet, nama situs; tiap item ada\r              field `engine`: baidu | bing | wikipedia).\r              Typo huruf ganda dikoreksi otomatis 1x retry\r              (ditandai `corrected_from`). Satu/lebih provider diblokir\r              tak menggagalkan yang lain. Default bahasa Indonesia.",
+      "summary": "Search the web via Bing rendered in a remote CDP browser (no API key).",
+      "description": "Query is rendered as a real Bing search page through\r              the remote CDP browser (wss://browser-yq20.onrender.com),\r              then organic hits (li.b_algo) are parsed server-side.\r              Ranking follows Bing order, de-duplicated by URL.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/search/web?query=nodejs+tutorial&lang=id&limit=5')\r     .then(res => res.json())\r     .then(data => console.log(data));",
+      "example": "fetch('https://puruboy-api.vercel.app/api/search/web?query=nodejs+tutorial&limit=10')\r     .then(res => res.json())\r     .then(data => console.log(data));",
       "params": [
         {
           "name": "query",
           "in": "query",
           "type": "string",
-          "description": "Kata kunci pencarian (wajib, alias: q).",
+          "description": "Search keywords (required, alias: q).",
           "required": true
-        },
-        {
-          "name": "lang",
-          "in": "query",
-          "type": "string",
-          "description": "Bahasa hasil: id | en (default id; khusus Wikipedia).",
-          "required": false
         },
         {
           "name": "limit",
           "in": "query",
           "type": "number",
-          "description": "Jumlah hasil maks PER PROVIDER (default 5, maks 10, alias: result, count).",
+          "description": "Max total results (default 10, max 20, alias: result, count).",
           "required": false
         }
       ]

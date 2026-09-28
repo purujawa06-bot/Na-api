@@ -1,11 +1,10 @@
 /**
  * @title Web Search
- * @summary Search the web via pre-checked SearXNG instances (no API key).
- * @description All active instances from the daily-checked registry
- *              (SearXNG-active-instance/active.json) are queried in parallel
- *              via Promise.all; results are merged, de-duplicated by URL,
- *              then sorted by relevance score so the most relevant hits
- *              move to the top. Plain SearXNG JSON API, no cookies or scraping.
+ * @summary Search the web via Bing rendered in a remote CDP browser (no API key).
+ * @description Query is rendered as a real Bing search page through
+ *              the remote CDP browser (wss://browser-yq20.onrender.com),
+ *              then organic hits (li.b_algo) are parsed server-side.
+ *              Ranking follows Bing order, de-duplicated by URL.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Search keywords (required, alias: q).
@@ -16,7 +15,7 @@
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchSearxngActive } from '../../../../lib/searxng-active.js';
+import { searchBingCdp } from '../../../../lib/bing-cdp.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,7 +39,7 @@ function parseQuery(searchParams) {
 }
 
 async function runSearch(params) {
-  const searched = await searchSearxngActive(params.query, { limit: params.limit });
+  const searched = await searchBingCdp(params.query, { limit: params.limit });
   return Response.json({
     success: true,
     status: 'success',
@@ -48,8 +47,6 @@ async function runSearch(params) {
     count: searched.count,
     results: searched.results,
     source: searched.source,
-    instances_used: searched.instances_used,
-    instances_total: searched.instances_total,
     limit: params.limit,
   });
 }
