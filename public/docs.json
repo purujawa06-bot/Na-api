@@ -416,8 +416,8 @@
     },
     {
       "title": "Web Search",
-      "summary": "Search the web via Bing + DuckDuckGo in a remote CDP browser (no API key).",
-      "description": "Both engines are rendered as real search pages through\r              the remote CDP browser (wss://browser-yq20.onrender.com),\r              then organic hits are parsed server-side, merged,\r              de-duplicated by URL, and sorted by relevance score\r              so the most relevant hits move to the top.",
+      "summary": "Search the web via the realtime AI provider (same Bard backend as chat completions).",
+      "description": "Search keywords are answered by the realtime Gemini web model\r              (lib/gemini-web.js — Bard batchexecute/StreamGenerate, the same\r              transport as /api/chat/completions model gemini-3.6-flash),\r              which returns the most relevant live web pages as strict JSON.\r              Hits are validated server-side (real http/https URLs, de-duplicated)\r              and ranked in the requested order. No scraper, no CAPTCHA wall.",
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",

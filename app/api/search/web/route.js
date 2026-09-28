@@ -1,11 +1,12 @@
 /**
  * @title Web Search
- * @summary Search the web via Bing + DuckDuckGo in a remote CDP browser (no API key).
- * @description Both engines are rendered as real search pages through
- *              the remote CDP browser (wss://browser-yq20.onrender.com),
- *              then organic hits are parsed server-side, merged,
- *              de-duplicated by URL, and sorted by relevance score
- *              so the most relevant hits move to the top.
+ * @summary Search the web via the realtime AI provider (same Bard backend as chat completions).
+ * @description Search keywords are answered by the realtime Gemini web model
+ *              (lib/gemini-web.js — Bard batchexecute/StreamGenerate, the same
+ *              transport as /api/chat/completions model gemini-3.6-flash),
+ *              which returns the most relevant live web pages as strict JSON.
+ *              Hits are validated server-side (real http/https URLs, de-duplicated)
+ *              and ranked in the requested order. No scraper, no CAPTCHA wall.
  * @method GET
  * @path /api/search/web
  * @param {string} query.query - Search keywords (required, alias: q).
@@ -16,7 +17,7 @@
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
-import { searchWebMixed } from '../../../../lib/search-mixed.js';
+import { searchWebViaAi } from '../../../../lib/ai-search.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,7 +41,7 @@ function parseQuery(searchParams) {
 }
 
 async function runSearch(params) {
-  const searched = await searchWebMixed(params.query, { limit: params.limit });
+  const searched = await searchWebViaAi(params.query, { limit: params.limit });
   return Response.json({
     success: true,
     status: 'success',

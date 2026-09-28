@@ -56,18 +56,14 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 - `app/api/agent-tools/web-fetch/route.js` + `lib/web-fetch.js` — fetch URL publik jadi teks bersih dengan pagination WAJIB (`url` + `offset` + `length`; GET query param & POST JSON; length 1..20000, offset >= 0). HTML di-strip via cheerio (sudah dependency), cap body 2MB, timeout 20s, tolak host lokal/privat (proteksi SSRF). Respons: `{success, url, final_url, content_type, total_length, offset, length, requested_length, has_more, truncated_body, content}`; offset/length kosong → 400; gagal upstream → 502.
 - Uji: `node temp/test-agent-tools.mjs` (find + regresi search/web), `node temp/test-install-md.mjs` (install markdown), `node temp/test-search-provider.mjs` (provider yahoo/baidu + fallback, 6/6). Catatan: uji install boros kuota GitHub API anonim (60/jam); ada `GITHUB_TOKEN` opsional di env untuk menaikkan limit.
 
-## Search Web — Bing + DuckDuckGo mixed via CDP remote (09/2026)
+## Search Web — via provider AI realtime (09/2026)
 
-`app/api/search/web/route.js` + `lib/search-mixed.js` + `lib/bing-cdp.js` + `lib/duckduckgo-search.js` + `lib/cdp-browser.js` (SearXNG-active DIHENTIKAN: hasil tak relevan/tak stabil).
+`app/api/search/web/route.js` + `lib/ai-search.js` (backend `lib/gemini-web.js` — Bard batchexecute/StreamGenerate, transport yang sama dengan model `gemini-3.6-flash` di `/api/chat/completions`).
 
-- Transport: SEMUA via WebSocket CDP (`lib/cdp-browser.js` → `fetchHtmlViaCdp(url)`, default `wss://browser-yq20.onrender.com/`, override `CDP_WS_URL`/`BING_CDP_URL`). Alur: connect → `createTarget(about:blank)` → `attach` → `Page.enable` + `Page.navigate` eksplisit → tunggu `Page.loadEventFired` (timeout 15 dtk, DDG 8 dtk) + settle 2.5 dtk (dilewati bila load tak fire) → `LP.dump({format:'html'})`. Cleanup di `finally`: tutup SEMUA tab page + WS close.
-- Browser remote SATU tab dipakai ulang → render antar-engine WAJIB sequential (Bing dulu, lalu DDG); satu engine gagal tak menggagalkan yang lain, dua-duanya gagal → 502.
-- Bing: URL WAJIB polos (`/search?q=`, tanpa `setlang/cc/count` — parameter region memicu halaman "tidak ada hasil"); parse `li.b_algo`, URL asli = decode redirect `/ck/a?...&u=a1<base64>` (buang prefix `a1`).
-- DDG: endpoint HTML klasik (`html.duckduckgo.com/html/?q=`), parse cheerio (`.result a.result__a`, decode `uddg=`, `.result__snippet`). Diketahui: DDG memblokir IP datacenter di level TCP — dari browser remote navigasi `OperationTimedout`, jadi DDG otomatis ter-skip dan Bing menggendong; parser DDG warisan dari implementasi fetch lama yang terbukti.
-- Gabung: interleave round-robin + dedupe URL, skor relevansi (frasa utuh di judul +30, token di judul +10, semua token di judul +15, token di snippet +4, token di URL +2, +2 per engine tambahan), potong `limit` (default 10, maks 20), `rank` ulang.
-- Respons: `source:'mixed'`, `providers:['bing','duckduckgo']` (hanya engine yang berkontribusi), `results[{title,url,snippet,source,engine,rank}]`; query kosong -> 400. Cache memori 10 mnt cap 300 (per-engine + mixed).
-- Klien WS memakai paket `ws` yang WAJIB eksternal (`serverComponentsExternalPackages` di `next.config.js`): bila ikut ter-bundle, native `bufferutil` rusak dan production 502 `t.mask is not a function` (lokal tetap jalan).
-- Uji: `node temp/test-web-mixed.mjs [query] [limit]` (wajib ada hasil `bing`), `node temp/test-bing-cdp.mjs [query]`.
+- Tumpukan scraper lama (Bing + DuckDuckGo via browser CDP remote — `lib/search-mixed.js`, `lib/bing-cdp.js`, `lib/duckduckgo-search.js`, `lib/cdp-browser.js`) DIPENSIUNKAN: IP datacenter browser remote di-flag sehingga Bing menyajikan set hasil decoy bergilir (hasil Microsoft/AARP/StackOverflow untuk query apa pun), sementara semua kandidat pengganti (Yahoo, DDG, Mojeek, Yandex, Brave, AOL, Ecosia, Dogpile, Swisscows, SearXNG publik, MetaGer) kena captcha/TCP-block/halaman kosong. File-file lama dibiarkan di repo tapi tak lagi dipakai route mana pun.
+- Alur: `searchWebViaAi(query, {limit})` meminta model realtime mengembalikan JSON ketat `{"results":[{"title","url","snippet"}]}` (tanpa markdown fence/komentar), lalu validasi server-side: URL wajib http/https asli, dedupe URL, potong `limit` (default 10, maks 20), `rank` ulang.
+- Respons: `source:'ai'`, `providers:['gemini-3.6-flash']`, `results[{title,url,snippet,source:'ai',engine,rank}]`; query kosong -> 400, tanpa hasil valid -> 502. Cache memori 10 mnt cap 300.
+- Uji: `node temp/test-ai-search.mjs [query] [limit]` (terverifikasi: "nodejs tutorial" -> nodejs.org/geeksforgeeks/freecodecamp, "cara membuat kopi tubruk" -> ottencoffee/nescafe, "fotosintesis" -> id.wikipedia).
 
 ## Scraper Komiku (09/2026)
 
