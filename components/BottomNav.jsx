@@ -17,8 +17,8 @@ const BottomNav = () => {
         { name: 'PurTV', href: '/purtv', icon: 'fa-tv' },
     ];
 
-    // Sembunyikan navigasi bawah pada halaman chat agar tampilan lebih luas/mirip aplikasi native
-    if (pathname === '/chat') return null;
+    // Sembunyikan navigasi bawah pada halaman chat dan purtv agar tampilan lebih luas/mirip aplikasi native
+    if (pathname === '/chat' || pathname?.startsWith('/purtv')) return null;
 
     return (
         <>
