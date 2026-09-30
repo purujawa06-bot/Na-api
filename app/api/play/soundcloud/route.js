@@ -25,6 +25,7 @@
  */
 import { NextResponse } from 'next/server';
 import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,34 +41,37 @@ export async function GET(req) {
     );
   }
 
-  try {
-    // Ambil hasil pencarian teratas (type=tracks, limit=1)
-    const searchResult = await searchSoundCloud(q.trim(), { type: 'tracks', limit: 1 });
-    const track = searchResult.results[0];
-    if (!track) {
-      return NextResponse.json({ success: false, error: 'Track tidak ditemukan' }, { status: 404 });
+  // Stream links expire after ~1h; 15 min cache stays safely under that.
+  return cachedJson(req, { ttl: 900, stale: 300 }, async () => {
+    try {
+      // Ambil hasil pencarian teratas (type=tracks, limit=1)
+      const searchResult = await searchSoundCloud(q.trim(), { type: 'tracks', limit: 1 });
+      const track = searchResult.results[0];
+      if (!track) {
+        return NextResponse.json({ success: false, error: 'Track tidak ditemukan' }, { status: 404 });
+      }
+
+      // downloadSoundCloud mengembalikan objek metadata + stream_url (bukan string)
+      const dl = await downloadSoundCloud(track.permalink_url);
+
+      return NextResponse.json({
+        success: true,
+        source: 'api-v2.soundcloud.com',
+        query: q.trim(),
+        track: {
+          id: dl.id,
+          title: dl.title,
+          author: dl.user?.username ?? null,
+          duration_ms: dl.duration_ms,
+          artwork_url: dl.artwork_url,
+          permalink_url: dl.permalink_url,
+          policy: dl.policy,
+          is_preview: dl.is_preview,
+          stream_url: dl.stream_url,
+        },
+      });
+    } catch (err) {
+      return NextResponse.json({ success: false, error: err.message }, { status: 502 });
     }
-
-    // downloadSoundCloud mengembalikan objek metadata + stream_url (bukan string)
-    const dl = await downloadSoundCloud(track.permalink_url);
-
-    return NextResponse.json({
-      success: true,
-      source: 'api-v2.soundcloud.com',
-      query: q.trim(),
-      track: {
-        id: dl.id,
-        title: dl.title,
-        author: dl.user?.username ?? null,
-        duration_ms: dl.duration_ms,
-        artwork_url: dl.artwork_url,
-        permalink_url: dl.permalink_url,
-        policy: dl.policy,
-        is_preview: dl.is_preview,
-        stream_url: dl.stream_url,
-      },
-    });
-  } catch (err) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 502 });
-  }
+  });
 }

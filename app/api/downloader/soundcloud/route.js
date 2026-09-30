@@ -10,7 +10,8 @@
  * @param {string} query.url - URL track SoundCloud publik (wajib, https only).
  * @param {string} [query.raw] - Format output yang diinginkan.
  *        @choice 0 - JSON Metadata & Link (Default)
- *        @choice 1 - File Audio Direct (Download)
+ *        @choice 1 - Redirect 302 langsung ke file audio CDN (hemat kuota,
+ *                    tanpa proxy byte via function; client mengikuti redirect otomatis).
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')
@@ -18,7 +19,12 @@
  *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
-import { downloadSoundCloud, getAudioBuffer } from '../../../../lib/soundcloud.js';
+import { downloadSoundCloud } from '../../../../lib/soundcloud.js';
+import {
+  cachedJson,
+  cacheControlHeader,
+  getOrSet,
+} from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,7 +47,40 @@ function validateUrl(url) {
   return null;
 }
 
-async function handle(url, raw) {
+// Signed CDN links expire after ~1 hour, so both the resolve memo and the
+// redirect cache stay well under that lifetime.
+const RESOLVE_TTL_MS = 30 * 60 * 1000;
+const RESOLVE_STALE_MS = 10 * 60 * 1000;
+
+// Quota guard: never proxy audio bytes through the function. Resolving the
+// signed CDN URL costs one cheap JSON call; the bytes then flow directly
+// from SoundCloud's CDN to the client (302 redirect).
+async function redirectToAudio(url) {
+  const key = `sc:resolve:${url}`;
+  const { value: result, hit } = await getOrSet(
+    key,
+    RESOLVE_TTL_MS,
+    RESOLVE_STALE_MS,
+    () => downloadSoundCloud(url)
+  );
+  if (result.is_preview) {
+    return NextResponse.json(
+      { success: false, error: 'Track ini hanya tersedia preview 30 detik (Go+/SNIP)' },
+      { status: 502 }
+    );
+  }
+  const target = result.download_url || result.stream_url;
+  return new NextResponse(null, {
+    status: 302,
+    headers: {
+      location: target,
+      'cache-control': cacheControlHeader(1800, 600),
+      'x-cache': hit,
+    },
+  });
+}
+
+async function handle(url, raw, cacheReq) {
   const invalid = validateUrl(url);
   if (invalid) {
     // raw mode tetap balas JSON agar error terbaca
@@ -50,24 +89,17 @@ async function handle(url, raw) {
 
   try {
     if (raw === '1') {
-      const { buffer, filename, is_preview } = await getAudioBuffer(url);
-      if (is_preview) {
-        return NextResponse.json(
-          { success: false, error: 'Track ini hanya tersedia preview 30 detik (Go+/SNIP)' },
-          { status: 502 }
-        );
-      }
-      return new NextResponse(buffer, {
-        headers: {
-          'content-type': 'audio/mpeg',
-          'content-disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
-          'cache-control': 'no-store',
-        },
-      });
+      return await redirectToAudio(url);
     }
 
-    const result = await downloadSoundCloud(url);
-    return NextResponse.json({ success: true, source: 'api-v2.soundcloud.com', ...result });
+    const produce = async () => {
+      const result = await downloadSoundCloud(url);
+      return NextResponse.json({ success: true, source: 'api-v2.soundcloud.com', ...result });
+    };
+    if (cacheReq) {
+      return await cachedJson(cacheReq, { ttl: 1800, stale: 600 }, produce);
+    }
+    return await produce();
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 502 });
   }
@@ -75,7 +107,7 @@ async function handle(url, raw) {
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  return handle(searchParams.get('url'), searchParams.get('raw'));
+  return handle(searchParams.get('url'), searchParams.get('raw'), req);
 }
 
 export async function POST(req) {
@@ -88,5 +120,5 @@ export async function POST(req) {
   } catch {
     return NextResponse.json({ success: false, error: 'Body harus JSON: {"url": "..."}' }, { status: 400 });
   }
-  return handle(url, raw);
+  return handle(url, raw, null);
 }

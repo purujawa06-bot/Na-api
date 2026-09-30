@@ -196,6 +196,27 @@ di Firebase RTDB public (`https://puru-69425-default-rtdb.firebaseio.com/`, rule
 - **Kuota anon terbatas**: beberapa pesan per identitas/IP -> `429 {"statusCode":429,"message":"Sign in to continue"}`. Mitigasi di lib: retry otomatis (maks 4) dengan rotasi identitas (jar cookie baru via `cloudscraper.defaults({jar: cloudscraper.jar()})`) + spoof `X-Forwarded-For` acak (backend quillbot membacanya). Setelah mitigasi, 6/6 sukses beruntun di production.
 - Adaptor buffered penuh (pola `gemini-3.6-flash`/`fakeSingleChunkStream`) karena transport cloudscraper tak streaming. Uji: `node scripts/test-quillbot-web.mjs`.
 
+## Quota Guard — Global Cache + Tanpa Proxy File (09/2026)
+
+Penyebab pause Vercel Hobby: `softBlock FAIR_USE_LIMITS_EXCEEDED (fluidCpuDuration)`.
+Dua lapis penghematan (tanpa ubah `maxDuration: 60`):
+
+- `lib/api-cache.js` — helper cache global: `cachedJson(req, {ttl, stale}, producer)`
+  (in-memory LRU 500 entri + header `Cache-Control: public, s-maxage, stale-while-revalidate`
+  + `X-Cache: HIT/STALE/MISS`) dan `getOrSet(key, ttlMs, staleMs, producer)` untuk memo
+  generik. Aturan: hanya GET, hanya JSON 2xx, tidak pernah cache error. POST/upload/stream
+  (SSE/NDJSON) dan endpoint personal (admin/chat/deepseek) dilarang pakai helper ini.
+- `middleware.js` — jaring pengaman: semua GET JSON 2xx yang belum punya `cache-control`
+  otomatis dapat `public, s-maxage=300, stale-while-revalidate=600` (kecuali path sensitif/
+  streaming: admin, chat, deepseek, text2image, tools-image, uploader, temp, media, chess, _diag).
+- `GET /api/downloader/soundcloud?raw=1` — DULU mem-proxy seluruh byte MP3 lewat function
+  (buffer + gabung ≤400 segmen HLS = pemakan CPU/bandwidth terbesar). Kini 302 redirect
+  langsung ke signed CDN URL (resolve JSON di-memo 30 menit, redirect di-cache 30 menit).
+  Kontrak `raw=1` tetap "file audio langsung" karena client mengikuti redirect otomatis.
+- TTL per-route: downloader tiktok/instagram/soundcloud 1800s, play 900s, youtube 600s
+  (link googlevideo pendek), search/web 600s, web-fetch 300s, find-skills 1800s.
+- Uji: `node temp/test-api-cache.mjs` (6/6).
+
 ## Konvensi Diet (AGENTS.md)
 
 - Komunikasi wajib bahasa Indonesia.

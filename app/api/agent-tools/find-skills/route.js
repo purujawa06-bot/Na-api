@@ -20,6 +20,7 @@
  *     .then(data => console.log(data));
  */
 import { searchSkills } from '../../../../lib/skills-sh.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -53,14 +54,17 @@ export async function GET(req) {
   if (parsed.error) {
     return Response.json(parsed.error, { status: parsed.status });
   }
-  try {
-    const result = await searchSkills(parsed.params.query, {
-      limit: parsed.params.limit,
-      owner: parsed.params.owner,
-    });
-    return Response.json({ success: true, status: 'success', ...result });
-  } catch (err) {
-    const status = err?.status === 404 ? 404 : 502;
-    return Response.json({ success: false, status: 'error', error: err.message, httpStatus: status }, { status });
-  }
+  // The skills directory changes slowly; cache aggressively.
+  return cachedJson(req, { ttl: 1800, stale: 600 }, async () => {
+    try {
+      const result = await searchSkills(parsed.params.query, {
+        limit: parsed.params.limit,
+        owner: parsed.params.owner,
+      });
+      return Response.json({ success: true, status: 'success', ...result });
+    } catch (err) {
+      const status = err?.status === 404 ? 404 : 502;
+      return Response.json({ success: false, status: 'error', error: err.message, httpStatus: status }, { status });
+    }
+  });
 }

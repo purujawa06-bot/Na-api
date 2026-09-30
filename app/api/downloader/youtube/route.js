@@ -30,6 +30,7 @@
 import { NextResponse } from 'next/server';
 import { downloadYoutube as e2bDownload } from '../../../../lib/e2b-yt.js';
 import { downloadYoutube as vidssaveDownload } from '../../../../lib/vidssave.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -55,32 +56,37 @@ function validateUrl(url) {
   return null;
 }
 
-async function handle(url, opts) {
+async function handle(url, opts, cacheReq) {
   const invalid = validateUrl(url);
   if (invalid) return NextResponse.json({ error: invalid.error }, { status: invalid.status });
 
-  // Utamakan E2B sandbox (tahan blokir IP datacenter); vidssave jadi fallback.
-  try {
-    const result = await e2bDownload(url, opts);
-    return NextResponse.json({ success: true, source: 'e2b-sandbox', ...result });
-  } catch (error) {
+  const produce = async () => {
+    // Utamakan E2B sandbox (tahan blokir IP datacenter); vidssave jadi fallback.
     try {
-      const result = await vidssaveDownload(url, opts);
-      return NextResponse.json({ success: true, source: 'vidssave.com', fallbackFrom: error.message, ...result });
-    } catch (fallbackError) {
-      return NextResponse.json(
-        { success: false, error: `E2B: ${error.message} | vidssave: ${fallbackError.message}` },
-        { status: 502 }
-      );
+      const result = await e2bDownload(url, opts);
+      return NextResponse.json({ success: true, source: 'e2b-sandbox', ...result });
+    } catch (error) {
+      try {
+        const result = await vidssaveDownload(url, opts);
+        return NextResponse.json({ success: true, source: 'vidssave.com', fallbackFrom: error.message, ...result });
+      } catch (fallbackError) {
+        return NextResponse.json(
+          { success: false, error: `E2B: ${error.message} | vidssave: ${fallbackError.message}` },
+          { status: 502 }
+        );
+      }
     }
-  }
+  };
+  // googlevideo links are short-lived; keep the cache window small.
+  if (cacheReq) return cachedJson(cacheReq, { ttl: 600, stale: 300 }, produce);
+  return produce();
 }
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get('type') || undefined;
   const quality = searchParams.get('quality') || undefined;
-  return handle(searchParams.get('url'), { type, quality });
+  return handle(searchParams.get('url'), { type, quality }, req);
 }
 
 export async function POST(req) {
@@ -90,5 +96,5 @@ export async function POST(req) {
   } catch {
     return NextResponse.json({ error: 'Body harus JSON: {"url": "..."}' }, { status: 400 });
   }
-  return handle(body?.url, { type: body?.type, quality: body?.quality });
+  return handle(body?.url, { type: body?.type, quality: body?.quality }, null);
 }

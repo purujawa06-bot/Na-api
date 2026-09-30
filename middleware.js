@@ -146,6 +146,36 @@ export async function middleware(request) {
 
     // Jika response OK (2xx), tidak perlu report
     if (response.status >= 200 && response.status < 300) {
+        // Global quota guard: cacheable GET JSON responses get a default edge
+        // cache window so repeats never reach the function. Routes with their
+        // own Cache-Control (via lib/api-cache.js) are left untouched, and
+        // sensitive/streaming/upload endpoints are excluded entirely.
+        if (request.method === 'GET') {
+            const contentType = response.headers.get('content-type') || '';
+            const hasCacheControl = response.headers.has('cache-control');
+            const excluded = [
+                '/api/admin/',
+                '/api/chat/',
+                '/api/deepseek/',
+                '/api/text2image',
+                '/api/tools-image/',
+                '/api/uploader/',
+                '/api/temp/',
+                '/api/media/',
+                '/api/chess/',
+                '/api/_diag/',
+            ].some((prefix) => pathname.startsWith(prefix));
+            if (contentType.includes('application/json') && !hasCacheControl && !excluded) {
+                const headers = new Headers(response.headers);
+                headers.set('cache-control', 'public, s-maxage=300, stale-while-revalidate=600');
+                headers.set('x-cache', 'EDGE-DEFAULT');
+                return new Response(response.body, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers,
+                });
+            }
+        }
         return response;
     }
 

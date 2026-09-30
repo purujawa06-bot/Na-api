@@ -18,6 +18,7 @@
  *     .then(data => console.log(data));
  */
 import { searchWebViaAi } from '../../../../lib/ai-search.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,12 +61,16 @@ export async function GET(req) {
   if (parsed.error) {
     return Response.json(parsed.error, { status: parsed.status });
   }
-  try {
-    return await runSearch(parsed.params);
-  } catch (err) {
-    const status = err?.status === 400 ? 400 : 502;
-    return Response.json({ success: false, status: 'error', error: err.message, httpStatus: status }, { status });
-  }
+  // The AI call is the most expensive per-hit cost here; lib already holds
+  // a 10 min memory cache, this layer adds edge caching on top of it.
+  return cachedJson(req, { ttl: 600, stale: 300 }, async () => {
+    try {
+      return await runSearch(parsed.params);
+    } catch (err) {
+      const status = err?.status === 400 ? 400 : 502;
+      return Response.json({ success: false, status: 'error', error: err.message, httpStatus: status }, { status });
+    }
+  });
 }
 
 export async function POST(req) {

@@ -488,7 +488,7 @@
             },
             {
               "value": "1",
-              "label": "File Audio Direct (Download)"
+              "label": "Redirect 302 langsung ke file audio CDN (hemat kuota,"
             }
           ]
         }

@@ -28,6 +28,7 @@
  */
 import { NextResponse } from 'next/server';
 import { downloadTiktok } from '../../../../lib/ssstik.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -68,7 +69,9 @@ async function handle(url) {
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  return handle(searchParams.get('url'));
+  const url = searchParams.get('url');
+  // CDN links from ssstik expire in ~1h; 30 min cache stays safely under that.
+  return cachedJson(req, { ttl: 1800, stale: 600 }, () => handle(url));
 }
 
 export async function POST(req) {

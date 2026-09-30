@@ -19,6 +19,7 @@
  *     .then(data => console.log(data));
  */
 import { fetchWebChunk, MAX_LENGTH } from '../../../../lib/web-fetch.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -82,7 +83,8 @@ export async function GET(req) {
   if (parsed.error) {
     return Response.json(parsed.error, { status: parsed.status });
   }
-  return runFetch(parsed.params);
+  // Page content drifts, so keep this window short (5 min).
+  return cachedJson(req, { ttl: 300, stale: 300 }, () => runFetch(parsed.params));
 }
 
 export async function POST(req) {
