@@ -71,7 +71,7 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
   // CDN links from ssstik expire in ~1h; 30 min cache stays safely under that.
-  return cachedJson(req, { ttl: 1800, stale: 600 }, () => handle(url));
+  return cachedJson(req, { ttl: 604800, stale: 86400 }, () => handle(url));
 }
 
 export async function POST(req) {

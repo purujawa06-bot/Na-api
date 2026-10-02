@@ -78,7 +78,7 @@ async function handle(url, opts, cacheReq) {
     }
   };
   // googlevideo links are short-lived; keep the cache window small.
-  if (cacheReq) return cachedJson(cacheReq, { ttl: 600, stale: 300 }, produce);
+  if (cacheReq) return cachedJson(cacheReq, { ttl: 604800, stale: 86400 }, produce);
   return produce();
 }
 

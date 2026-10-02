@@ -47,6 +47,13 @@ function validateUrl(url) {
   return null;
 }
 
+// ponytail: 302캐 cache ini 짧게 유지한다 — resolve한 signed CDN URL은 약 1시간이면 만료되므로,
+// s-maxage를604800(7일)으로 올리면 만료된 링크가 계속 응답된다(breaking).
+// If real quota pressure hits here, swap to re-resolve-on-401 instead of a longer TTL.
+// Edge JSON caching (7d) still applies via middleware for the normal JSON path.
+const REDIRECT_CACHE_TTL_S = 1800;
+const REDIRECT_CACHE_STALE_S = 600;
+
 // Signed CDN links expire after ~1 hour, so both the resolve memo and the
 // redirect cache stay well under that lifetime.
 const RESOLVE_TTL_MS = 30 * 60 * 1000;
@@ -74,7 +81,7 @@ async function redirectToAudio(url) {
     status: 302,
     headers: {
       location: target,
-      'cache-control': cacheControlHeader(1800, 600),
+      'cache-control': cacheControlHeader(REDIRECT_CACHE_TTL_S, REDIRECT_CACHE_STALE_S),
       'x-cache': hit,
     },
   });
@@ -97,7 +104,7 @@ async function handle(url, raw, cacheReq) {
       return NextResponse.json({ success: true, source: 'api-v2.soundcloud.com', ...result });
     };
     if (cacheReq) {
-      return await cachedJson(cacheReq, { ttl: 1800, stale: 600 }, produce);
+      return await cachedJson(cacheReq, { ttl: 604800, stale: 86400 }, produce);
     }
     return await produce();
   } catch (error) {

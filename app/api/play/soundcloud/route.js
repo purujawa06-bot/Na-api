@@ -42,7 +42,7 @@ export async function GET(req) {
   }
 
   // Stream links expire after ~1h; 15 min cache stays safely under that.
-  return cachedJson(req, { ttl: 900, stale: 300 }, async () => {
+  return cachedJson(req, { ttl: 604800, stale: 86400 }, async () => {
     try {
       // Ambil hasil pencarian teratas (type=tracks, limit=1)
       const searchResult = await searchSoundCloud(q.trim(), { type: 'tracks', limit: 1 });

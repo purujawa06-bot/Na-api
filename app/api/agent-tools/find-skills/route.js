@@ -55,7 +55,7 @@ export async function GET(req) {
     return Response.json(parsed.error, { status: parsed.status });
   }
   // The skills directory changes slowly; cache aggressively.
-  return cachedJson(req, { ttl: 1800, stale: 600 }, async () => {
+  return cachedJson(req, { ttl: 604800, stale: 86400 }, async () => {
     try {
       const result = await searchSkills(parsed.params.query, {
         limit: parsed.params.limit,

@@ -63,7 +63,7 @@ export async function GET(req) {
   }
   // The AI call is the most expensive per-hit cost here; lib already holds
   // a 10 min memory cache, this layer adds edge caching on top of it.
-  return cachedJson(req, { ttl: 600, stale: 300 }, async () => {
+  return cachedJson(req, { ttl: 604800, stale: 86400 }, async () => {
     try {
       return await runSearch(parsed.params);
     } catch (err) {

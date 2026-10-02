@@ -84,7 +84,7 @@ export async function GET(req) {
     return Response.json(parsed.error, { status: parsed.status });
   }
   // Page content drifts, so keep this window short (5 min).
-  return cachedJson(req, { ttl: 300, stale: 300 }, () => runFetch(parsed.params));
+  return cachedJson(req, { ttl: 604800, stale: 86400 }, () => runFetch(parsed.params));
 }
 
 export async function POST(req) {

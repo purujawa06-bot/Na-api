@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { EDGE_CACHE_CONTROL } from './lib/api-cache.js';
 
 // Rate limiter sederhana (in-memory, reset tiap deploy)
 const rateLimitMap = new Map();
@@ -146,13 +147,15 @@ export async function middleware(request) {
 
     // Jika response OK (2xx), tidak perlu report
     if (response.status >= 200 && response.status < 300) {
-        // Global quota guard: cacheable GET JSON responses get a default edge
-        // cache window so repeats never reach the function. Routes with their
-        // own Cache-Control (via lib/api-cache.js) are left untouched, and
-        // sensitive/streaming/upload endpoints are excluded entirely.
+        // Global quota guard: setiap response GET JSON yang boleh di-cache
+        // dipaksa memakai EDGE_CACHE_CONTROL (7 hari) supaya repeat traffic
+        // dilayani CDN tanpa menyentuh function. Ini satu-satunya titik
+        // pengaturan cache — route handler tidak perlu opt-in, dan header
+        // TTL lokal yang lebih pendek dioverride di sini.
+        // Endpoint sensitif/streaming/upload dikecualikan: cache 7 hari di
+        // sana akan serve respons basi, membocorkan sesi, atau menahan stream.
         if (request.method === 'GET') {
             const contentType = response.headers.get('content-type') || '';
-            const hasCacheControl = response.headers.has('cache-control');
             const excluded = [
                 '/api/admin/',
                 '/api/chat/',
@@ -165,9 +168,12 @@ export async function middleware(request) {
                 '/api/chess/',
                 '/api/_diag/',
             ].some((prefix) => pathname.startsWith(prefix));
-            if (contentType.includes('application/json') && !hasCacheControl && !excluded) {
+            // SSE / NDJSON stream tidak boleh di-cache.
+            const isStream = contentType.includes('text/event-stream')
+                || contentType.includes('application/x-ndjson');
+            if (contentType.includes('application/json') && !excluded && !isStream) {
                 const headers = new Headers(response.headers);
-                headers.set('cache-control', 'public, s-maxage=300, stale-while-revalidate=600');
+                headers.set('cache-control', EDGE_CACHE_CONTROL);
                 headers.set('x-cache', 'EDGE-DEFAULT');
                 return new Response(response.body, {
                     status: response.status,
