@@ -97,17 +97,9 @@ export async function middleware(request) {
     const url = request.nextUrl;
     const pathname = url.pathname;
 
-    // Hanya intercept API routes
-    if (!pathname.startsWith('/api/')) {
-        return;
-    }
-
-    // Skip route yang berdurasi panjang (download/konversi video / chess engine)
-    if (pathname.includes('/temp/') || pathname.includes('/media/') || pathname.includes('/chess/')) {
-        return;
-    }
-
-    // Skip jika method OPTIONS (CORS preflight)
+    // No-exception policy: tidak lagi membatasi hanya /api/*.
+    // Hapus semua early-return pembatas (temp/media/chess) supaya semua route
+    // dapat stamp header. Skip method OPTIONS (CORS preflight) tetap.
     if (request.method === 'OPTIONS') {
         return;
     }
@@ -145,51 +137,29 @@ export async function middleware(request) {
         return NextResponse.next();
     }
 
+    // No-exception policy: semua response, semua method, semua content-type
+    // (JSON/gambar/SSE/NDJSON/POST/private) distamp dengan nilai yang sama.
+    const stampCacheHeader = (res) => {
+        const headers = new Headers(res.headers);
+        headers.set('cache-control', EDGE_CACHE_CONTROL);
+        headers.set('x-cache', 'EDGE-DEFAULT');
+        return new Response(res.body, {
+            status: res.status,
+            statusText: res.statusText,
+            headers,
+        });
+    };
+
     // Jika response OK (2xx), tidak perlu report
     if (response.status >= 200 && response.status < 300) {
-        // Global quota guard: setiap response GET JSON yang boleh di-cache
-        // dipaksa memakai EDGE_CACHE_CONTROL (7 hari) supaya repeat traffic
-        // dilayani CDN tanpa menyentuh function. Ini satu-satunya titik
-        // pengaturan cache — route handler tidak perlu opt-in, dan header
-        // TTL lokal yang lebih pendek dioverride di sini.
-        // Endpoint sensitif/streaming/upload dikecualikan: cache 7 hari di
-        // sana akan serve respons basi, membocorkan sesi, atau menahan stream.
-        if (request.method === 'GET') {
-            const contentType = response.headers.get('content-type') || '';
-            const excluded = [
-                '/api/admin/',
-                '/api/chat/',
-                '/api/deepseek/',
-                '/api/text2image',
-                '/api/tools-image/',
-                '/api/uploader/',
-                '/api/temp/',
-                '/api/media/',
-                '/api/chess/',
-                '/api/_diag/',
-            ].some((prefix) => pathname.startsWith(prefix));
-            // SSE / NDJSON stream tidak boleh di-cache.
-            const isStream = contentType.includes('text/event-stream')
-                || contentType.includes('application/x-ndjson');
-            if (contentType.includes('application/json') && !excluded && !isStream) {
-                const headers = new Headers(response.headers);
-                headers.set('cache-control', EDGE_CACHE_CONTROL);
-                headers.set('x-cache', 'EDGE-DEFAULT');
-                return new Response(response.body, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers,
-                });
-            }
-        }
-        return response;
+        return stampCacheHeader(response);
     }
 
     // --- Non-200 response ---
 
     // Rate limiting: jangan spam untuk error yang sama
     if (isRateLimited(pathname, response.status)) {
-        return response; // Skip report, return response as-is
+        return stampCacheHeader(response); // Skip report, return response as-is
     }
 
     // Ambil response body untuk context
@@ -253,7 +223,7 @@ export async function middleware(request) {
             ? `This endpoint does not support ${request.method}. Check the documentation for supported methods.`
             : null;
 
-        return new Response(JSON.stringify({
+        return stampCacheHeader(new Response(JSON.stringify({
             success: false,
             error: statusTextMap[response.status] || `HTTP ${response.status}`,
             ...(hint ? { hint } : {}),
@@ -264,13 +234,13 @@ export async function middleware(request) {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
             },
-        });
+        }));
     }
 
-    return response;
+    return stampCacheHeader(response);
 }
 
-// Hanya aktif untuk /api/* routes
+// Semua route — tanpa pengecualian
 export const config = {
-    matcher: '/api/:path*',
+    matcher: '/:path*',
 };

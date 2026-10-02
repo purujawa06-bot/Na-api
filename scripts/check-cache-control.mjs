@@ -1,67 +1,44 @@
 /**
- * Check: semua GET JSON endpoint ikutEDGE_CACHE_CONTROL (7 hari).
+ * Check: SEMUA response (semua method, semua content-type, private/public)
+ * distamp EDGE_CACHE_CONTROL 7 hari — tanpa pengecualian.
  *
  * Jalankan: node scripts/check-cache-control.mjs
  * Exit != 0 kalau ada yang regresi.
  */
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { EDGE_CACHE_CONTROL } from '../lib/api-cache.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const API_DIR = join(ROOT, 'app/api');
 
 const EXPECTED = 'public, s-maxage=604800, stale-while-revalidate=86400';
 assert.equal(EDGE_CACHE_CONTROL, EXPECTED, 'EDGE_CACHE_CONTROL tidak sesuai');
 
-// TTL lokal yang lebih pendek tidak bocor: middleware override, tapi
-// inhale TTL_SHORT!=cache yangroute handler tulis sendiri akan tampil di client.
-const SHORT_TTL = /\{\s*ttl:\s*(\d+)\s*,\s*stale:\s*(\d+)\s*\}/g;
-
-// Cache 7 hari TIDAK boleh kena endpoint yang return-nya basi / sensitif / stream.
-const MUST_NOT_CACHE = [
-  '/api/admin/',
-  '/api/chat/',
-  '/api/deepseek/',
-  '/api/text2image',
-  '/api/tools-image/',
-  '/api/uploader/',
-  '/api/temp/',
-  '/api/media/',
-  '/api/chess/',
-  '/api/_diag/',
-];
-
-function walk(dir) {
-  return readdirSync(dir).flatMap((name) => {
-    const full = join(dir, name);
-    return statSync(full).isDirectory() ? walk(full) : [full];
-  });
-}
-
-const files = walk(API_DIR).filter((f) => f.endsWith('.js') || f.endsWith('.jsx'));
-
-let shortTtl = [];
-for (const file of files) {
-  const src = readFileSync(file, 'utf8');
-  for (const m of src.matchAll(SHORT_TTL)) {
-    const [full, ttl] = [m[0], Number(m[1])];
-    if (ttl < 604800) shortTtl.push(`${relative(ROOT, file)}: ${full.trim()}`);
-  }
-}
-assert.deepEqual(shortTtl, [], `TTL lokal < 7 hari (middleware override, tapi jangan andalkan):\n  ${shortTtl.join('\n  ')}`);
-
 const middleware = readFileSync(join(ROOT, 'middleware.js'), 'utf8');
 assert.ok(middleware.includes('EDGE_CACHE_CONTROL'), 'middleware tidak memakai EDGE_CACHE_CONTROL');
 assert.ok(!middleware.includes('s-maxage=300'), 'header TTL lama masih tertinggal di middleware');
-for (const prefix of MUST_NOT_CACHE) {
-  assert.ok(middleware.includes(`'${prefix}'`), `exclusion hilang: ${prefix}`);
+
+// No-exception policy: tidak boleh ada exclusion list, gate GET-only,
+// atau gate content-type/stream. Semua jalur return harus lewat stampCacheHeader.
+for (const banned of ['excluded', 'isStream', '/api/admin/', '/api/chat/', '/api/deepseek/', '/api/_diag/']) {
+  assert.ok(!middleware.includes(banned), `masih ada pembatas: ${banned}`);
 }
+assert.ok(!middleware.includes("request.method === 'GET'"), 'masih ada gate GET-only');
+assert.ok(!middleware.includes('application/json'), 'masih ada gate content-type JSON');
+assert.ok(middleware.includes("matcher: '/:path*'"), 'matcher harus /:path* (semua route)');
 
-// Guard utama: stream & non-GET tidak boleh di-cache.
-assert.ok(middleware.includes('request.method === \'GET\''), 'guard GET hilang');
-assert.ok(middleware.includes('isStream'), 'guard SSE/NDJSON stream hilang');
-assert.ok(middleware.includes('application/json'), 'guard content-type JSON hilang');
+// Setiap return response harus lewat stampCacheHeader — kecuali
+// NextResponse.next() (fetch-forward gagal), early return OPTIONS,
+// dan definisi stampCacheHeader itu sendiri (return new Response(res.body...)).
+const bareReturn = /^(\s*)return (response|new Response\()/gm;
+let leaks = [];
+for (const m of middleware.matchAll(bareReturn)) {
+  const after = middleware.slice(m.index, m.index + 60);
+  if (after.includes('res.body')) continue; // definisi stamp itu sendiri
+  const line = middleware.slice(Math.max(0, m.index - 120), m.index);
+  if (!line.includes('stampCacheHeader(')) leaks.push(m[0].trim());
+}
+assert.deepEqual(leaks, [], `jalur return tanpa stamp:\n  ${leaks.join('\n  ')}`);
 
-console.log(`OK — ${files.length} route file diperiksa, edge cache = ${EXPECTED}`);
+console.log(`OK — no-exception policy aktif, edge cache = ${EXPECTED}`);
