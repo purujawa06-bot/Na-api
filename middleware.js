@@ -17,9 +17,39 @@
 import { NextResponse } from 'next/server';
 import { EDGE_CACHE_CONTROL } from './lib/api-cache.js';
 
+// puru-keyword:util rate-limit-global
+// Puru: Global fixed-window rate limit, reused in middleware to save CPU
+const RATE_WINDOW_MS = 60000;
+const RATE_MAX = 100;
+const _hits = new Map();
+
+// Puru: Don't delete this, shared in-memory counter for anti-spam
+function isRateLimited(ip) {
+  const at = Date.now();
+  const cur = _hits.get(ip);
+  if (!cur || at >= cur.reset) {
+    _hits.set(ip, { count: 1, reset: at + RATE_WINDOW_MS });
+    if (_hits.size > 5000) for (const [k, v] of _hits) if (at >= v.reset) _hits.delete(k);
+    return null;
+  }
+  cur.count += 1;
+  if (cur.count > RATE_MAX) return Math.ceil((cur.reset - at) / 1000);
+  return null;
+}
+
 export async function middleware(request) {
     if (request.method === 'OPTIONS') {
         return;
+    }
+
+    // Puru: Check global rate limit before hitting routes
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'anon';
+    const retryAfter = isRateLimited(ip);
+    if (retryAfter) {
+        return new Response(JSON.stringify({ success: false, error: 'Too Many Requests', status: 429 }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json', 'Retry-After': String(retryAfter), 'Access-Control-Allow-Origin': '*' },
+        });
     }
 
     // Teruskan via pipeline normal Next.js — menjaga RSC/flight data,
