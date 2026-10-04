@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import PuruboyHeroAnim from '../components/PuruboyHeroAnim';
 import { getDocsSpec } from '../lib/docsService';
 
 export const revalidate = 3600;
@@ -28,11 +29,7 @@ const Hero = () => (
                 <span className="absolute -top-1 -right-2 w-3 h-3 bg-green-400 rounded-full border-2 border-[#09090b] animate-pulse z-10"></span>
             </div>
         </div>
-        <div className="w-full flex justify-center mb-3 mt-4 px-0">
-            <div className="w-full max-w-[620px] overflow-hidden rounded-2xl">
-                <iframe src="/puruboy-loop-embed.html" title="PuruBoy API Animation" className="w-full h-[220px] border-0 block" scrolling="no" loading="lazy" style={{display:'block',margin:'0 auto'}} />
-            </div>
-        </div>
+        <PuruboyHeroAnim />
         <p className="text-secondary text-sm leading-relaxed max-w-sm mx-auto font-medium">
             Platform API modular terbaik dengan integrasi AI, Downloader, dan Anime Streaming. Gratis, cepat, dan mudah digunakan.
         </p>
