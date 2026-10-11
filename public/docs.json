@@ -322,6 +322,107 @@
           "required": false
         }
       ]
+    },
+    {
+      "title": "AI Text-to-Video (Raphael) — Minta Tiket",
+      "summary": "Generate video dari teks via raphael.app (MiniMax H3 Turbo, gratis anonim). Langkah 1: minta tiket antre.",
+      "description": "POST /api/text2video meminta tiket antre ke Raphael (model gratis\n              terkunci: MiniMax H3 Turbo 480P ~4 detik). Respons langsung berisi\n              `ticket`, `wait_ms`, dan `cookie` (<5 detik, aman di timeout Hobby).\n              Lanjut ke GET /api/text2video/redeem setelah wait_ms, lalu poll\n              GET /api/text2video/status sampai `status: complete` (videoUrl).",
+      "method": "POST",
+      "path": "/api/text2video",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/text2video', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ prompt: 'a fox in snowy forest cinematic', aspect: '16:9' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "prompt",
+          "in": "body",
+          "type": "string",
+          "description": "Deskripsi video (wajib, 1-2000 karakter).",
+          "required": true
+        },
+        {
+          "name": "aspect",
+          "in": "body",
+          "type": "string",
+          "description": "Rasio aspek video. Default: '16:9'.",
+          "required": false,
+          "choices": [
+            {
+              "value": "16:9",
+              "label": "Landscape 16:9 (YouTube)"
+            },
+            {
+              "value": "9:16",
+              "label": "Vertikal 9:16 (TikTok/Reels/Shorts)"
+            },
+            {
+              "value": "1:1",
+              "label": "Persegi 1:1 (feed)"
+            },
+            {
+              "value": "4:3",
+              "label": "Klasik 4:3"
+            },
+            {
+              "value": "3:4",
+              "label": "Potrait 3:4"
+            },
+            {
+              "value": "21:9",
+              "label": "Ultrawide 21:9"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "AI Text-to-Video (Raphael) — Tukar Tiket",
+      "summary": "Langkah 2: tukar ticket menjadi job_id via raphael.app setelah wait_ms habis.",
+      "description": "GET /api/text2video/redeem menukar `ticket` (dari POST /api/text2video)\n              menjadi `job_id` setelah masa antre `wait_ms` habis. Kalau terlalu\n              cepat, balas 409 `QUEUE_NOT_READY` + sisa `wait_ms` — tunggu lalu\n              ulangi. Lanjut poll GET /api/text2video/status sampai complete.",
+      "method": "GET",
+      "path": "/api/text2video/redeem",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/text2video/redeem?ticket=TIKET_ANDA&cookie=COOKIE_ANDA')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "ticket",
+          "in": "query",
+          "type": "string",
+          "description": "Tiket antre dari POST /api/text2video (wajib).",
+          "required": true
+        },
+        {
+          "name": "cookie",
+          "in": "query",
+          "type": "string",
+          "description": "Cookie identitas dari POST /api/text2video (wajib).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "AI Text-to-Video (Raphael) — Cek Status",
+      "summary": "Langkah 3: poll status job video via raphael.app sampai complete (videoUrl).",
+      "description": "GET /api/text2video/status mengecek status `job_id` (dari\n              GET /api/text2video/redeem). Poll tiap ~10-20 detik (pakai\n              `next_poll_ms` bila ada) sampai `status: complete` — hasilnya ada\n              di `videos[]` (URL mp4 langsung) + `thumbnails[]`.",
+      "method": "GET",
+      "path": "/api/text2video/status",
+      "responseType": "json",
+      "example": "fetch('https://puruboy-api.vercel.app/api/text2video/status?job_id=JOB_ANDA&cookie=COOKIE_ANDA')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "job_id",
+          "in": "query",
+          "type": "string",
+          "description": "Job ID dari GET /api/text2video/redeem (wajib).",
+          "required": true
+        },
+        {
+          "name": "cookie",
+          "in": "query",
+          "type": "string",
+          "description": "Cookie identitas dari POST /api/text2video (wajib).",
+          "required": true
+        }
+      ]
     }
   ],
   "agent-tools": [
