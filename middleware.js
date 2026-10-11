@@ -17,6 +17,32 @@
 import { NextResponse } from 'next/server';
 import { EDGE_CACHE_CONTROL } from './lib/api-cache.js';
 
+/**
+ * Endpoint dinamis/polling — JANGAN di-cache edge.
+ * Bug 2026-10-11: /api/text2video/status ke-cache 7 hari (X-Vercel-Cache: HIT,
+ * Age: 7770) sehingga polling stuck processing padahal upstream complete.
+ * Semua prefix di sini dipaksa `no-store` + `x-cache: BYPASS`.
+ */
+const NO_STORE_PREFIXES = [
+  '/api/text2video',
+  '/api/text2image',
+  '/api/chat',
+  '/api/temp',
+  '/api/tools-image',
+  '/api/uploader',
+  '/api/admin',
+  '/api/agent-tools',
+  '/api/_diag',
+  '/api/user-scripts',
+  '/api/models',
+];
+
+function isNoStore(pathname) {
+  return NO_STORE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
+}
+
+const NO_STORE_CACHE_CONTROL = 'no-store, no-cache, must-revalidate';
+
 // puru-keyword:util rate-limit-global
 // Puru: Global fixed-window rate limit, reused in middleware to save CPU
 const RATE_WINDOW_MS = 60000;
@@ -57,15 +83,22 @@ export async function middleware(request) {
     // + new Response(): itu yang merusak navigasi client-side.
     const response = await NextResponse.next();
 
-    // Stamp hemat kuota — mutasi header langsung, body/streaming tak disentuh.
-    response.headers.set('cache-control', EDGE_CACHE_CONTROL);
-    response.headers.set('x-cache', 'EDGE-DEFAULT');
+    const pathname = request.nextUrl.pathname;
+    if (isNoStore(pathname)) {
+        // Endpoint dinamis/polling: larang semua layer cache (edge + browser).
+        response.headers.set('cache-control', NO_STORE_CACHE_CONTROL);
+        response.headers.set('pragma', 'no-cache');
+        response.headers.set('x-cache', 'BYPASS');
+    } else {
+        // Stamp hemat kuota — mutasi header langsung, body/streaming tak disentuh.
+        response.headers.set('cache-control', EDGE_CACHE_CONTROL);
+        response.headers.set('x-cache', 'EDGE-DEFAULT');
+    }
 
     if (response.status >= 200 && response.status < 300) {
         return response;
     }
 
-    const pathname = request.nextUrl.pathname;
     console.error(`[Middleware] Non-200: ${pathname} | ${request.method} | ${response.status}`);
 
     // Normalisasi HTML error default Next.js ke JSON (khusus API).
@@ -106,12 +139,20 @@ export async function middleware(request) {
         status: response.status,
     }), {
         status: response.status,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'cache-control': EDGE_CACHE_CONTROL,
-            'x-cache': 'EDGE-DEFAULT',
-        },
+        headers: isNoStore(pathname)
+            ? {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'cache-control': NO_STORE_CACHE_CONTROL,
+                'pragma': 'no-cache',
+                'x-cache': 'BYPASS',
+            }
+            : {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'cache-control': EDGE_CACHE_CONTROL,
+                'x-cache': 'EDGE-DEFAULT',
+            },
     });
 }
 

@@ -38,14 +38,23 @@ export async function GET(req) {
   try {
     const r = await redeemTicket({ ticket, cookie });
     const statusUrl = `/api/text2video/status?job_id=${encodeURIComponent(r.job_id)}&cookie=${encodeURIComponent(cookie)}`;
-    return NextResponse.json({
-      success: true,
-      status: 'submitted',
-      source: 'raphael',
-      job_id: r.job_id,
-      status_url: statusUrl,
-      hint: 'Poll GET status_url sampai status complete (videoUrl)',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        status: 'submitted',
+        source: 'raphael',
+        job_id: r.job_id,
+        status_url: statusUrl,
+        hint: 'Poll GET status_url sampai status complete (videoUrl)',
+      },
+      {
+        headers: {
+          'cache-control': 'no-store, no-cache, must-revalidate',
+          pragma: 'no-cache',
+          'x-cache': 'BYPASS',
+        },
+      }
+    );
   } catch (err) {
     reportError(err, { endpoint: '/api/text2video/redeem', method: 'GET' }).catch(() => {});
     if (err?.status === 409) {

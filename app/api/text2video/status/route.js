@@ -37,16 +37,25 @@ export async function GET(req) {
 
   try {
     const s = await getJobStatus({ job_id: jobId, cookie });
-    return NextResponse.json({
-      success: true,
-      source: 'raphael',
-      status: s.status,
-      upstream_status: s.upstream_status,
-      progress: s.progress,
-      videos: s.videos,
-      thumbnails: s.thumbnails,
-      next_poll_ms: s.next_poll_ms,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        source: 'raphael',
+        status: s.status,
+        upstream_status: s.upstream_status,
+        progress: s.progress,
+        videos: s.videos,
+        thumbnails: s.thumbnails,
+        next_poll_ms: s.next_poll_ms,
+      },
+      {
+        headers: {
+          'cache-control': 'no-store, no-cache, must-revalidate',
+          pragma: 'no-cache',
+          'x-cache': 'BYPASS',
+        },
+      }
+    );
   } catch (err) {
     reportError(err, { endpoint: '/api/text2video/status', method: 'GET' }).catch(() => {});
     const status = err?.status === 400 || err?.status === 404 ? err.status : 502;

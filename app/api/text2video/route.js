@@ -61,22 +61,31 @@ export async function POST(req) {
 
   try {
     const t = await requestTicket({ prompt, aspect });
-    return NextResponse.json({
-      success: true,
-      status: 'queued',
-      source: 'raphael',
-      model: VIDEO_MODEL,
-      ticket: t.ticket,
-      wait_ms: t.wait_ms,
-      wait_seconds: Math.ceil(t.wait_ms / 1000),
-      cookie: t.cookie,
-      aspect: t.aspect,
-      next: {
-        redeem_after_ms: t.wait_ms,
-        redeem_url: `/api/text2video/redeem?ticket=${encodeURIComponent(t.ticket)}&cookie=${encodeURIComponent(t.cookie)}`,
-        hint: 'Tunggu wait_ms lalu GET redeem_url untuk dapat job_id',
+    return NextResponse.json(
+      {
+        success: true,
+        status: 'queued',
+        source: 'raphael',
+        model: VIDEO_MODEL,
+        ticket: t.ticket,
+        wait_ms: t.wait_ms,
+        wait_seconds: Math.ceil(t.wait_ms / 1000),
+        cookie: t.cookie,
+        aspect: t.aspect,
+        next: {
+          redeem_after_ms: t.wait_ms,
+          redeem_url: `/api/text2video/redeem?ticket=${encodeURIComponent(t.ticket)}&cookie=${encodeURIComponent(t.cookie)}`,
+          hint: 'Tunggu wait_ms lalu GET redeem_url untuk dapat job_id',
+        },
       },
-    });
+      {
+        headers: {
+          'cache-control': 'no-store, no-cache, must-revalidate',
+          pragma: 'no-cache',
+          'x-cache': 'BYPASS',
+        },
+      }
+    );
   } catch (err) {
     reportError(err, { endpoint: '/api/text2video', method: 'POST' }).catch(() => {});
     const status = err?.status === 400 || err?.status === 429 ? err.status : 502;
