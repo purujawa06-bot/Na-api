@@ -2,16 +2,13 @@
  * @title SoundCloud Downloader
  * @summary Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.
  * @description Mengambil link stream/download audio dari URL track SoundCloud publik.
- *              Utama: progressive MP3 tunggal; bila tidak ada, HLS segment MP3 digabung
- *              otomatis dengan ?raw=1. Track Go+ (policy SNIP) hanya menghasilkan preview
- *              30 detik (ditandai is_preview=true). Link kedaluwarsa ±1 jam.
+ *              Selalu merespons JSON (tanpa redirect/proxy byte): hasilnya berisi
+ *              metadata + stream_url/download_url CDN. Track Go+ (policy SNIP)
+ *              hanya menghasilkan preview 30 detik (ditandai is_preview=true).
+ *              Link kedaluwarsa ±1 jam.
  * @method GET
  * @path /api/downloader/soundcloud
  * @param {string} query.url - URL track SoundCloud publik (wajib, https only).
- * @param {string} [query.raw] - Format output yang diinginkan.
- *        @choice 0 - JSON Metadata & Link (Default)
- *        @choice 1 - Redirect 302 langsung ke file audio CDN (hemat kuota,
- *                    tanpa proxy byte via function; client mengikuti redirect otomatis).
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')
@@ -20,11 +17,7 @@
  */
 import { NextResponse } from 'next/server';
 import { downloadSoundCloud } from '../../../../lib/soundcloud.js';
-import {
-  cachedJson,
-  cacheControlHeader,
-  getOrSet,
-} from '../../../../lib/api-cache.js';
+import { cachedJson } from '../../../../lib/api-cache.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,58 +40,13 @@ function validateUrl(url) {
   return null;
 }
 
-// ponytail: 302캐 cache ini 짧게 유지한다 — resolve한 signed CDN URL은 약 1시간이면 만료되므로,
-// s-maxage를604800(7일)으로 올리면 만료된 링크가 계속 응답된다(breaking).
-// If real quota pressure hits here, swap to re-resolve-on-401 instead of a longer TTL.
-// Edge JSON caching (7d) still applies via middleware for the normal JSON path.
-const REDIRECT_CACHE_TTL_S = 1800;
-const REDIRECT_CACHE_STALE_S = 600;
-
-// Signed CDN links expire after ~1 hour, so both the resolve memo and the
-// redirect cache stay well under that lifetime.
-const RESOLVE_TTL_MS = 30 * 60 * 1000;
-const RESOLVE_STALE_MS = 10 * 60 * 1000;
-
-// Quota guard: never proxy audio bytes through the function. Resolving the
-// signed CDN URL costs one cheap JSON call; the bytes then flow directly
-// from SoundCloud's CDN to the client (302 redirect).
-async function redirectToAudio(url) {
-  const key = `sc:resolve:${url}`;
-  const { value: result, hit } = await getOrSet(
-    key,
-    RESOLVE_TTL_MS,
-    RESOLVE_STALE_MS,
-    () => downloadSoundCloud(url)
-  );
-  if (result.is_preview) {
-    return NextResponse.json(
-      { success: false, error: 'Track ini hanya tersedia preview 30 detik (Go+/SNIP)' },
-      { status: 502 }
-    );
-  }
-  const target = result.download_url || result.stream_url;
-  return new NextResponse(null, {
-    status: 302,
-    headers: {
-      location: target,
-      'cache-control': cacheControlHeader(REDIRECT_CACHE_TTL_S, REDIRECT_CACHE_STALE_S),
-      'x-cache': hit,
-    },
-  });
-}
-
-async function handle(url, raw, cacheReq) {
+async function handle(url, cacheReq) {
   const invalid = validateUrl(url);
   if (invalid) {
-    // raw mode tetap balas JSON agar error terbaca
     return NextResponse.json({ success: false, error: invalid.error }, { status: invalid.status });
   }
 
   try {
-    if (raw === '1') {
-      return await redirectToAudio(url);
-    }
-
     const produce = async () => {
       const result = await downloadSoundCloud(url);
       return NextResponse.json({ success: true, source: 'api-v2.soundcloud.com', ...result });
@@ -114,18 +62,16 @@ async function handle(url, raw, cacheReq) {
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  return handle(searchParams.get('url'), searchParams.get('raw'), req);
+  return handle(searchParams.get('url'), req);
 }
 
 export async function POST(req) {
   let url = null;
-  let raw = null;
   try {
     const body = await req.json();
     url = body?.url;
-    raw = body?.raw != null ? String(body.raw) : null;
   } catch {
     return NextResponse.json({ success: false, error: 'Body harus JSON: {"url": "..."}' }, { status: 400 });
   }
-  return handle(url, raw, null);
+  return handle(url, null);
 }

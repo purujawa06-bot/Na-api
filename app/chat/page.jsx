@@ -82,15 +82,21 @@ const getRelativeDateLabel = (dateString) => {
     return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+// Media hosting: GitHub Na-media via raw (Vercel bersih dari file media)
+const MEDIA_BASE = 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main';
+const STICKER_BASE = `${MEDIA_BASE}/sticker`;
+
 // --- MEMOIZED COMPONENTS ---
 const ChatBubble = memo(({ chat, username, prevChat, index }) => {
     const isMe = chat.username === username;
     const isSequence = prevChat && prevChat.username === chat.username;
     const showHeader = !isSequence;
     
-    // Check if message is sticker
+    // Check if message is sticker ([sticker:url] atau legacy [sticker:/sticker/file])
     const isSticker = chat.message.startsWith('[sticker:') && chat.message.endsWith(']');
-    const stickerUrl = isSticker ? chat.message.slice(9, -1) : null;
+    let stickerUrl = isSticker ? chat.message.slice(9, -1) : null;
+    if (stickerUrl && stickerUrl.startsWith('/sticker/')) stickerUrl = `${MEDIA_BASE}${stickerUrl}`;
+    else if (stickerUrl && !/^https?:\/\//i.test(stickerUrl)) stickerUrl = `${STICKER_BASE}/${stickerUrl}`;
     
     // Date Label
     const currentDateLabel = getRelativeDateLabel(chat.created_at);
@@ -210,8 +216,8 @@ export default function ChatPage() {
         }
         setDeviceId(did);
 
-        // Sticker list dari manifest statis public/sticker/list.json
-        fetch('/sticker/list.json')
+        // Sticker list dari GitHub Na-media (Vercel bersih dari file media)
+        fetch(`${STICKER_BASE}/list.json`)
             .then(res => res.json())
             .then(data => {
                 if(Array.isArray(data) && data.length > 0) {
@@ -350,7 +356,7 @@ export default function ChatPage() {
 
     const handleSendSticker = async (filename) => {
         setShowStickers(false);
-        const msg = `[sticker:/sticker/${filename}]`;
+        const msg = `[sticker:${STICKER_BASE}/${filename}]`;
         await sendMessageToApi(msg);
     };
 
@@ -490,7 +496,7 @@ export default function ChatPage() {
                                     className="hover:bg-[#383a40] p-1 rounded transition-colors flex items-center justify-center relative h-20"
                                 >
                                     <Image 
-                                        src={`/sticker/${filename}`} 
+                                        src={`${STICKER_BASE}/${filename}`} 
                                         alt={`Sticker ${filename}`} 
                                         fill
                                         className="object-contain"

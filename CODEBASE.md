@@ -157,7 +157,7 @@ dengan event `processing` (heartbeat tiap 2s), `uploading`, lalu `done`. JANGAN 
 - Nama file hasil `_nobg.png`. Upload ke `https://tmpfiles.org/api/v1/upload` lalu ekstrak URL langsung dari `src` `img#img_preview` (pola `https://tmpfiles.org/dl/<...>`).
 - Jika URL sumber tanpa ekstensi gambar (mis. `picsum.photos/600/400`), lib menyisipkan ekstensi sesuai `content-type` agar upload iloveimg tidak ditolak (`InvalidExtension`).
 - Contract `done`: `{ event:'done', success, source:'iloveimg', url (link langsung), filename, mimetype }`.
-- Contoh gambar untuk docs/uji pakai `https://puruboy-api.vercel.app/example.jpg` (sama seperti upscaler & deepseek/vision).
+- Contoh gambar untuk docs/uji pakai `https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg` (sama seperti upscaler & deepseek/vision).
 
 ## Catatan Penting: HTML-to-Image (iloveimg) — 09/2026
 
@@ -209,10 +209,10 @@ Dua lapis penghematan (tanpa ubah `maxDuration: 60`):
 - `middleware.js` — jaring pengaman: semua GET JSON 2xx yang belum punya `cache-control`
   otomatis dapat `public, s-maxage=300, stale-while-revalidate=600` (kecuali path sensitif/
   streaming: admin, chat, deepseek, text2image, tools-image, uploader, temp, media, chess, _diag).
-- `GET /api/downloader/soundcloud?raw=1` — DULU mem-proxy seluruh byte MP3 lewat function
-  (buffer + gabung ≤400 segmen HLS = pemakan CPU/bandwidth terbesar). Kini 302 redirect
-  langsung ke signed CDN URL (resolve JSON di-memo 30 menit, redirect di-cache 30 menit).
-  Kontrak `raw=1` tetap "file audio langsung" karena client mengikuti redirect otomatis.
+- `GET /api/downloader/soundcloud` — selalu JSON (metadata + stream_url/download_url CDN).
+  Mode lama `?raw=1` (302 redirect langsung ke file audio) DIHAPUS 10/2026 agar
+  semua endpoint konsisten JSON-only (tanpa respons media langsung).
+  Client yang butuh byte audio tinggal fetch URL di field stream_url/download_url.
 - TTL per-route: downloader tiktok/instagram/soundcloud 1800s, play 900s, youtube 600s
   (link googlevideo pendek), search/web 600s, web-fetch 300s, find-skills 1800s.
 - Uji: `node temp/test-api-cache.mjs` (6/6).

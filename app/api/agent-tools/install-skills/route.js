@@ -1,14 +1,15 @@
 /**
  * @title Install Agent Skills
- * @summary Ambil file SKILL.md langsung (setara npx skills use).
- * @description Mengambil isi file SKILL.md satu skill langsung sebagai respons
- *              markdown (Content-Type text/markdown) — setara `npx skills use
+ * @summary Ambil file SKILL.md sebagai JSON (setara npx skills use).
+ * @description Mengambil isi file SKILL.md satu skill dan mengembalikannya
+ *              sebagai JSON { success, source, skill, name, description,
+ *              skill_url, install_command, markdown } — setara `npx skills use
  *              <owner/repo@skill>` — sehingga agent bisa membaca & memakai skill
  *              tanpa install ke folder lokal. Repo sumber divalidasi via GitHub
  *              API dan nama skill dicocokkan dengan frontmatter SKILL.md. Jika
  *              nama skill tidak cocok, respons 404 JSON berisi daftar skill yang
  *              tersedia di repo tersebut. Untuk install permanen ke folder agent,
- *              jalankan perintah pada header X-Install-Command di mesin client.
+ *              jalankan perintah pada field install_command di mesin client.
  *              Juga mendukung method POST dengan body JSON {"source": "...", "skill": "..."}.
  * @method GET
  * @path /api/agent-tools/install-skills
@@ -17,8 +18,8 @@
  * @response json
  * @example
  * fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')
- *     .then(res => res.text())
- *     .then(data => console.log(data));
+ *     .then(res => res.json())
+ *     .then(data => console.log(data.markdown));
  */
 import { getSkillFile } from '../../../../lib/skills-sh.js';
 
@@ -45,15 +46,17 @@ function parseParams(input) {
 async function runInstall({ source, skill }) {
   try {
     const file = await getSkillFile(source, skill);
-    return new Response(file.markdown, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'X-Skill-Name': file.name,
-        'X-Skill-Source': file.source,
-        'X-Skill-Url': file.skill_url,
-        'X-Install-Command': file.install_command,
-      },
+    return Response.json({
+      success: true,
+      source: file.source,
+      branch: file.branch,
+      skill: file.name,
+      name: file.name,
+      description: file.description,
+      path: file.path,
+      skill_url: file.skill_url,
+      install_command: file.install_command,
+      markdown: file.markdown,
     });
   } catch (err) {
     if (err?.status === 404 && err?.available) {

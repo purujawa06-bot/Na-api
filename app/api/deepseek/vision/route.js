@@ -30,7 +30,7 @@
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
  *         userID: 'TOKEN_ANDA',
- *         image: 'https://puruboy-api.vercel.app/example.jpg',
+ *         image: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg',
  *         prompt: 'Apa yang ada di gambar ini?',
  *         thinking: false,
  *         stream: false

@@ -208,7 +208,7 @@
       "method": "POST",
       "path": "/api/deepseek/vision",
       "responseType": "json",
-      "example": "Tanya isi gambar\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         userID: 'TOKEN_ANDA',\r         image: 'https://puruboy-api.vercel.app/example.jpg',\r         prompt: 'Apa yang ada di gambar ini?',\r         thinking: false,\r         stream: false\r     })\r }).then(res => res.json()).then(console.log);\n\nLanjutkan tanya-jawab tentang gambar yang sama\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })\r }).then(res => res.json()).then(console.log);",
+      "example": "Tanya isi gambar\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({\r         userID: 'TOKEN_ANDA',\r         image: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg',\r         prompt: 'Apa yang ada di gambar ini?',\r         thinking: false,\r         stream: false\r     })\r }).then(res => res.json()).then(console.log);\n\nLanjutkan tanya-jawab tentang gambar yang sama\r fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "userID",
@@ -460,12 +460,12 @@
     },
     {
       "title": "Install Agent Skills",
-      "summary": "Ambil file SKILL.md langsung (setara npx skills use).",
-      "description": "Mengambil isi file SKILL.md satu skill langsung sebagai respons\r              markdown (Content-Type text/markdown) — setara `npx skills use\r              <owner/repo@skill>` — sehingga agent bisa membaca & memakai skill\r              tanpa install ke folder lokal. Repo sumber divalidasi via GitHub\r              API dan nama skill dicocokkan dengan frontmatter SKILL.md. Jika\r              nama skill tidak cocok, respons 404 JSON berisi daftar skill yang\r              tersedia di repo tersebut. Untuk install permanen ke folder agent,\r              jalankan perintah pada header X-Install-Command di mesin client.\r              Juga mendukung method POST dengan body JSON {\"source\": \"...\", \"skill\": \"...\"}.",
+      "summary": "Ambil file SKILL.md sebagai JSON (setara npx skills use).",
+      "description": "Mengambil isi file SKILL.md satu skill dan mengembalikannya sebagai JSON { success, source, skill, name, description, skill_url, install_command, markdown } — setara `npx skills use <owner/repo@skill>`.",
       "method": "GET",
       "path": "/api/agent-tools/install-skills",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\r     .then(res => res.text())\r     .then(data => console.log(data));",
+      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\r     .then(res => res.json())\r     .then(data => console.log(data.markdown));",
       "params": [
         {
           "name": "source",
@@ -563,7 +563,7 @@
     {
       "title": "SoundCloud Downloader",
       "summary": "Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.",
-      "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\r              Utama: progressive MP3 tunggal; bila tidak ada, HLS segment MP3 digabung\r              otomatis dengan ?raw=1. Track Go+ (policy SNIP) hanya menghasilkan preview\r              30 detik (ditandai is_preview=true). Link kedaluwarsa ±1 jam.",
+      "description": "Mengambil link stream/download audio dari URL track SoundCloud publik. Selalu merespons JSON (tanpa redirect/proxy byte): hasilnya berisi metadata + stream_url/download_url CDN.",
       "method": "GET",
       "path": "/api/downloader/soundcloud",
       "responseType": "json",
@@ -575,23 +575,6 @@
           "type": "string",
           "description": "URL track SoundCloud publik (wajib, https only).",
           "required": true
-        },
-        {
-          "name": "raw",
-          "in": "query",
-          "type": "string",
-          "description": "Format output yang diinginkan.",
-          "required": false,
-          "choices": [
-            {
-              "value": "0",
-              "label": "JSON Metadata & Link (Default)"
-            },
-            {
-              "value": "1",
-              "label": "Redirect 302 langsung ke file audio CDN (hemat kuota,"
-            }
-          ]
         }
       ]
     },
@@ -1539,7 +1522,7 @@
       "method": "POST",
       "path": "/api/tools-image/remove-background",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/remove-background', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg' })\r }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/remove-background', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg' })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
@@ -1557,7 +1540,7 @@
       "method": "POST",
       "path": "/api/tools-image/upscaler",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg', scale: 2 })\r }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\r     method: 'POST',\r     headers: { 'Content-Type': 'application/json' },\r     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg', scale: 2 })\r }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",

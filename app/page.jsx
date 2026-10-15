@@ -77,15 +77,17 @@ const FeatureItem = ({ icon, title, desc, badge }) => (
     </div>
 );
 
+const MEDIA_BASE = 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main';
 const ChannelPromo = () => (
     <div className="native-card overflow-hidden relative group mb-8 border-none ring-1 ring-white/10">
         <div className="relative h-40 w-full bg-gray-900">
             <Image 
-                src="/puruboy-ch.jpg" 
+                src={`${MEDIA_BASE}/puruboy-ch.jpg`} 
                 alt="PuruBoy Channel" 
                 fill
                 className="object-cover opacity-70 group-hover:scale-105 transition-transform duration-700"
                 sizes="(max-width: 768px) 100vw, 600px"
+                unoptimized
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#121215] via-[#121215]/60 to-transparent"></div>
             <div className="absolute bottom-0 left-0 right-0 p-5">

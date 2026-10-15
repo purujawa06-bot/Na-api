@@ -13,7 +13,7 @@
  * fetch('https://puruboy-api.vercel.app/api/tools-image/remove-background', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
- *     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg' })
+ *     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg' })
  * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';

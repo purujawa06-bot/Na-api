@@ -14,7 +14,7 @@
  * fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
- *     body: JSON.stringify({ file: 'https://puruboy-api.vercel.app/example.jpg', scale: 2 })
+ *     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg', scale: 2 })
  * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
