@@ -14,7 +14,7 @@ if (!fs.existsSync(modulePath)) {
   process.exit(1);
 }
 
-console.log = (...args) => console.error(...args);
+console.log = () => {};
 
 const chunks = [];
 for await (const chunk of process.stdin) {

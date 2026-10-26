@@ -14,8 +14,8 @@ if (!fs.existsSync(modulePath)) {
   process.exit(1);
 }
 
-// Keep stdout reserved for the JSON result; the provider logs progress via console.log.
-console.log = (...args) => console.error(...args);
+// Keep stdout reserved for the JSON result and suppress provider progress logs.
+console.log = () => {};
 
 const chunks = [];
 for await (const chunk of process.stdin) {
