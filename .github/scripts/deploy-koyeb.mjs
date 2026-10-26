@@ -161,7 +161,8 @@ function buildDefinition() {
     routes: [{ path: "/", port }],
     regions: [region],
     instance_types: [{ type: instanceType }],
-    scalings: [{ min: 1, max: 1 }],
+    // Koyeb free instances require min scaling to be zero.
+    scalings: [{ min: instanceType === "free" ? 0 : 1, max: 1 }],
     health_checks: [
       {
         grace_period: 20,

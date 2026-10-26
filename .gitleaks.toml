@@ -1,0 +1,9 @@
+# Gitleaks configuration: extend the default ruleset and allowlist audited
+# false positives instead of disabling the scan.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vheer encrypts uploads with a password constant embedded in their public frontend bundle; it is not a user secret."
+paths = ['''backend/internal/tools/vheer\.go''']
