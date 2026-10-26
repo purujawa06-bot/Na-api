@@ -268,10 +268,15 @@ func (h *handlers) chatCompletions(w http.ResponseWriter, r *http.Request) {
 		model = "auto"
 	}
 	if isUnavailableModel(model) {
-		httpx.JSON(w, http.StatusBadGateway, map[string]any{
-			"success": false,
-			"error":   "Model " + model + " belum tersedia di backend Go",
-			"status":  http.StatusBadGateway,
+		// Return 400 instead of 502: Koyeb's edge replaces upstream 502 bodies
+		// with a generic "error code: 502" page, hiding the real reason.
+		httpx.JSON(w, http.StatusBadRequest, map[string]any{
+			"error": map[string]any{
+				"message": "Model " + model + " belum tersedia di backend Go",
+				"type":    "invalid_request_error",
+				"param":   "model",
+				"code":    "model_not_available",
+			},
 		})
 		return
 	}

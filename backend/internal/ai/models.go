@@ -21,6 +21,7 @@ type openAIModel struct {
 	Label       string `json:"label"`
 	Desc        string `json:"desc"`
 	Chainable   bool   `json:"chainable"`
+	Available   bool   `json:"available"`
 	Description string `json:"description"`
 }
 
@@ -37,6 +38,7 @@ func (h *handlers) listModels(w http.ResponseWriter, _ *http.Request) {
 			Label:       model.Label,
 			Desc:        model.Desc,
 			Chainable:   model.Chainable,
+			Available:   !isUnavailableModel(model.ID),
 			Description: model.Desc,
 		})
 	}
