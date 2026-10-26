@@ -1,9 +1,10 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
+import { apiUrl } from '../../lib/apiBase';
 
 /* PurTV ala purtv.vercel.app — bg #0f1117, card #161922, blue #3b82f6 */
-const API = '/api/purtv';
+const API = apiUrl('/api/purtv');
 const LS_H = 'puruTV_history';
 const LS_T = 'puruTV_trash';
 const asArray = (v) => (Array.isArray(v) ? v : []);

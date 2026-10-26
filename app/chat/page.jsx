@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import CryptoJS from 'crypto-js';
 import { v4 as uuidv4 } from 'uuid';
 import { Virtuoso } from 'react-virtuoso';
+import { apiUrl } from '../../lib/apiBase';
 
 // --- INDEXED DB HELPERS ---
 const DB_NAME = 'PuruBoyChatDB';
@@ -245,7 +246,7 @@ export default function ChatPage() {
                     const lastChat = currentChats.length > 0 ? currentChats[currentChats.length - 1] : null;
                     const lastDate = lastChat ? lastChat.created_at : '';
                     
-                    const pollRes = await fetch(`/api/chat?mode=poll&lastDate=${encodeURIComponent(lastDate)}`);
+                    const pollRes = await fetch(apiUrl(`/api/chat?mode=poll&lastDate=${encodeURIComponent(lastDate)}`));
                     
                     if (pollRes.ok) {
                         const status = await pollRes.json();
@@ -278,7 +279,7 @@ export default function ChatPage() {
             const lastChat = currentChats.length > 0 ? currentChats[currentChats.length - 1] : null;
             const lastTimestamp = lastChat ? lastChat.created_at : null;
             
-            let url = '/api/chat';
+            let url = apiUrl('/api/chat');
             if (lastTimestamp) {
                 url += `?after=${encodeURIComponent(lastTimestamp)}`;
             }
@@ -318,7 +319,7 @@ export default function ChatPage() {
             const timestamp = Date.now().toString();
             const signature = CryptoJS.SHA256(deviceId + SECRET_KEY + timestamp).toString();
 
-            const res = await fetch('/api/chat', {
+            const res = await fetch(apiUrl('/api/chat'), {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',

@@ -6,7 +6,7 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 
 **Na-api** — platform API dengan frontend Next.js 14 (App Router) dan **backend Go** (`backend/`) yang menangani seluruh endpoint `/api/*`. Endpoint bergaya OpenAI (chat/completions) dan layanan multimedia (downloader, dramabox, text2image, tools-image) kini diimplementasikan di Go; frontend hanya mem-proxy request ke backend sesuai `config.json`.
 
-- Frontend: Next.js `14.2.3`, React 18 (UI, docs, chat, purtv). Tidak ada lagi route handler API di `app/api` selain catch-all proxy.
+- Frontend: Next.js `14.2.3`, React 18 (UI, docs, chat, purtv). Tidak ada route handler API di `app/api`; browser memanggil backend Go langsung.
 - Backend: Go 1.22+ (`backend/`), stdlib + `pgx` + `golang.org/x/net/html`.
 - Script frontend: `node scripts/rebuild-docs.js && next build`.
 - Konfigurasi bersama: `config.json` di root (`backendUrl`, `port`, `requestTimeoutMs`).
@@ -25,7 +25,7 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
   - `internal/tools` — `/api/tools-image/*`, `/api/text2image`, `/api/text2video`, `/api/uploader`.
   - `internal/content` — blogs, chat board, temp, pages, user-scripts, admin.
   - `internal/agenttools` — agent-tools, chess/maia, _diag.
-- `app/api/[...path]/route.js` — proxy streaming ke backend Go (SSE/NDJSON aman).
+- `app/api` — tidak ada; seluruh panggilan API dari browser langsung ke backend Go.
 - `legacy/next-api/` — handler Next.js lama, **tidak dieksekusi**; disimpan sebagai sumber JSDoc untuk `scripts/rebuild-docs.js`.
 - `lib/` — logika/scraper JavaScript lama (referensi port Go + dipakai `scripts/`).
 - `app/docs`, `app/blog`, `app/chat`, `app/purtv`, dst — halaman UI/frontend.
@@ -35,8 +35,8 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 
 Migrasi backend dari handler Next.js ke Go. Frontend tidak lagi mengeksekusi route handler API.
 
-- Proxy: `app/api/[...path]/route.js` meneruskan seluruh `/api/*` (semua method) ke `backendBaseUrl()` dari `lib/backendConfig.js`. Body/response di-stream sehingga SSE dan NDJSON tetap jalan. Prioritas URL: `BACKEND_URL` env → `backendUrl` di `config.json` → `http://localhost:8081`.
-- `config.json` (root): `{ backendUrl, port, requestTimeoutMs }`. Backend membacanya dari cwd atau `../config.json`; env `PORT`/`CONFIG_PATH` menimpa. `backendUrl` default mengarah ke backend Koyeb; untuk debugging lokal set `BACKEND_URL=http://localhost:8081` lalu jalankan `npm run backend:dev` (port backend 8081, Next dev 8080).
+- Tanpa proxy: `lib/apiBase.js` membangun URL absolut ke backend Go (`NEXT_PUBLIC_BACKEND_URL` → `config.json` `backendUrl` → `http://localhost:8081`). Semua fetch UI (`chat`, `blogs`, `purtv`, `docs` Try It Out, dll) memakai `apiUrl()` sehingga request tidak melewati Vercel Function dan tidak kena batas `maxDuration`/timeout 10 detik. SSE/NDJSON tetap streaming langsung dari Go. CORS/rate limit/cache ditangani middleware Go.
+- `config.json` (root): `{ backendUrl, port, requestTimeoutMs }`. Backend membacanya dari cwd atau `../config.json`; env `PORT`/`CONFIG_PATH` menimpa. `backendUrl` di-inline ke frontend saat build; untuk debugging lokal set `NEXT_PUBLIC_BACKEND_URL=http://localhost:8081` lalu jalankan `npm run backend:dev` (port backend 8081, Next dev 8080).
 - Middleware Next (`middleware.js`) dihapus. Rate limit 100 req/menit/IP, CORS, `Contact`, dan aturan cache (`no-store` untuk chat/temp/tools/admin/agent-tools/models/user-scripts; 7 hari untuk sisanya) sekarang ada di `backend/cmd/server/middleware.go`.
 - Handler lama dipindah ke `legacy/next-api/` (tidak dibangun Next) dan tetap menjadi sumber JSDoc untuk `scripts/rebuild-docs.js` (`lib/docsService.js` memindai folder itu). `public/docs.json` tidak berubah.
 - Docker: `backend/Dockerfile` (multi-stage `golang:1.24-alpine` → `alpine:3.20`, user non-root, `HEALTHCHECK /healthz`, `PORT=8080`). Build: `docker build -t na-api-backend backend`.

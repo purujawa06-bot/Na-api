@@ -23,13 +23,14 @@
 
 ## 🧱 Arsitektur
 
-- **Frontend** — Next.js 14 (UI, `/docs`, `/chat`, `/purtv`). Seluruh request `/api/*` diproxy ke backend Go melalui `app/api/[...path]/route.js`.
+- **Frontend** — Next.js 14 (UI, `/docs`, `/chat`, `/purtv`). Browser memanggil backend Go **langsung** (tanpa proxy `/api/*`); tidak ada route handler API di Next/Vercel. Base URL diatur lewat `config.json`/`NEXT_PUBLIC_BACKEND_URL`.
 - **Backend** — Go (`backend/`) untuk semua endpoint API: AI chat, DeepSeek, downloader, komiku/dramabox/purtv, tools media, blogs/chat/temp, admin, dan agent tools.
-- **Konfigurasi** — `config.json` di root menentukan URL backend:
+- **Konfigurasi** — `config.json` di root menentukan URL backend (dipakai frontend saat build dan backend saat runtime):
   ```json
   { "backendUrl": "https://na-api-nue-api-e7bfd3f4.koyeb.app", "port": 8081, "requestTimeoutMs": 55000 }
   ```
-  Nilai default mengarah ke backend Koyeb. Saat debugging lokal jalankan backend lalu set `BACKEND_URL=http://localhost:8081` (env menimpa `backendUrl`).
+  `NEXT_PUBLIC_BACKEND_URL` menimpa `backendUrl` untuk frontend. Saat debugging lokal set `NEXT_PUBLIC_BACKEND_URL=http://localhost:8081` lalu jalankan backend.
+- **Tanpa proxy** — panggilan API langsung ke domain Koyeb (CORS `*`), jadi tidak kena batas durasi Vercel Function. `https://puruboy-api.vercel.app/api/*` tidak lagi melayani API; gunakan URL Koyeb.
 
 Menjalankan lokal:
 
@@ -47,8 +48,9 @@ docker run --rm -p 8080:8080 --env-file .env.local na-api-backend
 
 Deploy backend otomatis ke Koyeb: push ke `main` yang mengubah `backend/**`
 menjalankan `.github/workflows/deploy-backend.yml` (butuh secret
-`KOYEB_API_TOKEN`). Setelah deploy, set `BACKEND_URL` di Vercel ke URL Koyeb dari
-job summary. Detail ada di [`backend/README.md`](backend/README.md#deploy-ke-koyeb).
+`KOYEB_API_TOKEN`). Setelah deploy, samakan `config.json` `backendUrl` (atau set
+`NEXT_PUBLIC_BACKEND_URL` di Vercel) dengan URL dari job summary. Detail ada di
+[`backend/README.md`](backend/README.md#deploy-ke-koyeb).
 
 Detail backend (struktur, env, catatan migrasi) ada di [`backend/README.md`](backend/README.md).
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { apiUrl } from '../lib/apiBase';
 
 const STEPS = [
     { icon: 'fa-wand-magic-sparkles', title: 'Pasang Manager', desc: 'Install Tampermonkey atau Violentmonkey di browser.' },
@@ -37,7 +38,7 @@ export default function UserscriptStoreClient() {
     const fetchScripts = useCallback(async (p, q) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/user-scripts?page=${p}&search=${encodeURIComponent(q)}`);
+            const res = await fetch(apiUrl(`/api/user-scripts?page=${p}&search=${encodeURIComponent(q)}`));
             const data = await res.json();
             setScripts(data.scripts || []);
             setTotalPages(data.totalPages || 0);

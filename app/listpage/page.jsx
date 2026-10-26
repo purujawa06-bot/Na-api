@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { apiUrl } from '../../lib/apiBase';
 
 export default function ListPage() {
     const [pages, setPages] = useState([]);
@@ -13,7 +14,7 @@ export default function ListPage() {
     const fetchPages = useCallback(async (p) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/pages?page=${p}&search=${encodeURIComponent(searchQuery)}`);
+            const res = await fetch(apiUrl(`/api/pages?page=${p}&search=${encodeURIComponent(searchQuery)}`));
             const data = await res.json();
             setPages(data.pages || []);
             setTotalPages(data.totalPages || 0);

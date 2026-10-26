@@ -445,7 +445,10 @@
     </div>
 
     <script>
-        const API_BASE = '/api';
+        // Puruboy admin panel calls the Go backend directly (no Vercel proxy).
+        const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+            ? 'http://localhost:8081/api'
+            : 'https://na-api-nue-api-e7bfd3f4.koyeb.app/api';
         const PASSWORD_KEY = 'nexta-admin-auth';
         const GH_REPO_KEY = 'github_repo';
         const GH_TOKEN_KEY = 'github_token';

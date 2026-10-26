@@ -6,11 +6,6 @@ const nextConfig = {
     // optional native `bufferutil` sehingga production error
     // "t.mask is not a function". Biarkan require saat runtime.
     serverComponentsExternalPackages: ['ws'],
-    // config.json dibaca saat runtime oleh proxy /api (lib/backendConfig.js),
-    // jadi pastikan file ikut ter-trace di deployment Vercel.
-    outputFileTracingIncludes: {
-      '/api/**/*': ['./config.json'],
-    },
   },
   images: {
     remotePatterns: [
@@ -71,21 +66,6 @@ const nextConfig = {
         hostname: 'v2.samehadaku.how',
       },
     ],
-  },
-  async headers() {
-    return [
-      {
-        // Terapkan header CORS dan Contact ke semua rute API
-        source: "/api/:path*",
-        headers: [
-          { key: "Access-Control-Allow-Credentials", value: "true" },
-          { key: "Access-Control-Allow-Origin", value: "*" }, // Izinkan akses dari semua domain
-          { key: "Access-Control-Allow-Methods", value: "GET,DELETE,PATCH,POST,PUT" },
-          { key: "Access-Control-Allow-Headers", value: "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" },
-          { key: "Contact", value: "https://t.me/puruboy_hub" } // Header kontak tambahan
-        ]
-      }
-    ]
   },
   async rewrites() {
     return [

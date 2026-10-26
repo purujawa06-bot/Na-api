@@ -6,6 +6,7 @@ import Image from 'next/image';
 import EndpointCard from './EndpointCard';
 import InfoModal from './InfoModal';
 import { collectExampleFields, buildCurl } from './docsPayload';
+import { apiBaseUrl } from '../lib/apiBase';
 
 const escapeXmlAttr = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const xmlCdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]]]><![CDATA[>')}]]>`;
@@ -117,9 +118,7 @@ export default function DocsClient({ apiSpec }) {
     });
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setBaseUrl(window.location.origin);
-        }
+        setBaseUrl(apiBaseUrl());
     }, []);
 
     // Check for shared endpoint param

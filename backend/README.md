@@ -1,8 +1,8 @@
 # Na-api Go backend
 
 Backend HTTP API Na-api, ditulis ulang dari handler Next.js ke Go. Frontend
-Next.js meneruskan seluruh request `/api/*` ke service ini (lihat
-`app/api/[...path]/route.js` dan `config.json` di root repo).
+Next.js memanggil service ini **langsung** dari browser (tanpa proxy), dengan
+base URL dari `lib/apiBase.js` / `config.json` di root repo.
 
 ## Menjalankan
 
@@ -42,8 +42,8 @@ Secret/variable yang dipakai workflow:
 | `CF_PROXY` | variable | tidak | Override proxy Cloudflare. |
 | `KOYEB_APP_NAME`, `KOYEB_SERVICE_NAME`, `KOYEB_REGION`, `KOYEB_INSTANCE_TYPE`, `KOYEB_PORT`, `KOYEB_WORKDIR`, `KOYEB_DOCKERFILE` | variable | tidak | Override default di atas. |
 
-Setelah deploy, catat URL backend dari job summary lalu set `BACKEND_URL` di
-Vercel (atau `backendUrl` di `config.json`) ke URL tersebut.
+Setelah deploy, catat URL backend dari job summary lalu samakan `backendUrl` di
+`config.json` (atau set `NEXT_PUBLIC_BACKEND_URL` di Vercel) dan redeploy frontend.
 
 ## Konfigurasi
 
@@ -57,8 +57,9 @@ Bersama frontend, backend membaca `config.json` di root repo:
 }
 ```
 
-- `backendUrl` — URL yang dipakai frontend untuk proxy. Nilai default mengarah ke
-  backend Koyeb; set `BACKEND_URL=http://localhost:8081` saat debugging lokal.
+- `backendUrl` — URL backend yang dipanggil langsung oleh browser. Nilai ini
+  di-inline saat build frontend; set `NEXT_PUBLIC_BACKEND_URL=http://localhost:8081`
+  saat debugging lokal.
 - `port` — port listen backend.
 - `requestTimeoutMs` — batas waktu panggilan upstream.
 
@@ -72,7 +73,7 @@ Environment variable menimpa file konfigurasi:
 | `PURUBOY_ADMIN_KEY` | Kunci endpoint `/api/admin/*`. |
 | `GITHUB_TOKEN` | Menaikkan rate limit GitHub API (pages, user-scripts, skills). |
 | `CF_PROXY` | Proxy fallback Cloudflare (default `vercel-api-beta-red.vercel.app`). |
-| `BACKEND_URL` | Override `backendUrl` khusus untuk frontend Next.js. |
+| `NEXT_PUBLIC_BACKEND_URL` | Override `backendUrl` untuk frontend (build-time). |
 
 ## Struktur
 

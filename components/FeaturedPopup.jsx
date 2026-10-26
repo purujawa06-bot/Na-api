@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiUrl } from '../lib/apiBase';
 
 export default function FeaturedPopup() {
     const [featured, setFeatured] = useState(null);
@@ -11,7 +12,7 @@ export default function FeaturedPopup() {
     useEffect(() => {
         const fetchFeatured = async () => {
             try {
-                const res = await fetch('/api/admin/featured');
+                const res = await fetch(apiUrl('/api/admin/featured'));
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.active && data.path) {

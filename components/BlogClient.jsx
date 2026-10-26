@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import InfoModal from './InfoModal';
 import BlogImage from './BlogImage';
 import { Virtuoso } from 'react-virtuoso';
+import { apiUrl } from '../lib/apiBase';
 
 const getTimeAgo = (dateString) => {
     const date = new Date(dateString);
@@ -114,7 +115,7 @@ export default function BlogClient({ initialPosts, totalPages: initialTotalPages
         const loadMorePosts = async () => {
             setLoadingMore(true);
             try {
-                const res = await fetch(`/api/blogs?page=${page}&limit=5`);
+                const res = await fetch(apiUrl(`/api/blogs?page=${page}&limit=5`));
                 const data = await res.json();
                 
                 setPosts(prevPosts => [...prevPosts, ...data.posts]);
@@ -134,7 +135,7 @@ export default function BlogClient({ initialPosts, totalPages: initialTotalPages
         setIsLoadingPost(true);
 
         try {
-            const res = await fetch(`/api/blogs/${postPreview.id}`);
+            const res = await fetch(apiUrl(`/api/blogs/${postPreview.id}`));
             if (res.ok) {
                 const fullPost = await res.json();
                 setSelectedPost(fullPost);
