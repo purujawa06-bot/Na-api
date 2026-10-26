@@ -13,6 +13,12 @@ import (
 )
 
 const quillbotChatURL = "https://quillbot.com/api/ai-chat/chat/conversation/"
+const defaultQuillbotBridge = "bridge/quillbot-cli.mjs"
+
+// quillbotBridgeResult is the JSON contract printed by the QuillBot Node bridge.
+type quillbotBridgeResult struct {
+	Text string `json:"text"`
+}
 
 // quillbotEvent is one NDJSON line returned by the QuillBot chat API.
 type quillbotEvent struct {
@@ -69,9 +75,36 @@ func parseQuillbotNDJSON(body io.Reader) (string, error) {
 }
 
 // generateQuillbot sends one prompt to QuillBot and returns the buffered answer.
-// Cloudflare occasionally rejects anonymous requests, so retries rotate the
-// spoofed client IP like the legacy cloudscraper implementation.
+// The direct HTTP client works from residential IPs, but Cloudflare rejects some
+// data-center IPs (403 "Just a moment"), so a cloudscraper bridge is used as a
+// fallback for those deployments.
 func generateQuillbot(ctx context.Context, prompt string) (string, error) {
+	text, httpErr := generateQuillbotHTTP(ctx, prompt)
+	if httpErr == nil {
+		return text, nil
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	stdout, bridgeErr := runNodeBridge(ctx, prompt, "QUILLBOT_BRIDGE", defaultQuillbotBridge)
+	if bridgeErr != nil {
+		return "", fmt.Errorf("QuillBot: HTTP gagal (%v), bridge gagal (%s)", httpErr, bridgeErr)
+	}
+	var result quillbotBridgeResult
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		return "", fmt.Errorf("QuillBot: respons bridge tidak valid: %w", err)
+	}
+	text = strings.TrimSpace(result.Text)
+	if text == "" {
+		return "", fmt.Errorf("QuillBot: bridge mengembalikan konten kosong")
+	}
+	return text, nil
+}
+
+// generateQuillbotHTTP sends one prompt to QuillBot using net/http. Cloudflare
+// occasionally rejects anonymous requests, so retries rotate the spoofed IP.
+func generateQuillbotHTTP(ctx context.Context, prompt string) (string, error) {
 	payload, err := json.Marshal(map[string]any{
 		"message": map[string]any{
 			"content": prompt,
@@ -134,7 +167,10 @@ func generateQuillbotOnce(ctx context.Context, payload []byte) (string, bool, er
 
 	if response.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 200))
-		return "", true, fmt.Errorf("HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		// A Cloudflare challenge is tied to the origin IP, so retrying the same
+		// request is pointless; let the caller fall back to the Node bridge.
+		retryable := response.StatusCode != http.StatusForbidden
+		return "", retryable, fmt.Errorf("HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	text, err := parseQuillbotNDJSON(response.Body)

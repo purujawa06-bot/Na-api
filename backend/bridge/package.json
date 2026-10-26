@@ -1,3 +1,6 @@
 {
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "cloudscraper": "^4.6.0"
+  }
 }

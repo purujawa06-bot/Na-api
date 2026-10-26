@@ -73,8 +73,9 @@ Environment variable menimpa file konfigurasi:
 | `PURUBOY_ADMIN_KEY` | Kunci endpoint `/api/admin/*`. |
 | `GITHUB_TOKEN` | Menaikkan rate limit GitHub API (pages, user-scripts, skills). |
 | `CF_PROXY` | Proxy fallback Cloudflare (default `vercel-api-beta-red.vercel.app`). |
-| `NODE_BIN` | Binary Node.js untuk bridge EaseMate (default `node`). |
+| `NODE_BIN` | Binary Node.js untuk bridge EaseMate/QuillBot (default `node`). |
 | `EASEMATE_BRIDGE` | Path `easemate-cli.mjs` (default `bridge/easemate-cli.mjs`, Docker `/app/bridge/easemate-cli.mjs`). |
+| `QUILLBOT_BRIDGE` | Path `quillbot-cli.mjs` (default `bridge/quillbot-cli.mjs`, Docker `/app/bridge/quillbot-cli.mjs`). |
 | `NEXT_PUBLIC_BACKEND_URL` | Override `backendUrl` untuk frontend (build-time). |
 
 ## Struktur
