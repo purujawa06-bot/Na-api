@@ -3,11 +3,11 @@
     {
       "title": "Chat Completions (OpenAI Compatible)",
       "summary": "Endpoint chat completions kompatibel OpenAI API untuk berbagai provider web.",
-      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via MorphXML protocol (XML element per tool, via @ai-sdk-tool/parser;\n              body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).\n              Bukan untuk tugas coding kompleks.\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://puruboy-api.vercel.app/api",
+      "description": "Bridge OpenAI Chat Completions -> provider web (Gemini, Claude, GPT) via Vercel AI SDK.\n              Mendukung multi-turn (system/user/assistant), streaming SSE, reasoning_content,\n              FUNCTION CALLING (body.tools) untuk semua model — tool calls\n              diemulasi via MorphXML protocol (XML element per tool, via @ai-sdk-tool/parser;\n              body.tool_choice diabaikan),\n              sehingga endpoint ini bisa dipakai sebagai backend CLI/ai agent (OpenAI-compatible).\n              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).\n              Bukan untuk tugas coding kompleks.\n              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:\n              OPENAI_BASE_URL=https://na-api-nue-api-e7bfd3f4.koyeb.app/api",
       "method": "POST",
       "path": "/api/chat/completions",
       "responseType": "json",
-      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://puruboy-api.vercel.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
+      "example": "Kembalikan jawaban langsung (non-streaming, model auto)\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Halo, apa itu Next.js?' }]\n     })\n }).then(res => res.json()).then(console.log);\n\nStreaming SSE\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         stream: true,\n         messages: [\n             { role: 'system', content: 'Jawab singkat.' },\n             { role: 'user', content: 'Jelaskan fotosintesis' }\n         ]\n     })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });\n\nFunction calling (tools) — balasan berisi message.tool_calls\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         model: 'auto',\n         messages: [{ role: 'user', content: 'Bagaimana cuaca di Jakarta?' }],\n         tools: [{\n             type: 'function',\n             function: {\n                 name: 'getWeather',\n                 description: 'Cuaca sebuah kota',\n                 parameters: { type:'object', properties:{ city:{type:'string'} }, required:['city'] }\n             }\n         }]\n     })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "model",
@@ -78,7 +78,7 @@
       "method": "GET",
       "path": "/api/chess/maia",
       "responseType": "json",
-      "example": "Request — Maia KDD 2200\n fetch('https://puruboy-api.vercel.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
+      "example": "Request — Maia KDD 2200\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')\n     .then(res => res.json())\n     .then(console.log);\n // { top_move: \"d7d5\", move_delay: 0.0, inference_time: null }",
       "params": [
         {
           "name": "pgn",
@@ -96,7 +96,7 @@
       "method": "POST",
       "path": "/api/deepseek/instant",
       "responseType": "json",
-      "example": "Chat baru (non-streaming)\n fetch('https://puruboy-api.vercel.app/api/deepseek/instant', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Apa itu Next.js?' })\n }).then(res => res.json()).then(console.log);\n\nLanjutkan percakapan + streaming SSE\n fetch('https://puruboy-api.vercel.app/api/deepseek/instant', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID_DARI_RESPONS', parentID: 2, prompt: 'Lanjutkan', stream: true })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });",
+      "example": "Chat baru (non-streaming)\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/instant', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Apa itu Next.js?' })\n }).then(res => res.json()).then(console.log);\n\nLanjutkan percakapan + streaming SSE\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/instant', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID_DARI_RESPONS', parentID: 2, prompt: 'Lanjutkan', stream: true })\n }).then(res => {\n     const reader = res.body.getReader();\n     const dec = new TextDecoder();\n     (async () => {\n         while (true) {\n             const { done, value } = await reader.read();\n             if (done) break;\n             console.log(dec.decode(value));\n         }\n     })();\n });",
       "params": [
         {
           "name": "userID",
@@ -152,7 +152,7 @@
       "method": "POST",
       "path": "/api/deepseek/reasoning",
       "responseType": "json",
-      "example": "Reasoning non-streaming\n fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Jika sebuah kereta 120 m membutuhkan 12 detik untuk melewati tiang, berapa kecepatannya?' })\n }).then(res => res.json()).then(r => console.log(r.reasoning, '=>', r.content));\n\nStreaming SSE\n fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Tebak angka 1-10 yang saya pikirkan', stream: true })\n }).then(res => res.text()).then(console.log);\n\nLanjutkan percakapan (chatID + parentID dari respons sebelumnya)\n fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID_DARI_RESPONS', parentID: 2, prompt: 'Yakin dengan jawabanmu?' })\n }).then(res => res.json()).then(console.log);",
+      "example": "Reasoning non-streaming\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/reasoning', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Jika sebuah kereta 120 m membutuhkan 12 detik untuk melewati tiang, berapa kecepatannya?' })\n }).then(res => res.json()).then(r => console.log(r.reasoning, '=>', r.content));\n\nStreaming SSE\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/reasoning', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Tebak angka 1-10 yang saya pikirkan', stream: true })\n }).then(res => res.text()).then(console.log);\n\nLanjutkan percakapan (chatID + parentID dari respons sebelumnya)\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/reasoning', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID_DARI_RESPONS', parentID: 2, prompt: 'Yakin dengan jawabanmu?' })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "userID",
@@ -208,7 +208,7 @@
       "method": "POST",
       "path": "/api/deepseek/vision",
       "responseType": "json",
-      "example": "Tanya isi gambar\n fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         userID: 'TOKEN_ANDA',\n         image: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg',\n         prompt: 'Apa yang ada di gambar ini?',\n         thinking: false,\n         stream: false\n     })\n }).then(res => res.json()).then(console.log);\n\nLanjutkan tanya-jawab tentang gambar yang sama\n fetch('https://puruboy-api.vercel.app/api/deepseek/vision', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })\n }).then(res => res.json()).then(console.log);",
+      "example": "Tanya isi gambar\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/vision', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({\n         userID: 'TOKEN_ANDA',\n         image: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg',\n         prompt: 'Apa yang ada di gambar ini?',\n         thinking: false,\n         stream: false\n     })\n }).then(res => res.json()).then(console.log);\n\nLanjutkan tanya-jawab tentang gambar yang sama\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/vision', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "userID",
@@ -288,7 +288,7 @@
       "method": "GET",
       "path": "/api/models",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/models')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     },
     {
@@ -330,7 +330,7 @@
       "method": "POST",
       "path": "/api/text2video",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/text2video', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ prompt: 'a fox in snowy forest cinematic', aspect: '16:9' })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/text2video', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ prompt: 'a fox in snowy forest cinematic', aspect: '16:9' })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "prompt",
@@ -381,7 +381,7 @@
       "method": "GET",
       "path": "/api/text2video/redeem",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/text2video/redeem?ticket=TIKET_ANDA&cookie=COOKIE_ANDA')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/text2video/redeem?ticket=TIKET_ANDA&cookie=COOKIE_ANDA')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "ticket",
@@ -406,7 +406,7 @@
       "method": "GET",
       "path": "/api/text2video/status",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/text2video/status?job_id=JOB_ANDA&cookie=COOKIE_ANDA')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/text2video/status?job_id=JOB_ANDA&cookie=COOKIE_ANDA')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "job_id",
@@ -433,7 +433,7 @@
       "method": "GET",
       "path": "/api/agent-tools/find-skills",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/find-skills?query=web+design&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/agent-tools/find-skills?query=web+design&limit=5')\n     .then(res => res.json())\n     .then(data => console.log(data));",
       "params": [
         {
           "name": "query",
@@ -465,7 +465,7 @@
       "method": "GET",
       "path": "/api/agent-tools/install-skills",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\n     .then(res => res.json())\n     .then(data => console.log(data.markdown));",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')\n     .then(res => res.json())\n     .then(data => console.log(data.markdown));",
       "params": [
         {
           "name": "source",
@@ -490,7 +490,7 @@
       "method": "GET",
       "path": "/api/agent-tools/web-fetch",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/agent-tools/web-fetch?url=https%3A%2F%2Fexample.com&offset=0&length=5000')\n     .then(res => res.json())\n     .then(data => console.log(data));",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/agent-tools/web-fetch?url=https%3A%2F%2Fexample.com&offset=0&length=5000')\n     .then(res => res.json())\n     .then(data => console.log(data));",
       "params": [
         {
           "name": "url",
@@ -522,7 +522,7 @@
       "method": "GET",
       "path": "/api/search/web",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/search/web?query=nodejs+tutorial&limit=10')\n     .then(res => res.json())\n     .then(data => console.log(data));",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/search/web?query=nodejs+tutorial&limit=10')\n     .then(res => res.json())\n     .then(data => console.log(data));",
       "params": [
         {
           "name": "query",
@@ -549,7 +549,7 @@
       "method": "GET",
       "path": "/api/downloader/instagram",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -567,7 +567,7 @@
       "method": "GET",
       "path": "/api/downloader/soundcloud",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -585,7 +585,7 @@
       "method": "GET",
       "path": "/api/downloader/tiktok",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -603,7 +603,7 @@
       "method": "GET",
       "path": "/api/downloader/youtube",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -671,7 +671,7 @@
       "method": "GET",
       "path": "/api/play/soundcloud",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/play/soundcloud?q=dj%20ya%20odna')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/play/soundcloud?q=dj%20ya%20odna')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -691,7 +691,7 @@
       "method": "GET",
       "path": "/api/dramabox/category",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/category?id=447')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/category?id=447')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "id",
@@ -777,7 +777,7 @@
       "method": "GET",
       "path": "/api/dramabox/detail",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/detail?id=41000105764')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/detail?id=41000105764')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "id",
@@ -856,7 +856,7 @@
       "method": "GET",
       "path": "/api/dramabox/home",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/home')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/home')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "locale",
@@ -928,7 +928,7 @@
       "method": "GET",
       "path": "/api/dramabox/search",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/search?q=cinta')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/search?q=cinta')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -1014,7 +1014,7 @@
       "method": "GET",
       "path": "/api/dramabox/stream",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/dramabox/stream?id=41000105764&chapter=578668219')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/stream?id=41000105764&chapter=578668219')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "id",
@@ -1100,7 +1100,7 @@
       "method": "GET",
       "path": "/api/komiku/chapter",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -1118,7 +1118,7 @@
       "method": "GET",
       "path": "/api/komiku/detail",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "slug",
@@ -1136,7 +1136,7 @@
       "method": "GET",
       "path": "/api/komiku/genre",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/genre?genre=isekai')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/genre?genre=isekai')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "genre",
@@ -1161,7 +1161,7 @@
       "method": "GET",
       "path": "/api/komiku/home",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/home')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/home')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     },
     {
@@ -1171,7 +1171,7 @@
       "method": "GET",
       "path": "/api/komiku/pustaka",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/pustaka?tipe=manhwa&page=2')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/pustaka?tipe=manhwa&page=2')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "tipe",
@@ -1266,7 +1266,7 @@
       "method": "GET",
       "path": "/api/komiku/search",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/komiku/search?q=boruto')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/search?q=boruto')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -1291,7 +1291,7 @@
       "method": "GET",
       "path": "/api/purtv/detail",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/detail?url=https://anichin.com.co/soul-land-episode-1/')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://anichin.com.co/soul-land-episode-1/')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -1309,7 +1309,7 @@
       "method": "GET",
       "path": "/api/purtv/genres",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/genres')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/genres')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     },
     {
@@ -1319,7 +1319,7 @@
       "method": "GET",
       "path": "/api/purtv/home",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/home')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/home')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     },
     {
@@ -1329,7 +1329,7 @@
       "method": "GET",
       "path": "/api/purtv/list",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/list?genre=action')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/list?genre=action')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "genre",
@@ -1347,7 +1347,7 @@
       "method": "GET",
       "path": "/api/purtv/player",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/player?post=12345&nume=1&type=schtml&slug=one-piece-episode-1000')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/player?post=12345&nume=1&type=schtml&slug=one-piece-episode-1000')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "post",
@@ -1379,7 +1379,7 @@
       "method": "GET",
       "path": "/api/purtv/schedule",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/schedule')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/schedule')\n     .then(res => res.json())\n     .then(console.log);",
       "params": []
     },
     {
@@ -1389,7 +1389,7 @@
       "method": "GET",
       "path": "/api/purtv/search",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/search?q=soul+land')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/search?q=soul+land')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -1407,7 +1407,7 @@
       "method": "GET",
       "path": "/api/purtv/series",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -1427,7 +1427,7 @@
       "method": "GET",
       "path": "/api/search/soundcloud",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "q",
@@ -1490,7 +1490,7 @@
       "method": "POST",
       "path": "/api/tools-image/html-to-image",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/html-to-image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://example.com', view_width: 1920, to_format: 'jpg' })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools-image/html-to-image', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://example.com', view_width: 1920, to_format: 'jpg' })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
@@ -1522,7 +1522,7 @@
       "method": "POST",
       "path": "/api/tools-image/remove-background",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/remove-background', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg' })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools-image/remove-background', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg' })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
@@ -1540,7 +1540,7 @@
       "method": "POST",
       "path": "/api/tools-image/upscaler",
       "responseType": "json",
-      "example": "fetch('https://puruboy-api.vercel.app/api/tools-image/upscaler', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg', scale: 2 })\n }).then(res => res.json()).then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools-image/upscaler', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg', scale: 2 })\n }).then(res => res.json()).then(console.log);",
       "params": [
         {
           "name": "file",
@@ -1567,7 +1567,7 @@
       "method": "POST",
       "path": "/api/uploader/imggbb",
       "responseType": "json",
-      "example": "const fd = new FormData();\n fd.append('file', fileInput.files[0]);\n fetch('https://puruboy-api.vercel.app/api/uploader/imggbb', { method: 'POST', body: fd })\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "const fd = new FormData();\n fd.append('file', fileInput.files[0]);\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/uploader/imggbb', { method: 'POST', body: fd })\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "file",
