@@ -36,7 +36,7 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 Migrasi backend dari handler Next.js ke Go. Frontend tidak lagi mengeksekusi route handler API.
 
 - Proxy: `app/api/[...path]/route.js` meneruskan seluruh `/api/*` (semua method) ke `backendBaseUrl()` dari `lib/backendConfig.js`. Body/response di-stream sehingga SSE dan NDJSON tetap jalan. Prioritas URL: `BACKEND_URL` env → `backendUrl` di `config.json` → `http://localhost:8081`.
-- `config.json` (root): `{ backendUrl, port, requestTimeoutMs }`. Backend membacanya dari cwd atau `../config.json`; env `PORT`/`CONFIG_PATH` menimpa. Untuk debugging lokal isi `backendUrl` dengan `http://localhost:8081` lalu jalankan `npm run backend:dev` (port backend 8081, Next dev 8080).
+- `config.json` (root): `{ backendUrl, port, requestTimeoutMs }`. Backend membacanya dari cwd atau `../config.json`; env `PORT`/`CONFIG_PATH` menimpa. `backendUrl` default mengarah ke backend Koyeb; untuk debugging lokal set `BACKEND_URL=http://localhost:8081` lalu jalankan `npm run backend:dev` (port backend 8081, Next dev 8080).
 - Middleware Next (`middleware.js`) dihapus. Rate limit 100 req/menit/IP, CORS, `Contact`, dan aturan cache (`no-store` untuk chat/temp/tools/admin/agent-tools/models/user-scripts; 7 hari untuk sisanya) sekarang ada di `backend/cmd/server/middleware.go`.
 - Handler lama dipindah ke `legacy/next-api/` (tidak dibangun Next) dan tetap menjadi sumber JSDoc untuk `scripts/rebuild-docs.js` (`lib/docsService.js` memindai folder itu). `public/docs.json` tidak berubah.
 - Docker: `backend/Dockerfile` (multi-stage `golang:1.24-alpine` → `alpine:3.20`, user non-root, `HEALTHCHECK /healthz`, `PORT=8080`). Build: `docker build -t na-api-backend backend`.

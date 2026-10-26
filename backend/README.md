@@ -51,14 +51,14 @@ Bersama frontend, backend membaca `config.json` di root repo:
 
 ```json
 {
-  "backendUrl": "http://localhost:8081",
+  "backendUrl": "https://na-api-nue-api-e7bfd3f4.koyeb.app",
   "port": 8081,
   "requestTimeoutMs": 55000
 }
 ```
 
-- `backendUrl` — URL yang dipakai frontend untuk proxy (bisa diganti `localhost`
-  saat debugging, atau URL publik backend saat deploy).
+- `backendUrl` — URL yang dipakai frontend untuk proxy. Nilai default mengarah ke
+  backend Koyeb; set `BACKEND_URL=http://localhost:8081` saat debugging lokal.
 - `port` — port listen backend.
 - `requestTimeoutMs` — batas waktu panggilan upstream.
 

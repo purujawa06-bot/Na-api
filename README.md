@@ -27,9 +27,9 @@
 - **Backend** — Go (`backend/`) untuk semua endpoint API: AI chat, DeepSeek, downloader, komiku/dramabox/purtv, tools media, blogs/chat/temp, admin, dan agent tools.
 - **Konfigurasi** — `config.json` di root menentukan URL backend:
   ```json
-  { "backendUrl": "http://localhost:8081", "port": 8081, "requestTimeoutMs": 55000 }
+  { "backendUrl": "https://na-api-nue-api-e7bfd3f4.koyeb.app", "port": 8081, "requestTimeoutMs": 55000 }
   ```
-  Ubah `backendUrl` ke `http://localhost:8081` saat debugging lokal, atau ke URL publik backend saat deploy. `BACKEND_URL` env menimpa nilai ini.
+  Nilai default mengarah ke backend Koyeb. Saat debugging lokal jalankan backend lalu set `BACKEND_URL=http://localhost:8081` (env menimpa `backendUrl`).
 
 Menjalankan lokal:
 
