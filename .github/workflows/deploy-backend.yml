@@ -1,0 +1,57 @@
+name: Deploy Backend (Koyeb)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/scripts/deploy-koyeb.mjs'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-koyeb
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy Go backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify backend before deploy
+        working-directory: backend
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+      - name: Deploy to Koyeb
+        run: node .github/scripts/deploy-koyeb.mjs
+        env:
+          KOYEB_API_TOKEN: ${{ secrets.KOYEB_API_TOKEN }}
+          KOYEB_APP_NAME: ${{ vars.KOYEB_APP_NAME || 'na-api' }}
+          KOYEB_SERVICE_NAME: ${{ vars.KOYEB_SERVICE_NAME || 'backend' }}
+          KOYEB_REGION: ${{ vars.KOYEB_REGION || 'fra' }}
+          KOYEB_INSTANCE_TYPE: ${{ vars.KOYEB_INSTANCE_TYPE || 'free' }}
+          KOYEB_PORT: ${{ vars.KOYEB_PORT || '8080' }}
+          KOYEB_WORKDIR: ${{ vars.KOYEB_WORKDIR || 'backend' }}
+          KOYEB_DOCKERFILE: ${{ vars.KOYEB_DOCKERFILE || 'Dockerfile' }}
+          KOYEB_GIT_BRANCH: ${{ github.ref_name }}
+          PURUBOY_PG_URL: ${{ secrets.PURUBOY_PG_URL }}
+          PURUBOY_ADMIN_KEY: ${{ secrets.PURUBOY_ADMIN_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GH_API_TOKEN }}
+          CF_PROXY: ${{ vars.CF_PROXY }}

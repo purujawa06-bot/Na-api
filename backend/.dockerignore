@@ -1,0 +1,18 @@
+# Build artifacts
+bin/
+*.test
+*.out
+
+# Local environment files (secrets must be injected at runtime)
+.env
+.env.*
+config.json
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Documentation
+README.md

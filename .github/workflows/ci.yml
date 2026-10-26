@@ -15,6 +15,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  backend:
+    name: Go Backend (build & test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: backend/go.sum
+
+      - name: Build, vet, test
+        working-directory: backend
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
   lint-build:
     name: Lint & Build (Node 22)
     runs-on: ubuntu-latest

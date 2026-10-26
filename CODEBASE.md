@@ -4,40 +4,57 @@ Dokumen ini menyimpan informasi arsitektur, struktur, dan konteks proyek. Perbar
 
 ## Ringkasan
 
-**Na-api** — platform API Next.js 14 (App Router) dengan endpoint bergaya OpenAI (chat/completions) dan layanan multimedia (downloader, dramabox, text2image, tools-image). Deploy ke Vercel Production.
+**Na-api** — platform API dengan frontend Next.js 14 (App Router) dan **backend Go** (`backend/`) yang menangani seluruh endpoint `/api/*`. Endpoint bergaya OpenAI (chat/completions) dan layanan multimedia (downloader, dramabox, text2image, tools-image) kini diimplementasikan di Go; frontend hanya mem-proxy request ke backend sesuai `config.json`.
 
-- Package: `na-api`, Next.js `14.2.3`, React 18, Node runtime.
-- Script build: `node scripts/rebuild-docs.js && next build`.
-- Menggunakan beberapa layanan pihak ketiga via reverse engineering (Gemini, DeepSeek, iloveimg, vheer, dll), tanpa hardcode token.
+- Frontend: Next.js `14.2.3`, React 18 (UI, docs, chat, purtv). Tidak ada lagi route handler API di `app/api` selain catch-all proxy.
+- Backend: Go 1.22+ (`backend/`), stdlib + `pgx` + `golang.org/x/net/html`.
+- Script frontend: `node scripts/rebuild-docs.js && next build`.
+- Konfigurasi bersama: `config.json` di root (`backendUrl`, `port`, `requestTimeoutMs`).
+- Docker backend: `backend/Dockerfile` (multi-stage, port 8080).
+- Deploy backend: `.github/workflows/deploy-backend.yml` (Koyeb, app `na-api`, service `backend`, region `fra`, instance `free`) memanggil `.github/scripts/deploy-koyeb.mjs`; lihat `backend/README.md`.
 
 ## Struktur Direktori
 
-- `app/api/**` — endpoint API (App Router).
-  - `app/api/chat/completions` — endpoint OpenAI-compatible chat.
-  - `app/api/deepseek/` — instant, reasoning, vision via deepseek.
-  - `app/api/downloader/` — instagram, soundcloud, tiktok, youtube.
-  - `app/api/dramabox/` — home, category, detail, search, stream.
-  - `app/api/purtv/` — home, detail, series, schedule, search, genres, list (sumber anichin.cafe, data frontend purtv.vercel.app).
-  - `app/api/tools-image/upscaler` — perbesar gambar AI (iloveimg) + upload ke tmpfiles.
-  - `app/api/tools-image/remove-background` — hapus latar belakang gambar (iloveimg) + upload ke tmpfiles.
-  - `app/api/tools-image/html-to-image` — konversi halaman web/URL jadi gambar (iloveimg) + upload ke tmpfiles.
-  - `app/api/temp/[id]` — temp file service.
-  - `app/api/admin/` — login, aichain, featured.
-- `lib/` — logika bisnis/scraper client.
-- `scripts/` — test serta file sniff (hasil reverse engineering, berformat `.json`).
-- `utils/` — helper kecil (`urlCleaner.js`).
-- `app/docs`, `app/blog`, `app/chat`, dll — halaman UI/frontend.
-- `public/docs.json` — dokumentasi API yang dibangkitkan `scripts/rebuild-docs.js`.
+- `backend/` — backend Go (lihat `backend/README.md`).
+  - `cmd/server` — entrypoint + middleware (CORS, rate limit 100/menit, cache header, JSON error).
+  - `internal/ai` — `/api/models`, `/api/chat/completions`, `/api/search/web`.
+  - `internal/deepseek` — `/api/deepseek/*` (PoW DeepSeekHashV1).
+  - `internal/downloader` — `/api/downloader/*`, `/api/search/soundcloud`, `/api/play/soundcloud`.
+  - `internal/reader` — `/api/komiku/*`, `/api/dramabox/*`.
+  - `internal/purtv` — `/api/purtv/*` (anichin + samehadaku).
+  - `internal/tools` — `/api/tools-image/*`, `/api/text2image`, `/api/text2video`, `/api/uploader`.
+  - `internal/content` — blogs, chat board, temp, pages, user-scripts, admin.
+  - `internal/agenttools` — agent-tools, chess/maia, _diag.
+- `app/api/[...path]/route.js` — proxy streaming ke backend Go (SSE/NDJSON aman).
+- `legacy/next-api/` — handler Next.js lama, **tidak dieksekusi**; disimpan sebagai sumber JSDoc untuk `scripts/rebuild-docs.js`.
+- `lib/` — logika/scraper JavaScript lama (referensi port Go + dipakai `scripts/`).
+- `app/docs`, `app/blog`, `app/chat`, `app/purtv`, dst — halaman UI/frontend.
+- `public/docs.json` — dokumentasi API hasil `scripts/rebuild-docs.js`.
+
+## Backend Go (10/2026)
+
+Migrasi backend dari handler Next.js ke Go. Frontend tidak lagi mengeksekusi route handler API.
+
+- Proxy: `app/api/[...path]/route.js` meneruskan seluruh `/api/*` (semua method) ke `backendBaseUrl()` dari `lib/backendConfig.js`. Body/response di-stream sehingga SSE dan NDJSON tetap jalan. Prioritas URL: `BACKEND_URL` env → `backendUrl` di `config.json` → `http://localhost:8081`.
+- `config.json` (root): `{ backendUrl, port, requestTimeoutMs }`. Backend membacanya dari cwd atau `../config.json`; env `PORT`/`CONFIG_PATH` menimpa. Untuk debugging lokal isi `backendUrl` dengan `http://localhost:8081` lalu jalankan `npm run backend:dev` (port backend 8081, Next dev 8080).
+- Middleware Next (`middleware.js`) dihapus. Rate limit 100 req/menit/IP, CORS, `Contact`, dan aturan cache (`no-store` untuk chat/temp/tools/admin/agent-tools/models/user-scripts; 7 hari untuk sisanya) sekarang ada di `backend/cmd/server/middleware.go`.
+- Handler lama dipindah ke `legacy/next-api/` (tidak dibangun Next) dan tetap menjadi sumber JSDoc untuk `scripts/rebuild-docs.js` (`lib/docsService.js` memindai folder itu). `public/docs.json` tidak berubah.
+- Docker: `backend/Dockerfile` (multi-stage `golang:1.24-alpine` → `alpine:3.20`, user non-root, `HEALTHCHECK /healthz`, `PORT=8080`). Build: `docker build -t na-api-backend backend`.
+- Deploy Koyeb: workflow `deploy-backend.yml` (push `main` yang menyentuh `backend/**` atau `workflow_dispatch`) → build/test Go → `node .github/scripts/deploy-koyeb.mjs`. Script memakai Koyeb API (`KOYEB_API_TOKEN`), membuat app/service bila belum ada, update + redeploy bila sudah ada, lalu menunggu status deployment `HEALTHY`. Default build dari repo publik via `git` (workdir `backend`, `Dockerfile`) dengan `no_deploy_on_push: true`; autodeploy GitHub Koyeb memang nonaktif untuk repo publik.
+- Database opsional tetap `PURUBOY_PG_URL` (pgx). Tanpa DB, endpoint scraper jalan dan endpoint DB memberi fallback/error yang sama seperti JS.
+- Paritas yang belum 100%: provider EaseMate & QuillBot (butuh WASM/cloudscraper) → 502 + pesan jelas dan dilewati rantai `auto`; YouTube memakai `vidssave.com` (jalur E2B sandbox tidak diport); usage token chat memakai aproksimasi. Detail lain ada di `backend/README.md`.
+- Uji backend: `cd backend && go build ./... && go vet ./... && go test ./...` (CI punya job `backend`).
 
 ## Endpoint Utama & Konvensi
 
-- Endpoint tools biasa mengembalikan `NextResponse.json(...)`, tetapi `upscaler` memakai **streaming NDJSON** (`application/x-ndjson`) dengan event `processing`, `uploading`, `done`.
-- `route.js` endpoint meng-import client dari `lib/`. Contoh: `upscaler` → `lib/iloveimg-upscaler.js`.
-- Konvensi wrapper `downloadImage`/`getSession` memakai User-Agent Chrome untuk menghindari blokir.
+- Backend Go mengembalikan JSON/SSE/NDJSON; `tools-image/*` memakai **streaming NDJSON** (`application/x-ndjson`) dengan event `processing`, `uploading`, `done` (heartbeat 2 detik).
+- Streaming lain: `/api/chat/completions`, `/api/deepseek/*`, `/api/text2image` memakai SSE.
+- Wrapper upstream di Go memakai `User-Agent` Chrome (`internal/webclient`); fallback Cloudflare memakai `CF_PROXY`.
+- Konvensi di bawah ini menjelaskan implementasi JS lama; perilakunya sudah diporting ke Go kecuali disebutkan di bagian Backend Go.
 
 ## Kategori Dokumentasi (docs.json) — 09/2026
 
-Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `app/api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `agent-tools`, `downloader`, `nonton/baca`, `search`, `tools`, `uploader`.
+Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsService.js` (key = rel path dari `legacy/next-api`, value = kategori). Default = folder pertama. Saat ini kategori: `AI`, `agent-tools`, `downloader`, `nonton/baca`, `search`, `tools`, `uploader`.
 
 - **agent-tools**: `agent-tools/find-skills`, `agent-tools/install-skills` (folder default) + `search/web` (di-override dari `search`, karena web search adalah tool utama AI agent).
 

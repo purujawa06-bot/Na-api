@@ -21,6 +21,39 @@
 
 ---
 
+## 🧱 Arsitektur
+
+- **Frontend** — Next.js 14 (UI, `/docs`, `/chat`, `/purtv`). Seluruh request `/api/*` diproxy ke backend Go melalui `app/api/[...path]/route.js`.
+- **Backend** — Go (`backend/`) untuk semua endpoint API: AI chat, DeepSeek, downloader, komiku/dramabox/purtv, tools media, blogs/chat/temp, admin, dan agent tools.
+- **Konfigurasi** — `config.json` di root menentukan URL backend:
+  ```json
+  { "backendUrl": "http://localhost:8081", "port": 8081, "requestTimeoutMs": 55000 }
+  ```
+  Ubah `backendUrl` ke `http://localhost:8081` saat debugging lokal, atau ke URL publik backend saat deploy. `BACKEND_URL` env menimpa nilai ini.
+
+Menjalankan lokal:
+
+```bash
+npm run backend:dev     # backend Go di :8081
+npm run dev             # frontend Next.js di :8080
+```
+
+Docker backend:
+
+```bash
+docker build -t na-api-backend backend
+docker run --rm -p 8080:8080 --env-file .env.local na-api-backend
+```
+
+Deploy backend otomatis ke Koyeb: push ke `main` yang mengubah `backend/**`
+menjalankan `.github/workflows/deploy-backend.yml` (butuh secret
+`KOYEB_API_TOKEN`). Setelah deploy, set `BACKEND_URL` di Vercel ke URL Koyeb dari
+job summary. Detail ada di [`backend/README.md`](backend/README.md#deploy-ke-koyeb).
+
+Detail backend (struktur, env, catatan migrasi) ada di [`backend/README.md`](backend/README.md).
+
+---
+
 ## ✨ Fitur Utama
 
 ### 🤖 AI

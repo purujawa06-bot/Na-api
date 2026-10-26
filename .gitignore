@@ -143,3 +143,6 @@ research/
 
 .vercel
 .env*
+
+# Go backend build output
+backend/bin/

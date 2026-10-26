@@ -6,6 +6,11 @@ const nextConfig = {
     // optional native `bufferutil` sehingga production error
     // "t.mask is not a function". Biarkan require saat runtime.
     serverComponentsExternalPackages: ['ws'],
+    // config.json dibaca saat runtime oleh proxy /api (lib/backendConfig.js),
+    // jadi pastikan file ikut ter-trace di deployment Vercel.
+    outputFileTracingIncludes: {
+      '/api/**/*': ['./config.json'],
+    },
   },
   images: {
     remotePatterns: [
