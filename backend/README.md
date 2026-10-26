@@ -16,7 +16,7 @@ go build -o bin/server ./cmd/server && ./bin/server
 Docker:
 
 ```bash
-docker build -t na-api-backend backend
+docker build -t na-api-backend -f backend/Dockerfile .
 docker run --rm -p 8080:8080 --env-file .env.local na-api-backend
 ```
 
@@ -73,6 +73,8 @@ Environment variable menimpa file konfigurasi:
 | `PURUBOY_ADMIN_KEY` | Kunci endpoint `/api/admin/*`. |
 | `GITHUB_TOKEN` | Menaikkan rate limit GitHub API (pages, user-scripts, skills). |
 | `CF_PROXY` | Proxy fallback Cloudflare (default `vercel-api-beta-red.vercel.app`). |
+| `NODE_BIN` | Binary Node.js untuk bridge EaseMate (default `node`). |
+| `EASEMATE_BRIDGE` | Path `easemate-cli.mjs` (default `bridge/easemate-cli.mjs`, Docker `/app/bridge/easemate-cli.mjs`). |
 | `NEXT_PUBLIC_BACKEND_URL` | Override `backendUrl` untuk frontend (build-time). |
 
 ## Struktur

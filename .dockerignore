@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+temp
+app
+components
+public
+legacy
+scripts
+docs
+*.md
+.env
+.env.*
+config.json

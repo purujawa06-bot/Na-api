@@ -38,7 +38,7 @@ func (h *handlers) listModels(w http.ResponseWriter, _ *http.Request) {
 			Label:       model.Label,
 			Desc:        model.Desc,
 			Chainable:   model.Chainable,
-			Available:   !isUnavailableModel(model.ID),
+			Available:   true,
 			Description: model.Desc,
 		})
 	}

@@ -149,13 +149,12 @@ func (h *handlers) autoChain(ctx context.Context) []string {
 
 // isPortedModel reports whether the Go backend implements a provider.
 func isPortedModel(id string) bool {
-	return id == "gemini-3.6-flash" || id == "gemini"
-}
-
-// isUnavailableModel reports provider IDs kept in /api/models but not ported
-// (EaseMate needs WASM signing, QuillBot needs a Cloudflare bypass).
-func isUnavailableModel(id string) bool {
-	return id == "gemini-1.5-flash" || id == "gpt-4.1-mini"
+	switch id {
+	case "gemini-3.6-flash", "gemini", "gemini-1.5-flash", "gpt-4.1-mini":
+		return true
+	default:
+		return false
+	}
 }
 
 // candidateIDs resolves the models to try. Auto chains skip unported models;
@@ -190,6 +189,10 @@ func (h *handlers) generateOne(ctx context.Context, modelID, prompt string) (str
 		return text, err
 	case "gemini":
 		return generateGeminiShare(ctx, prompt)
+	case "gemini-1.5-flash":
+		return generateEasemate(ctx, prompt)
+	case "gpt-4.1-mini":
+		return generateQuillbot(ctx, prompt)
 	default:
 		return "", fmt.Errorf("Model %s belum tersedia di backend Go", modelID)
 	}
@@ -266,19 +269,6 @@ func (h *handlers) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	model := strings.TrimSpace(request.Model)
 	if model == "" || !aimodels.IsKnown(model) {
 		model = "auto"
-	}
-	if isUnavailableModel(model) {
-		// Return 400 instead of 502: Koyeb's edge replaces upstream 502 bodies
-		// with a generic "error code: 502" page, hiding the real reason.
-		httpx.JSON(w, http.StatusBadRequest, map[string]any{
-			"error": map[string]any{
-				"message": "Model " + model + " belum tersedia di backend Go",
-				"type":    "invalid_request_error",
-				"param":   "model",
-				"code":    "model_not_available",
-			},
-		})
-		return
 	}
 
 	tools := parseToolDefinitions(request.Tools)

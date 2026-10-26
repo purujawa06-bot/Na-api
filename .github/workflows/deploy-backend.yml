@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'lib/easemate-web.js'
+      - 'lib/easemate-wasm.js'
       - '.github/scripts/deploy-koyeb.mjs'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
@@ -48,8 +50,8 @@ jobs:
           KOYEB_REGION: ${{ vars.KOYEB_REGION || 'fra' }}
           KOYEB_INSTANCE_TYPE: ${{ vars.KOYEB_INSTANCE_TYPE || 'free' }}
           KOYEB_PORT: ${{ vars.KOYEB_PORT || '8080' }}
-          KOYEB_WORKDIR: ${{ vars.KOYEB_WORKDIR || 'backend' }}
-          KOYEB_DOCKERFILE: ${{ vars.KOYEB_DOCKERFILE || 'Dockerfile' }}
+          KOYEB_WORKDIR: ${{ vars.KOYEB_WORKDIR || '' }}
+          KOYEB_DOCKERFILE: ${{ vars.KOYEB_DOCKERFILE || 'backend/Dockerfile' }}
           KOYEB_GIT_BRANCH: ${{ github.ref_name }}
           PURUBOY_PG_URL: ${{ secrets.PURUBOY_PG_URL }}
           PURUBOY_ADMIN_KEY: ${{ secrets.PURUBOY_ADMIN_KEY }}

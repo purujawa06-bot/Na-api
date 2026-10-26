@@ -42,7 +42,7 @@ npm run dev             # frontend Next.js di :8080
 Docker backend:
 
 ```bash
-docker build -t na-api-backend backend
+docker build -t na-api-backend -f backend/Dockerfile .
 docker run --rm -p 8080:8080 --env-file .env.local na-api-backend
 ```
 

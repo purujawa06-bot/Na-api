@@ -18,7 +18,7 @@
     "backend:dev": "cd backend && go run ./cmd/server",
     "backend:build": "cd backend && go build -o bin/server ./cmd/server",
     "backend:test": "cd backend && go test ./...",
-    "backend:docker": "docker build -t na-api-backend backend"
+    "backend:docker": "docker build -t na-api-backend -f backend/Dockerfile ."
   },
   "dependencies": {
     "@ai-sdk-tool/parser": "^5.1.6",

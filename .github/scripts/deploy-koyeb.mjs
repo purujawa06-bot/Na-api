@@ -17,8 +17,8 @@ const serviceName = process.env.KOYEB_SERVICE_NAME || "backend";
 const region = process.env.KOYEB_REGION || "fra";
 const instanceType = process.env.KOYEB_INSTANCE_TYPE || "free";
 const port = parsePositiveInt("KOYEB_PORT", process.env.KOYEB_PORT, 8080);
-const workdir = process.env.KOYEB_WORKDIR || "backend";
-const dockerfile = process.env.KOYEB_DOCKERFILE || "Dockerfile";
+const workdir = (process.env.KOYEB_WORKDIR ?? "").trim().replace(/^\.\/?$/, "").replace(/\/+$/, "");
+const dockerfile = process.env.KOYEB_DOCKERFILE || "backend/Dockerfile";
 const repository = process.env.KOYEB_GIT_REPOSITORY || `github.com/${requiredEnv("GITHUB_REPOSITORY")}`;
 const branch = process.env.KOYEB_GIT_BRANCH || "main";
 const deployTimeoutMs = parsePositiveInt("KOYEB_DEPLOY_TIMEOUT_MS", process.env.KOYEB_DEPLOY_TIMEOUT_MS, 900_000);
@@ -152,7 +152,7 @@ function buildDefinition() {
     git: {
       repository,
       branch,
-      workdir,
+      ...(workdir ? { workdir } : {}),
       // The workflow triggers deployments explicitly, so Koyeb must not auto-deploy on push.
       no_deploy_on_push: true,
       docker: { dockerfile },
