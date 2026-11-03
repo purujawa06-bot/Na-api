@@ -5,7 +5,7 @@ Disallow: /admin
 Disallow: /admin.html
 
 # Sitemap
-Sitemap: http://na-api.puruboy.duckdns.org/sitemap.xml
+Sitemap: http://nirkyy-api.accesscam.org/sitemap.xml
 
 # Crawl delay untuk beban server
 Crawl-delay: 1

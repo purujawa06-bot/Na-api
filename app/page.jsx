@@ -13,7 +13,7 @@ export const metadata = {
     openGraph: {
         title: 'PuruBoy API - REST API Gratis Indonesia',
         description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
-        url: 'http://na-api.puruboy.duckdns.org',
+        url: 'http://nirkyy-api.accesscam.org',
         siteName: 'PuruBoy API',
         type: 'website',
     },
@@ -246,7 +246,7 @@ export default async function HomePage() {
                         </div>
                         <span className="text-[9px] bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-green-500/20">Stabil</span>
                     </a>
-                    <a href="http://na-api.puruboy.duckdns.org" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
+                    <a href="http://nirkyy-api.accesscam.org" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
                             <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">purujawa06-bot.github.io/Na-api</span>

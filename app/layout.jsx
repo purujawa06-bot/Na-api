@@ -18,7 +18,7 @@ export const viewport = {
 };
 
 export const metadata = {
-  metadataBase: new URL('http://na-api.puruboy.duckdns.org'),
+  metadataBase: new URL('http://nirkyy-api.accesscam.org'),
   title: {
     default: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
     template: '%s | PuruBoy API'
@@ -29,12 +29,12 @@ export const metadata = {
   creator: 'PuruBoy',
   publisher: 'PuruBoy',
   alternates: {
-    canonical: 'http://na-api.puruboy.duckdns.org',
+    canonical: 'http://nirkyy-api.accesscam.org',
   },
   openGraph: {
     title: 'PuruBoy API - Platform REST API Gratis & Modular',
     description: 'Akses ratusan endpoint API gratis untuk AI, Downloader, Anime, dan Tools. Dokumentasi lengkap, respons cepat, dan gratis untuk semua developer Indonesia.',
-    url: 'http://na-api.puruboy.duckdns.org',
+    url: 'http://nirkyy-api.accesscam.org',
     siteName: 'PuruBoy API',
     locale: 'id_ID',
     type: 'website',
