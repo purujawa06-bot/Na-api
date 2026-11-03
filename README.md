@@ -1,12 +1,12 @@
 # PuruBoy API 🚀
 
 [![Next.js](https://img.shields.io/badge/Next.js-14+-black?logo=next.js)](https://nextjs.org)
-[![GitHub Pages](https://img.shields.io/badge/Deployed-GitHub%20Pages-green?logo=github)](https://purujawa06-bot.github.io/Na-api)
+[![GitHub Pages](https://img.shields.io/badge/Deployed-GitHub%20Pages-green?logo=github)](http://na-api.puruboy.duckdns.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **PuruBoy API** adalah platform REST API berbasis Next.js yang menyediakan layanan AI, multimedia, pencarian konten, anime/manga, tools, dan berbagai utilitas developer dalam satu API.
 
-> Dokumentasi interaktif tersedia di **https://purujawa06-bot.github.io/Na-api/docs**. Gunakan halaman tersebut sebagai referensi endpoint, parameter, contoh request, dan response terbaru.
+> Dokumentasi interaktif tersedia di **http://na-api.puruboy.duckdns.org/docs**. Gunakan halaman tersebut sebagai referensi endpoint, parameter, contoh request, dan response terbaru.
 
 ---
 
@@ -15,7 +15,7 @@
 | Resource | Link |
 | --- | --- |
 | **Base URL (API)** | `https://na-api-nue-api-e7bfd3f4.koyeb.app` |
-| **Interactive Docs** | `https://purujawa06-bot.github.io/Na-api/docs` |
+| **Interactive Docs** | `http://na-api.puruboy.duckdns.org/docs` |
 | **Models Registry** | `https://na-api-nue-api-e7bfd3f4.koyeb.app/api/models` |
 | **Repository** | `https://github.com/purujawa06-bot/Na-api` |
 

@@ -18,7 +18,7 @@ export const viewport = {
 };
 
 export const metadata = {
-  metadataBase: new URL('https://purujawa06-bot.github.io/Na-api'),
+  metadataBase: new URL('http://na-api.puruboy.duckdns.org'),
   title: {
     default: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
     template: '%s | PuruBoy API'
@@ -29,12 +29,12 @@ export const metadata = {
   creator: 'PuruBoy',
   publisher: 'PuruBoy',
   alternates: {
-    canonical: 'https://purujawa06-bot.github.io/Na-api',
+    canonical: 'http://na-api.puruboy.duckdns.org',
   },
   openGraph: {
     title: 'PuruBoy API - Platform REST API Gratis & Modular',
     description: 'Akses ratusan endpoint API gratis untuk AI, Downloader, Anime, dan Tools. Dokumentasi lengkap, respons cepat, dan gratis untuk semua developer Indonesia.',
-    url: 'https://purujawa06-bot.github.io/Na-api',
+    url: 'http://na-api.puruboy.duckdns.org',
     siteName: 'PuruBoy API',
     locale: 'id_ID',
     type: 'website',
