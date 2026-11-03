@@ -5,7 +5,7 @@ Disallow: /admin
 Disallow: /admin.html
 
 # Sitemap
-Sitemap: https://puruboy-api.vercel.app/sitemap.xml
+Sitemap: https://purujawa06-bot.github.io/Na-api/sitemap.xml
 
 # Crawl delay untuk beban server
 Crawl-delay: 1

@@ -6,7 +6,7 @@
  * @path /api/_diag/upstream
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/_diag/upstream')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/_diag/upstream')
  *     .then(res => res.json())
  *     .then(console.log);
  */

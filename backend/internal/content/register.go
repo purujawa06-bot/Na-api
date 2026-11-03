@@ -25,6 +25,7 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("GET /api/temp/{id}", h.getTemp)
 
 	mux.HandleFunc("GET /api/pages", h.listPages)
+	mux.HandleFunc("GET /page/{slug}", h.servePage)
 
 	mux.HandleFunc("GET /api/user-scripts", h.listUserScripts)
 	mux.HandleFunc("GET /api/user-scripts/{id}", h.serveUserScript)

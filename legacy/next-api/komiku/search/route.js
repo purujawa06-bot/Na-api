@@ -10,7 +10,7 @@
  * @param {string} [query.page] - Nomor halaman, mulai dari 1 (default: 1).
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/komiku/search?q=boruto')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/search?q=boruto')
  *     .then(res => res.json())
  *     .then(console.log);
  */

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"net/url"
@@ -212,6 +213,38 @@ func (h *handler) listPages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.OK(w, catalog)
+}
+
+// servePage handles GET /page/{slug}: it proxies the matching static HTML
+// page from the configured GitHub catalog. Slugs are validated before they
+// are embedded in a repository file name to avoid path injection and XSS.
+func (h *handler) servePage(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if slug == "" || len(slug) > 200 || strings.ContainsAny(slug, "/\\") {
+		servePageNotFound(w, "Page not found")
+		return
+	}
+
+	html, err := fetchRawText(r.Context(), rawFileURL(pageDir, "PuruPage["+slug+"].html"))
+	if err != nil {
+		servePageNotFound(w, slug)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(html))
+}
+
+// servePageNotFound renders the same user-facing 404 page as the legacy
+// frontend route. The slug is escaped before being placed in the document.
+func servePageNotFound(w http.ResponseWriter, slug string) {
+	escapedSlug := html.EscapeString(slug)
+	body := `<!doctype html><html><head><title>404 Not Found</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#09090b;color:#a1a1aa;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{background:#121215;padding:2rem;border-radius:1rem;border:1px solid #27272a;text-align:center;box-shadow:0 10px 15px -3px rgba(0,0,0,.5)}h1{color:white;margin:0 0 .5rem;font-size:3rem}p{margin-bottom:1.5rem;font-size:.9rem}a{color:#ec4899;text-decoration:none;font-weight:bold;padding:.5rem 1rem;border:1px solid #ec4899;border-radius:.5rem}a:hover{background:#ec4899;color:white}</style></head><body><div class="card"><h1>404</h1><p>Halaman "<b>` + escapedSlug + `</b>" tidak ditemukan atau sedang dalam proses sinkronisasi.</p><a href="/listpage">Lihat Semua Halaman</a></div></body></html>`
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte(body))
 }
 
 var (

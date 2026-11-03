@@ -8,7 +8,7 @@
  * @param {string} [query.search] - Filter pencarian judul/deskripsi.
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/pages?page=1&search=')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/pages?page=1&search=')
  *     .then(res => res.json())
  *     .then(console.log);
  */

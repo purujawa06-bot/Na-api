@@ -21,7 +21,7 @@
  *   next_offset dari response sebelumnya untuk halaman berikutnya.
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/search/soundcloud?q=winter%20night%20lofi&type=tracks&limit=10')
  *     .then(res => res.json())
  *     .then(console.log);
  */

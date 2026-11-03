@@ -10,7 +10,7 @@
  * @param {string} query.url - URL video TikTok (wajib, https only).
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')
  *     .then(res => res.json())
  *     .then(console.log);
  */

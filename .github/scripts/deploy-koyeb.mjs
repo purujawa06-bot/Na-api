@@ -298,7 +298,7 @@ async function main() {
     `- Deployment: \`${deployment.id}\` (${deployment.status})`,
     appUrl ? `- URL: ${appUrl}` : "- URL: not assigned yet",
     "",
-    "Set the frontend `BACKEND_URL` (Vercel) or `config.json` `backendUrl` to the URL above.",
+    "Set the frontend `BACKEND_URL` (GitHub Pages) or `config.json` `backendUrl` to the URL above.",
   ]);
 }
 

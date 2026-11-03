@@ -7,7 +7,7 @@
  * @param {string} body.password - Password admin.
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/admin/login', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/admin/login', {
  *     method: 'POST',
  *     headers: { 'content-type': 'application/json' },
  *     body: JSON.stringify({ password: '<PURUBOY_ADMIN_KEY>' })

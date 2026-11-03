@@ -9,7 +9,7 @@
  * @param {string} query.url - URL halaman seri (bisa dari navigation.allEpisodes).
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

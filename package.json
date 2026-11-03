@@ -12,7 +12,6 @@
     "dev": "next dev -p 8080",
     "build": "next build",
     "build:full": "node scripts/rebuild-docs.js && next build",
-    "vercel:build": "node scripts/rebuild-docs.js && next build",
     "start": "next start",
     "lint": "next lint",
     "backend:dev": "cd backend && go run ./cmd/server",

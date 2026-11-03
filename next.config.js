@@ -1,13 +1,14 @@
 /** @type {import('next').NextConfig} */
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 const nextConfig = {
-  reactStrictMode: false, // Nonaktifkan strict mode untuk menghindari double-invocation pada useEffect di dev (opsional)
-  experimental: {
-    // Jangan bundle `ws` (dipakai lib/bing-cdp.js): bundling merusak
-    // optional native `bufferutil` sehingga production error
-    // "t.mask is not a function". Biarkan require saat runtime.
-    serverComponentsExternalPackages: ['ws'],
-  },
+  output: 'export',
+  basePath,
+  assetPrefix: basePath,
+  trailingSlash: true,
+  reactStrictMode: false,
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -67,19 +68,8 @@ const nextConfig = {
       },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: '/admin',
-        destination: '/admin.html',
-      },
-      // Fix Favicon untuk Search Engine (Map .ico request ke .jpg)
-      {
-        source: '/favicon.ico',
-        destination: '/favicon.jpg',
-      },
-    ];
+  experimental: {
+    serverComponentsExternalPackages: ['ws'],
   },
 };
-
 module.exports = nextConfig;

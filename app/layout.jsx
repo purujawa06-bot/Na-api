@@ -18,7 +18,7 @@ export const viewport = {
 };
 
 export const metadata = {
-  metadataBase: new URL('https://puruboy-api.vercel.app'),
+  metadataBase: new URL('https://purujawa06-bot.github.io/Na-api'),
   title: {
     default: 'PuruBoy API - Platform REST API Gratis untuk Developer Indonesia',
     template: '%s | PuruBoy API'
@@ -29,12 +29,12 @@ export const metadata = {
   creator: 'PuruBoy',
   publisher: 'PuruBoy',
   alternates: {
-    canonical: 'https://puruboy-api.vercel.app',
+    canonical: 'https://purujawa06-bot.github.io/Na-api',
   },
   openGraph: {
     title: 'PuruBoy API - Platform REST API Gratis & Modular',
     description: 'Akses ratusan endpoint API gratis untuk AI, Downloader, Anime, dan Tools. Dokumentasi lengkap, respons cepat, dan gratis untuk semua developer Indonesia.',
-    url: 'https://puruboy-api.vercel.app',
+    url: 'https://purujawa06-bot.github.io/Na-api',
     siteName: 'PuruBoy API',
     locale: 'id_ID',
     type: 'website',

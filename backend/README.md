@@ -43,7 +43,7 @@ Secret/variable yang dipakai workflow:
 | `KOYEB_APP_NAME`, `KOYEB_SERVICE_NAME`, `KOYEB_REGION`, `KOYEB_INSTANCE_TYPE`, `KOYEB_PORT`, `KOYEB_WORKDIR`, `KOYEB_DOCKERFILE` | variable | tidak | Override default di atas. |
 
 Setelah deploy, catat URL backend dari job summary lalu samakan `backendUrl` di
-`config.json` (atau set `NEXT_PUBLIC_BACKEND_URL` di Vercel) dan redeploy frontend.
+`config.json` (atau set `NEXT_PUBLIC_BACKEND_URL` di GitHub Actions) dan redeploy frontend.
 
 ## Konfigurasi
 

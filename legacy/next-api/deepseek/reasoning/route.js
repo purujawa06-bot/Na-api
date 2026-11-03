@@ -17,21 +17,21 @@
  *        @choice false - Tidak (JSON Default)
  * @response stream
  * @example Reasoning non-streaming
- * fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/reasoning', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Jika sebuah kereta 120 m membutuhkan 12 detik untuk melewati tiang, berapa kecepatannya?' })
  * }).then(res => res.json()).then(r => console.log(r.reasoning, '=>', r.content));
  *
  * @example Streaming SSE
- * fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/reasoning', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Tebak angka 1-10 yang saya pikirkan', stream: true })
  * }).then(res => res.text()).then(console.log);
  *
  * @example Lanjutkan percakapan (chatID + parentID dari respons sebelumnya)
- * fetch('https://puruboy-api.vercel.app/api/deepseek/reasoning', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/reasoning', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID_DARI_RESPONS', parentID: 2, prompt: 'Yakin dengan jawabanmu?' })

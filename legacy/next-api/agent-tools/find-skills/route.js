@@ -15,7 +15,7 @@
  * @param {string} [query.owner] - Filter owner GitHub (mis. vercel-labs, setara --owner).
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/agent-tools/find-skills?query=web+design&limit=5')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/agent-tools/find-skills?query=web+design&limit=5')
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */

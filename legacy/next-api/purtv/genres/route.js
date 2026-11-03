@@ -8,7 +8,7 @@
  * @path /api/purtv/genres
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/purtv/genres')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/genres')
  *     .then(res => res.json())
  *     .then(console.log);
  */

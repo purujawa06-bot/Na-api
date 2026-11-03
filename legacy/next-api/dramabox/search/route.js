@@ -23,7 +23,7 @@
  *        @choice zh - Chinese
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/dramabox/search?q=cinta')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/search?q=cinta')
  *     .then(res => res.json())
  *     .then(console.log);
  */

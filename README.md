@@ -1,12 +1,12 @@
 # PuruBoy API 🚀
 
 [![Next.js](https://img.shields.io/badge/Next.js-14+-black?logo=next.js)](https://nextjs.org)
-[![Vercel](https://img.shields.io/badge/Deployed-Vercel-blue?logo=vercel)](https://vercel.com)
+[![GitHub Pages](https://img.shields.io/badge/Deployed-GitHub%20Pages-green?logo=github)](https://purujawa06-bot.github.io/Na-api)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **PuruBoy API** adalah platform REST API berbasis Next.js yang menyediakan layanan AI, multimedia, pencarian konten, anime/manga, tools, dan berbagai utilitas developer dalam satu API.
 
-> Dokumentasi interaktif tersedia di **https://puruboy-api.vercel.app/docs**. Gunakan halaman tersebut sebagai referensi endpoint, parameter, contoh request, dan response terbaru.
+> Dokumentasi interaktif tersedia di **https://purujawa06-bot.github.io/Na-api/docs**. Gunakan halaman tersebut sebagai referensi endpoint, parameter, contoh request, dan response terbaru.
 
 ---
 
@@ -14,9 +14,9 @@
 
 | Resource | Link |
 | --- | --- |
-| **Base URL** | `https://puruboy-api.vercel.app` |
-| **Interactive Docs** | `https://puruboy-api.vercel.app/docs` |
-| **Models Registry** | `https://puruboy-api.vercel.app/api/models` |
+| **Base URL (API)** | `https://na-api-nue-api-e7bfd3f4.koyeb.app` |
+| **Interactive Docs** | `https://purujawa06-bot.github.io/Na-api/docs` |
+| **Models Registry** | `https://na-api-nue-api-e7bfd3f4.koyeb.app/api/models` |
 | **Repository** | `https://github.com/purujawa06-bot/Na-api` |
 
 ---
@@ -30,7 +30,7 @@
   { "backendUrl": "https://na-api-nue-api-e7bfd3f4.koyeb.app", "port": 8081, "requestTimeoutMs": 55000 }
   ```
   `NEXT_PUBLIC_BACKEND_URL` menimpa `backendUrl` untuk frontend. Saat debugging lokal set `NEXT_PUBLIC_BACKEND_URL=http://localhost:8081` lalu jalankan backend.
-- **Tanpa proxy** — panggilan API langsung ke domain Koyeb (CORS `*`), jadi tidak kena batas durasi Vercel Function. `https://puruboy-api.vercel.app/api/*` tidak lagi melayani API; gunakan URL Koyeb.
+- **Tanpa proxy** — panggilan API langsung ke domain Koyeb (CORS `*`), jadi tidak kena batas durasi serverless/Pages function. `https://na-api-nue-api-e7bfd3f4.koyeb.app/api/*` tidak lagi melayani API; gunakan URL Koyeb.
 
 Menjalankan lokal:
 
@@ -49,7 +49,7 @@ docker run --rm -p 8080:8080 --env-file .env.local na-api-backend
 Deploy backend otomatis ke Koyeb: push ke `main` yang mengubah `backend/**`
 menjalankan `.github/workflows/deploy-backend.yml` (butuh secret
 `KOYEB_API_TOKEN`). Setelah deploy, samakan `config.json` `backendUrl` (atau set
-`NEXT_PUBLIC_BACKEND_URL` di Vercel) dengan URL dari job summary. Detail ada di
+`NEXT_PUBLIC_BACKEND_URL` di GitHub Actions/Pages) dengan URL dari job summary. Detail ada di
 [`backend/README.md`](backend/README.md#deploy-ke-koyeb).
 
 Detail backend (struktur, env, catatan migrasi) ada di [`backend/README.md`](backend/README.md).
@@ -59,7 +59,7 @@ Detail backend (struktur, env, catatan migrasi) ada di [`backend/README.md`](bac
 ## ✨ Fitur Utama
 
 ### 🤖 AI
-- Endpoint chat yang kompatibel dengan format OpenAI pada `/v1/chat/completions`.
+- Endpoint chat yang kompatibel dengan format OpenAI pada `/api/chat/completions`.
 - Integrasi berbagai model/provider, termasuk Gemini dan DeepSeek.
 - Registry model dinamis melalui `/api/models`.
 - Fitur vision, reasoning, dan text-to-image pada endpoint yang tersedia.
@@ -93,7 +93,7 @@ Endpoint terorganisasi untuk discovery dan pengambilan data konten:
 ### Mengambil daftar model
 
 ```bash
-curl https://puruboy-api.vercel.app/api/models
+curl https://na-api-nue-api-e7bfd3f4.koyeb.app/api/models
 ```
 
 ### Chat Completions
@@ -101,13 +101,13 @@ curl https://puruboy-api.vercel.app/api/models
 Endpoint kompatibel OpenAI tersedia di:
 
 ```text
-POST https://puruboy-api.vercel.app/v1/chat/completions
+POST https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions
 ```
 
 Contoh struktur request:
 
 ```bash
-curl https://puruboy-api.vercel.app/v1/chat/completions \
+curl https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "MODEL_ID",
@@ -127,7 +127,7 @@ Dokumentasi API dikelompokkan secara otomatis agar endpoint lebih mudah ditemuka
 
 | Kategori | Contoh endpoint |
 | --- | --- |
-| **AI** | `/v1/chat/completions`, `/api/models` |
+| **AI** | `/api/chat/completions`, `/api/models` |
 | **Downloader** | `/api/play/soundcloud` |
 | **DramaBox** | `/api/dramabox/home`, `/api/dramabox/search`, `/api/dramabox/detail` |
 | **Komiku** | `/api/komiku/home`, `/api/komiku/search`, `/api/komiku/detail` |
@@ -147,7 +147,7 @@ Daftar di atas hanya contoh. **Daftar endpoint lengkap, parameter wajib/opsional
 - **AI:** Vercel AI SDK, OpenAI SDK, DeepSeek/Gemini integrations
 - **Media:** Axios, Cheerio, FFmpeg, scraping utilities
 - **Validation:** Zod
-- **Deployment:** Vercel
+- **Deployment:** GitHub Pages
 - **License:** MIT
 
 ---
@@ -223,7 +223,7 @@ Dokumentasi juga melakukan validasi terhadap kelengkapan parameter dan payload c
 - Simpan credential dan secret hanya pada environment variable.
 - Jangan memasukkan API key/database URL ke source code yang di-commit.
 - Endpoint internal/admin tidak ditujukan untuk dokumentasi publik.
-- Untuk deployment publik, gunakan konfigurasi secret yang sesuai dengan environment Vercel/hosting.
+- Untuk deployment publik, gunakan konfigurasi secret yang sesuai dengan environment GitHub Pages/hosting.
 
 ---
 

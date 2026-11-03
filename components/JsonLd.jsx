@@ -7,7 +7,7 @@ export default function JsonLd() {
       {
         '@type': 'WebApplication',
         name: 'PuruBoy API',
-        url: 'https://puruboy-api.vercel.app',
+        url: 'https://purujawa06-bot.github.io/Na-api',
         description: 'Platform REST API gratis untuk developer dengan fitur AI, Downloader, Anime Streaming, dan Tools.',
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'All',
@@ -26,7 +26,7 @@ export default function JsonLd() {
       {
         '@type': 'WebSite',
         name: 'PuruBoy API',
-        url: 'https://puruboy-api.vercel.app',
+        url: 'https://purujawa06-bot.github.io/Na-api',
         description: 'Platform API modular terbaik dengan integrasi AI, Downloader, dan Anime Streaming. Gratis, cepat, dan mudah digunakan.',
         about: {
           '@type': 'Thing',
@@ -40,7 +40,7 @@ export default function JsonLd() {
         },
         potentialAction: {
           '@type': 'SearchAction',
-          target: 'https://puruboy-api.vercel.app/search?q={search_term_string}',
+          target: 'https://purujawa06-bot.github.io/Na-api/search?q={search_term_string}',
           'query-input': 'required name=search_term_string',
         },
       },
@@ -48,21 +48,21 @@ export default function JsonLd() {
         '@type': 'CollectionPage',
         name: 'Dokumentasi API – PuruBoy API',
         description: 'Dokumentasi lengkap endpoint REST API PuruBoy: AI, Downloader, Anime, Tools, dan Search.',
-        url: 'https://puruboy-api.vercel.app/docs',
+        url: 'https://purujawa06-bot.github.io/Na-api/docs',
         isPartOf: {
           '@type': 'WebSite',
           name: 'PuruBoy API',
-          url: 'https://puruboy-api.vercel.app',
+          url: 'https://purujawa06-bot.github.io/Na-api',
         },
       },
       {
         '@type': 'BreadcrumbList',
         name: 'Breadcrumb',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Beranda', item: 'https://puruboy-api.vercel.app/' },
-          { '@type': 'ListItem', position: 2, name: 'Dokumentasi', item: 'https://puruboy-api.vercel.app/docs' },
-          { '@type': 'ListItem', position: 3, name: 'Blog', item: 'https://puruboy-api.vercel.app/blog' },
-          { '@type': 'ListItem', position: 4, name: 'Chat Room', item: 'https://puruboy-api.vercel.app/chat' },
+          { '@type': 'ListItem', position: 1, name: 'Beranda', item: 'https://purujawa06-bot.github.io/Na-api/' },
+          { '@type': 'ListItem', position: 2, name: 'Dokumentasi', item: 'https://purujawa06-bot.github.io/Na-api/docs' },
+          { '@type': 'ListItem', position: 3, name: 'Blog', item: 'https://purujawa06-bot.github.io/Na-api/blog' },
+          { '@type': 'ListItem', position: 4, name: 'Chat Room', item: 'https://purujawa06-bot.github.io/Na-api/chat' },
         ],
       },
     ],

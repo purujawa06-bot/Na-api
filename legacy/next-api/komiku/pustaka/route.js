@@ -24,7 +24,7 @@
  *        @choice end - Tamat
  * @response json
  * @example
- * fetch('https://puruboy-api.vercel.app/api/komiku/pustaka?tipe=manhwa&page=2')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/pustaka?tipe=manhwa&page=2')
  *     .then(res => res.json())
  *     .then(console.log);
  */

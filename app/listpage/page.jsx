@@ -72,7 +72,7 @@ export default function ListPage() {
                             <h3 className="font-bold text-primary text-sm mb-1">{p.title}</h3>
                             <p className="text-xs text-secondary mb-3 leading-relaxed">{p.description || 'Tidak ada deskripsi.'}</p>
                             <Link 
-                                href={`/page/${p.slug}`} 
+                                href={apiUrl(`/page/${p.slug}`)}
                                 target="_blank" 
                                 className="inline-flex items-center gap-2 bg-accent/10 text-accent hover:bg-accent hover:text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"
                             >

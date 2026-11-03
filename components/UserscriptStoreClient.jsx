@@ -24,16 +24,12 @@ const gradientFor = (id) => {
 };
 
 export default function UserscriptStoreClient() {
-    const [origin, setOrigin] = useState('');
+
     const [scripts, setScripts] = useState([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-
-    useEffect(() => {
-        setOrigin(window.location.origin);
-    }, []);
 
     const fetchScripts = useCallback(async (p, q) => {
         setLoading(true);
@@ -112,7 +108,7 @@ export default function UserscriptStoreClient() {
             ) : scripts.length > 0 ? (
                 <div className="space-y-4">
                     {scripts.map((script) => {
-                        const installUrl = origin ? `${origin}/userscripts/${script.file}` : '';
+                        const installUrl = apiUrl(`/userscripts/${script.file}`);
                         return (
                             <div key={script.id} className="native-card overflow-hidden">
                                 <div className="p-4 space-y-4">

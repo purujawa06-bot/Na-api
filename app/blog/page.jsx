@@ -9,7 +9,7 @@ export const metadata = {
     openGraph: {
         title: 'Blog & Tutorial PuruBoy API',
         description: 'Tutorial, update fitur, dan tips seputar PuruBoy API untuk developer Indonesia.',
-        url: 'https://puruboy-api.vercel.app/blog',
+        url: 'https://purujawa06-bot.github.io/Na-api/blog',
         siteName: 'PuruBoy API',
         type: 'website',
     },
