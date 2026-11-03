@@ -108,6 +108,30 @@ export default function BlogClient({ initialPosts, totalPages: initialTotalPages
     const [selectedPost, setSelectedPost] = useState(null);
     const [isLoadingPost, setIsLoadingPost] = useState(false);
 
+    // Load the first page in the browser (static export has no ISR/server run).
+    useEffect(() => {
+        if (initialPosts && initialPosts.length > 0) return;
+        let canceled = false;
+        const loadInitialPosts = async () => {
+            setLoadingMore(true);
+            try {
+                const res = await fetch(apiUrl('/api/blogs?page=1&limit=5'));
+                if (!res.ok) throw new Error('Failed to fetch posts');
+                const data = await res.json();
+                if (canceled) return;
+                const posts = Array.isArray(data?.posts) ? data.posts : [];
+                setPosts(posts);
+                setHasMore((data?.currentPage || 1) < (data?.totalPages || 1));
+            } catch (err) {
+                console.error('Error fetching posts:', err);
+            } finally {
+                if (!canceled) setLoadingMore(false);
+            }
+        };
+        loadInitialPosts();
+        return () => { canceled = true; };
+    }, [initialPosts]);
+
     // Fetch more posts when page increments
     useEffect(() => {
         if (page === 1) return;
