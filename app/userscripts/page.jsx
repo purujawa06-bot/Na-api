@@ -8,7 +8,7 @@ export const metadata = {
     openGraph: {
         title: 'UserScript Store - PuruBoy API',
         description: 'UserScript gratis dengan auto-update untuk mempermudah pakai API PuruBoy.',
-        url: 'http://nirkyy-api.accesscam.org/userscripts',
+        url: 'http://na-api.puruboy.duckdns.org/userscripts',
         siteName: 'PuruBoy API',
         type: 'website',
     },
