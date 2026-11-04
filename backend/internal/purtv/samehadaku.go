@@ -73,12 +73,15 @@ type shDetailResult struct {
 	Error    string
 }
 
-// shServer is one admin-ajax player entry.
+// shServer is one admin-ajax player entry. Embed holds the iframe source the
+// episode page already exposes in its `data-embed` attribute, which removes the
+// dependency on the (often Cloudflare-blocked) admin-ajax round-trip.
 type shServer struct {
-	Name *string
-	Post *string
-	Nume *string
-	Type *string
+	Name  *string
+	Post  *string
+	Nume  *string
+	Type  *string
+	Embed *string
 }
 
 // shDownloadQuality groups download links by quality.

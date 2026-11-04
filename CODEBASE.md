@@ -93,7 +93,7 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
 
 ## Scraper PurTV (09/2026) — DUA SUMBER
 
-`app/api/purtv/*` + `lib/purtv.js` (parsing HTML pakai **cheerio**), merge dengan `lib/samehadaku.js` (got-scraping TLS fingerprint utk bypass CF).
+`backend/internal/purtv/*` (parsing HTML pakai `golang.org/x/net/html`), merge anichin (donghua) dengan samehadaku (anime). `lib/purtv.js` + `lib/samehadaku.js` adalah referensi legacy untuk `scripts/`, bukan runtime.
 
 - Sumber 1: anichin.cafe (SSR) — sumber data frontend **purtv.vercel.app** (SPA React). Sumber 2: v2.samehadaku.how (anime sub Indo, eastplay theme).
 - Endpoints: `/api/purtv/home`, `/detail?url=`, `/series?url=`, `/schedule`, `/search?q=&page=`, `/genres`, `/list?genre=&page=`. Semua di-map ke kategori `nonton/baca` via `CATEGORY_OVERRIDES` di `lib/docsService.js`.
@@ -104,9 +104,10 @@ Kategori di `public/docs.json` diatur via `CATEGORY_OVERRIDES` di `lib/docsServi
   - detail/series: route otomatis berdasar host URL (anichin.cafe → donghua, v2.samehadaku.how → anime; URL seri anime `/anime/` wajib via /series).
   - genres: tetap dari anichin `/seri/` — slug yang sama diteruskan ke two sources (pola PurTV).
 - **`purtv_pagenation`** ({currentPage, hasNext}) ada di SETIAP respon — kontrak navigasi konsisten.
-- **Jadwal rilis (10/2026):** route lama `wp-json/custom/v1/all-schedule` **dihapus sumbernya** (balas HTML 404) → seluruh hari jadi kosong. Sumber utama sekarang halaman SSR `/jadwal-rilis/` yang diambil 1 request lewat scraper-web (7 blok `.result-schedule` → `.animepost`, isi ±42 judul yang benar-benar tayang pekan ini). Cadangan: REST `wp-json/apk/schedule?day=<english>` (namespace `apk`, ±50 judul/hari termasuk anime tamat → difilter `Currently Airing`), lalu route `custom/v1` sebagai jaring pengaman terakhir.
+- **Jadwal rilis (10/2026):** route lama `wp-json/custom/v1/all-schedule` **dihapus sumbernya** (balas HTML 404). Sumber utama halaman SSR `/jadwal-rilis/` yang di-parse native dari satu request (7 blok `.result-schedule` → `.animepost`, hari dibaca dari atribut Alpine `x-show`; ±41 judul yang benar-benar tayang pekan ini). Cadangan: REST `wp-json/apk/schedule?day=<english>` (namespace `apk`, difilter `Currently Airing`).
+- **Iframe anime:** halaman episode samehadaku sudah menyertakan seluruh server di `data-embed` (`.east_player_option`), jadi `/detail` mengisi `streamingLinks[].url` + `defaultIframe` langsung dari situ. `/player` memakai admin-ajax sebagai jalur utama dan jatuh ke `data-embed` halaman episode bila admin-ajax diblokir Cloudflare.
 - Selektor penting: home donghua (`#slidertwo .swiper-slide.item`, `.bixbox:has(.releases.hothome)`, `.listupd.normal article.bs`, `.ongoingseries ul li`, `.series-gen`), episode (`#pembed iframe`, `.mirror option` base64), seri (`/seri/<slug>/`: `.eplister ul li a`, `.infox .spe span`, `.infox .genxed a`), samehadaku home (`.post-show ul li`, `.topten-animesu ul li`), genre/s (`.genre-info a`, `.lstepsiode.listeps`).
-- **Cloudflare:** anichin di balik CF Managed Challenge → `getHtml()` fallback `CF_PROXY` (`vercel-api-beta-red.vercel.app/api/fetch`) pada 403. samehadaku WAJIB via **scraper-web proxy** (`vercel-api-beta-red.vercel.app/api/scraper-web`, POST `{url, output: selector}` — transport resmi utk anime di PurTV): fetch polos/got-scraping kena CF 403, dan got-scraping TIDAK dipakai lagi karena bundling-nya merusak build Next (collect-page-data/chunk runtime).
+- **Cloudflare:** anichin di balik CF Managed Challenge → `getHtml()` fallback `CF_PROXY` (`vercel-api-beta-red.vercel.app/api/fetch`) pada 403. samehadaku diambil lewat **cloudscraper** lalu fallback fetch browser-like (proxy hanya jaring terakhir); halaman normal tetap memuat skrip `challenge-platform`, jadi deteksi challenge harus berbasis `Just a moment`/`challenge-error-text`, bukan sekadar nama skrip.
 - Uji: `node temp/test-purtv.mjs`.
 
 ## Pemetaan ID Model (09/2026)

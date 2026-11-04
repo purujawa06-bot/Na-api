@@ -29,15 +29,19 @@ func (c *client) animeDetail(ctx context.Context, slug string) (*detailAnimeResp
 	}
 
 	streamingLinks := make([]animeStreamLink, 0, len(result.Servers))
+	var defaultIframe *string
 	for _, server := range result.Servers {
 		streamingLinks = append(streamingLinks, animeStreamLink{
 			Server: server.Name,
 			Index:  server.Nume,
-			URL:    nil,
+			URL:    server.Embed,
 			Post:   server.Post,
 			Nume:   server.Nume,
 			Type:   server.Type,
 		})
+		if defaultIframe == nil && server.Embed != nil && *server.Embed != "" {
+			defaultIframe = server.Embed
+		}
 	}
 
 	downloadLinks := make([]downloadGroup, 0, len(result.Downloads))
@@ -68,7 +72,7 @@ func (c *client) animeDetail(ctx context.Context, slug string) (*detailAnimeResp
 		SeriesURL:      result.AnimeURL,
 		Synopsis:       result.AnimeSynopsis,
 		Thumbnail:      thumbnail,
-		DefaultIframe:  nil,
+		DefaultIframe:  defaultIframe,
 		EpisodeSlug:    slug,
 		StreamingLinks: streamingLinks,
 		DownloadLinks:  downloadLinks,

@@ -88,7 +88,7 @@ function EpisodeView({ episode, onBack, onOpenSeries, onOpenEpisode, onWatched }
   const [extra, setExtra] = useState(null);
   const resolve = useCallback(async (s, slug) => {
     if (!s) return;
-    if (s.url && !s.post) { setSrc(s.url); setActive(s); return; }
+    if (s.url) { setSrc(s.url); setActive(s); return; }
     if (!s.post || !s.nume) return;
     setSrvLoad(true); setSrvErr(null); setActive(s);
     try {

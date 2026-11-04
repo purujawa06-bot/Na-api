@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/purujawa06-bot/na-api/backend/internal/htmlx"
 	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
 )
 
@@ -60,22 +61,67 @@ func (c *client) player(ctx context.Context, post, nume, playerType, slug string
 		}
 	}
 
+	if body != "" && !isPlayerBlocked(body) {
+		if iframe := extractPlayerIframe(body); iframe != "" {
+			return &playerResponse{Iframe: iframe, Raw: truncateRunes(body, 5000)}, nil
+		}
+	}
+
+	// Newer samehadaku episode pages embed every server iframe in a
+	// `data-embed` attribute, so the episode page is a reliable fallback when
+	// admin-ajax is Cloudflare-blocked.
+	if iframe := c.animePlayerFromEpisode(ctx, slug, post, nume); iframe != "" {
+		return &playerResponse{Iframe: iframe, Raw: truncateRunes(body, 5000)}, nil
+	}
+
 	if body == "" || isPlayerBlocked(body) {
 		return nil, errors.New("Player diblokir Cloudflare (coba lagi nanti)")
 	}
+	return nil, errors.New("Iframe tidak ditemukan di respons player")
+}
 
+// extractPlayerIframe pulls the first usable iframe URL out of a player
+// response body.
+func extractPlayerIframe(body string) string {
 	if match := iframeSrcPattern.FindStringSubmatch(body); match != nil {
-		return &playerResponse{Iframe: normaliseIframeURL(match[1]), Raw: truncateRunes(body, 5000)}, nil
+		return normaliseIframeURL(strings.ReplaceAll(match[1], "&amp;", "&"))
 	}
 	if match := httpSrcPattern.FindStringSubmatch(body); match != nil {
-		return &playerResponse{Iframe: match[1], Raw: truncateRunes(body, 5000)}, nil
+		return match[1]
 	}
 	if utf8.RuneCountInString(strings.TrimSpace(body)) < 500 && strings.Contains(body, "http") {
-		if match := bareURLPattern.FindString(body); match != "" {
-			return &playerResponse{Iframe: match, Raw: truncateRunes(body, 5000)}, nil
+		return bareURLPattern.FindString(body)
+	}
+	return ""
+}
+
+// animePlayerFromEpisode resolves a server iframe from the episode page itself.
+func (c *client) animePlayerFromEpisode(ctx context.Context, slug, post, nume string) string {
+	if slug == "" {
+		return ""
+	}
+	body, err := c.samehadakuHTML(ctx, samehadakuHost+"/"+slug+"/")
+	if err != nil {
+		return ""
+	}
+	doc, err := htmlx.Parse(body)
+	if err != nil {
+		return ""
+	}
+	for _, option := range findClass(doc, "", "east_player_option") {
+		optionPost := htmlx.Attr(option, "data-post")
+		optionNume := htmlx.Attr(option, "data-nume")
+		if post != "" && optionPost != "" && optionPost != post {
+			continue
+		}
+		if nume != "" && optionNume != "" && optionNume != nume {
+			continue
+		}
+		if source := embedIframeSource(htmlx.Attr(option, "data-embed")); source != nil {
+			return *source
 		}
 	}
-	return nil, errors.New("Iframe tidak ditemukan di respons player")
+	return ""
 }
 
 // normaliseIframeURL upgrades protocol-relative iframe sources.

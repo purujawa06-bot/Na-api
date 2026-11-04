@@ -2,7 +2,6 @@ package purtv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/purujawa06-bot/na-api/backend/internal/htmlx"
+	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
 )
 
 var samehadakuScraper *cloudscraper.Client
@@ -29,28 +29,6 @@ func newSamehadakuScraper() (*cloudscraper.Client, error) {
 	}
 	samehadakuScraper = client
 	return client, nil
-}
-
-func samehadakuHTML(ctx context.Context, rawURL string) (string, error) {
-	scraper, err := newSamehadakuScraper()
-	if err != nil {
-		return "", err
-	}
-	response, err := scraper.Get(ctx, rawURL)
-	if err != nil {
-		return "", fmt.Errorf("samehadaku.com.co fetch: %w", err)
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", fmt.Errorf("samehadaku.com.co gagal diakses (HTTP %d)", response.StatusCode)
-	}
-	body := string(response.Body)
-	lower := strings.ToLower(body)
-	if strings.Contains(lower, "just a moment") ||
-		strings.Contains(body, "challenge-platform") ||
-		strings.Contains(body, "cdn-cgi/challenge-platform") {
-		return "", errors.New("samehadaku Cloudflare challenge; cloudscraper belum cukup")
-	}
-	return body, nil
 }
 
 func parseSamehadakuCards(doc *html.Node) []shCard {
@@ -89,7 +67,7 @@ func parseSamehadakuCards(doc *html.Node) []shCard {
 			Title:     stringPtrOrNil(title),
 			Thumbnail: thumb,
 			URL:       stringPtr(absPath(href)),
-				Status:    stringPtrOrNil(status),
+			Status:    stringPtrOrNil(status),
 			Episode:   stringPtrOrNil(strings.TrimSpace(score)),
 		})
 	}
@@ -313,6 +291,11 @@ func (c *client) fetchSamehadakuEpisode(ctx context.Context, slug string) shEpis
 	if err != nil {
 		return shEpisodeResult{Error: "parse: " + err.Error()}
 	}
+	return parseSamehadakuEpisode(doc)
+}
+
+// parseSamehadakuEpisode normalises an episode page into the shared shape.
+func parseSamehadakuEpisode(doc *html.Node) shEpisodeResult {
 	res := shEpisodeResult{}
 	if h1 := firstClass(doc, "h1", ""); h1 != nil {
 		t := strings.TrimSuffix(strings.TrimSpace(text(h1)), "Sub Indo")
@@ -325,38 +308,101 @@ func (c *client) fetchSamehadakuEpisode(ctx context.Context, slug string) shEpis
 			break
 		}
 	}
-	// series via breadcrumb
-	var seriesLinks []*html.Node
-	for _, a := range findClass(doc, "a", "") {
-		href := htmlx.Attr(a, "href")
-		if strings.Contains(href, "/anime/") {
-			seriesLinks = append(seriesLinks, a)
-		}
-	}
-	if len(seriesLinks) >= 2 {
-		sl := seriesLinks[len(seriesLinks)-2]
-		res.AnimeTitle = stringPtrOrNil(text(sl))
-		res.AnimeURL = absSamehadakuPtr(htmlx.Attr(sl, "href"))
+	// The episode nav (`.naveps .nvsc`) is the only reliable series link; the
+	// related-anime widgets later in the page would otherwise win.
+	if seriesLink := episodeSeriesLink(doc); seriesLink != nil {
+		res.AnimeTitle = stringPtrOrNil(text(seriesLink))
+		res.AnimeURL = absSamehadakuPtr(htmlx.Attr(seriesLink, "href"))
 	}
 	for _, n := range findClass(doc, "", "east_player_option") {
 		res.Servers = append(res.Servers, shServer{
-			Name: stringPtrOrNil(text(n)),
-			Post: stringPtrOrNil(htmlx.Attr(n, "data-post")),
-			Nume: stringPtrOrNil(htmlx.Attr(n, "data-nume")),
-			Type: stringPtrOrNil(htmlx.Attr(n, "data-type")),
+			Name:  stringPtrOrNil(text(n)),
+			Post:  stringPtrOrNil(htmlx.Attr(n, "data-post")),
+			Nume:  stringPtrOrNil(htmlx.Attr(n, "data-nume")),
+			Type:  stringPtrOrNil(htmlx.Attr(n, "data-type")),
+			Embed: embedIframeSource(htmlx.Attr(n, "data-embed")),
 		})
 	}
-	for _, a := range findClass(doc, "a", "") {
-		rel := htmlx.Attr(a, "rel")
-		href := htmlx.Attr(a, "href")
-		if rel == "prev" {
-			res.PrevURL = absSamehadakuPtr(href)
+	res.PrevURL, res.NextURL = episodeNavigation(doc)
+	return res
+}
+
+// episodeSeriesLink returns the series anchor inside the episode navigation,
+// preferring the breadcrumb (which carries the real anime title) over the
+// "All Episode" link.
+func episodeSeriesLink(doc *html.Node) *html.Node {
+	for _, breadcrumb := range findAttr(doc, "div", "id", "breadcrumbs") {
+		var series *html.Node
+		for _, anchor := range findClass(breadcrumb, "a", "") {
+			if strings.Contains(htmlx.Attr(anchor, "href"), "/anime/") {
+				series = anchor
+			}
 		}
-		if rel == "next" {
-			res.NextURL = absSamehadakuPtr(href)
+		if series != nil {
+			return series
 		}
 	}
-	return res
+	for _, naveps := range findClass(doc, "", "naveps") {
+		for _, nav := range findClass(naveps, "", "nvs") {
+			for _, anchor := range findClass(nav, "a", "") {
+				if strings.Contains(htmlx.Attr(anchor, "href"), "/anime/") {
+					return anchor
+				}
+			}
+		}
+	}
+	// Breadcrumb fallback: the last `/anime/` link before the related widgets.
+	var last *html.Node
+	for _, anchor := range findClass(doc, "a", "") {
+		if strings.Contains(htmlx.Attr(anchor, "href"), "/anime/") {
+			last = anchor
+		}
+	}
+	return last
+}
+
+// episodeNavigation reads the prev/next anchors from `.naveps .nvs`. The theme
+// does not emit rel="prev"/rel="next", and disabled arrows use `.nonex`/`#`.
+func episodeNavigation(doc *html.Node) (*string, *string) {
+	var prev, next *string
+	for _, naveps := range findClass(doc, "", "naveps") {
+		for _, nav := range findClass(naveps, "", "nvs") {
+			if htmlx.HasClass(nav, "nvsc") {
+				continue
+			}
+			for _, anchor := range findClass(nav, "a", "") {
+				href := htmlx.Attr(anchor, "href")
+				if htmlx.HasClass(anchor, "nonex") || href == "" || href == "#" {
+					continue
+				}
+				if htmlx.HasClass(nav, "rght") {
+					if next == nil {
+						next = absSamehadakuPtr(href)
+					}
+				} else if prev == nil {
+					prev = absSamehadakuPtr(href)
+				}
+			}
+		}
+	}
+	return prev, next
+}
+
+// embedIframeSource extracts the iframe src from a `data-embed` snippet.
+func embedIframeSource(raw string) *string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	match := iframeSrcPattern.FindStringSubmatch(raw)
+	if match == nil {
+		return nil
+	}
+	source := strings.ReplaceAll(match[1], "&amp;", "&")
+	source = normaliseIframeURL(source)
+	if source == "" || source == "about:blank" {
+		return nil
+	}
+	return stringPtr(source)
 }
 
 func absSamehadakuPtr(u string) *string {
@@ -369,16 +415,35 @@ func (c *client) samehadakuHTML(ctx context.Context, rawURL string) (string, err
 		if response, err := scraper.Get(ctx, rawURL); err == nil {
 			if response.StatusCode >= 200 && response.StatusCode < 300 {
 				body := string(response.Body)
-				lower := strings.ToLower(body)
-				if !strings.Contains(lower, "just a moment") && !strings.Contains(body, "challenge-platform") {
+				if !samehadakuChallenge(body) {
 					return body, nil
 				}
 			}
 		}
 	}
+	// Plain browser-like request: works on residential IPs and keeps the
+	// schedule/anime pages available when the cloudscraper session expires.
+	if response, err := webclient.Get(ctx, rawURL, map[string]string{
+		"User-Agent": webclient.UserAgentChrome,
+		"Accept":     "text/html,application/xhtml+xml,*/*",
+	}); err == nil {
+		if body, readErr := webclient.ReadBody(response); readErr == nil &&
+			response.StatusCode >= 200 && response.StatusCode < 300 && !samehadakuChallenge(body) {
+			return body, nil
+		}
+	}
 	if body, err := c.cfFetch(ctx, rawURL); err == nil {
 		return body, nil
-	} else {
-		return "", err
 	}
+	return "", fmt.Errorf("samehadaku gagal diakses (Cloudflare/proxy): %s", rawURL)
+}
+
+// samehadakuChallenge reports whether a body is a Cloudflare interstitial.
+// Normal samehadaku pages also load the `challenge-platform` script, so only
+// the explicit challenge markers count.
+func samehadakuChallenge(body string) bool {
+	lower := strings.ToLower(body)
+	return strings.Contains(lower, "<title>just a moment") ||
+		strings.Contains(lower, "challenge-error-text") ||
+		strings.Contains(lower, "cf-challenge-running")
 }

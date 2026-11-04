@@ -144,6 +144,8 @@ var (
 	anichinHostPattern = regexp.MustCompile(`(?i)^https?://anichin\.com\.co`)
 	// samehadakuSeriesPattern detects samehadaku series URLs.
 	samehadakuSeriesPattern = regexp.MustCompile(`(?i)samehadaku\.how/anime/`)
+	// scheduleDayAttrPattern extracts the Alpine day key from a schedule block.
+	scheduleDayAttrPattern = regexp.MustCompile(`(?i)activeDay\s*===\s*['"]([a-z]+)['"]`)
 	// dailymotionVideoParamPattern extracts the access ID from geo players.
 	dailymotionVideoParamPattern = regexp.MustCompile(`(?i)[?&]video=([^&#]+)`)
 	// dailymotionIDPattern extracts a public ID from embed/watch URLs.

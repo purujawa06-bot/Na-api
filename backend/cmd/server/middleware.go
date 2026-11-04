@@ -30,6 +30,10 @@ var noStorePrefixes = []string{
 	"/api/_diag",
 	"/api/user-scripts",
 	"/api/models",
+	// PurTV player and schedule are dynamic: a failed player lookup or an empty
+	// schedule must not be cached for a week and outlive the upstream fix.
+	"/api/purtv/player",
+	"/api/purtv/schedule",
 }
 
 type rateEntry struct {

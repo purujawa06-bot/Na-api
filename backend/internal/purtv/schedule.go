@@ -28,9 +28,6 @@ var scheduleDayID = map[string]string{
 	"sunday":    "Minggu",
 }
 
-// scheduleCardExpr is the jQuery expression run by scraper-web for one card.
-const scheduleCardExpr = `title:$(e).find('h2').attr('title')||$(e).find('h2').text().trim(),url:$(e).find('a').attr('href'),img:$(e).find('img').attr('src'),type:$(e).find('.type').first().text().trim()||null,score:$(e).find('.score').text().replace(/[^0-9.]/g,'')||null,time:$(e).find('.data_tw a').text().replace(/\s+/g,' ').trim()||null,genre:$(e).find('.data .type').text().replace(/\s+/g,' ').trim()||null`
-
 // shScheduleResult is the normalised samehadaku schedule payload.
 type shScheduleResult struct {
 	Schedule []scheduleDay
@@ -101,21 +98,6 @@ func (c *client) schedule(ctx context.Context) (*scheduleResponse, error) {
 	}, nil
 }
 
-// schedulePageSelector builds the scraper-web expression that grabs all seven
-// day blocks from `/jadwal-rilis/` in one request.
-func schedulePageSelector() string {
-	var builder strings.Builder
-	builder.WriteString("({ ")
-	for index, day := range scheduleDays {
-		if index > 0 {
-			builder.WriteString(", ")
-		}
-		fmt.Fprintf(&builder, "%s: $('.result-schedule').eq(%d).find('.animepost').map((i,e)=>({%s})).get()", day, index, scheduleCardExpr)
-	}
-	builder.WriteString(" })")
-	return builder.String()
-}
-
 // fetchSamehadakuSchedule prefers the SSR schedule page, falling back to the
 // per-day REST endpoints.
 func (c *client) fetchSamehadakuSchedule(ctx context.Context) shScheduleResult {
@@ -133,27 +115,114 @@ func (c *client) fetchSamehadakuSchedule(ctx context.Context) shScheduleResult {
 	return shScheduleResult{Schedule: schedule}
 }
 
-// scheduleFromPage scrapes the official `/jadwal-rilis/` page.
+// scheduleFromPage scrapes the official `/jadwal-rilis/` page natively. The
+// page renders all seven `.result-schedule` blocks at once (Alpine only hides
+// the inactive ones), so one request returns the full week.
 func (c *client) scheduleFromPage(ctx context.Context) ([]scheduleDay, error) {
-	raw, err := c.scraperWebPost(ctx, samehadakuHost+"/jadwal-rilis/", map[string]string{
-		"days": schedulePageSelector(),
-	}, samehadakuSource)
+	body, err := c.samehadakuHTML(ctx, samehadakuHost+"/jadwal-rilis/")
 	if err != nil {
 		return nil, err
 	}
-	days := decodeInto[map[string][]map[string]any](raw, "days")
+	doc, err := htmlx.Parse(body)
+	if err != nil {
+		return nil, fmt.Errorf("parse jadwal-rilis: %w", err)
+	}
+	return parseSchedulePage(doc), nil
+}
+
+// parseSchedulePage maps the seven `.result-schedule` blocks of the schedule
+// page into day buckets.
+func parseSchedulePage(doc *html.Node) []scheduleDay {
+	byDay := map[string][]scheduleCard{}
+	blocks := findClass(doc, "", "result-schedule")
+	for index, block := range blocks {
+		day := scheduleDayFromBlock(block)
+		if day == "" {
+			if index >= len(scheduleDays) {
+				continue
+			}
+			day = scheduleDays[index]
+		}
+		byDay[day] = append(byDay[day], mapNativeScheduleCards(block)...)
+	}
 
 	schedule := make([]scheduleDay, 0, len(scheduleDays))
 	for _, day := range scheduleDays {
-		list := []scheduleCard{}
-		for _, item := range days[day] {
-			if mapped := mapScheduleCard(item); mapped != nil {
-				list = append(list, *mapped)
-			}
+		list := byDay[day]
+		if list == nil {
+			list = []scheduleCard{}
 		}
 		schedule = append(schedule, scheduleDay{Day: scheduleDayLabel(day), DayEn: day, List: list})
 	}
-	return schedule, nil
+	return schedule
+}
+
+// scheduleDayFromBlock reads the Alpine `x-show` day key of a schedule block.
+func scheduleDayFromBlock(block *html.Node) string {
+	match := scheduleDayAttrPattern.FindStringSubmatch(htmlx.Attr(block, "x-show"))
+	if match == nil {
+		return ""
+	}
+	return strings.ToLower(match[1])
+}
+
+// mapNativeScheduleCards normalises every `.animepost` inside one day block.
+func mapNativeScheduleCards(block *html.Node) []scheduleCard {
+	cards := []scheduleCard{}
+	seen := map[string]struct{}{}
+	for _, article := range findClass(block, "div", "animepost") {
+		link := firstClass(article, "a", "")
+		href := htmlx.Attr(link, "href")
+		if href == "" {
+			continue
+		}
+		url := absSamehadaku(href)
+		if url == nil {
+			continue
+		}
+		key := strings.TrimRight(*url, "/")
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		heading := firstClass(article, "h2", "")
+		title := strings.TrimSpace(htmlx.Attr(heading, "title"))
+		if title == "" {
+			title = strings.TrimSpace(text(heading))
+		}
+		if title == "" {
+			continue
+		}
+
+		release := firstClass(firstClass(article, "div", "data_tw"), "a", "")
+		score := firstClass(article, "div", "score")
+		genre := firstClass(firstClass(article, "div", "data"), "div", "type")
+
+		cards = append(cards, scheduleCard{
+			Title:       title,
+			Thumbnail:   imgSrc(firstClass(article, "img", "anmsa")),
+			URL:         *url,
+			Slug:        trimmedPtr(slugOf(*url)),
+			ReleaseTime: normaliseReleaseTime(text(release)),
+			Type:        trimmedPtr(text(firstClass(article, "div", "type"))),
+			Genre:       normaliseGenre(text(genre)),
+			Score:       trimmedPtr(cleanScore(text(score))),
+			Source:      samehadakuSource,
+		})
+	}
+	return cards
+}
+
+// cleanScore keeps only digits and dots from a "★ 8.72" score label.
+func cleanScore(value string) string {
+	var builder strings.Builder
+	for _, character := range value {
+		if (character >= '0' && character <= '9') || character == '.' {
+			builder.WriteRune(character)
+		}
+	}
+	return builder.String()
 }
 
 // scheduleFromRest queries the per-day REST routes (newest namespace first).
@@ -173,15 +242,12 @@ func (c *client) scheduleFromRest(ctx context.Context) ([]scheduleDay, error) {
 			defer waitGroup.Done()
 			base := scheduleDay{Day: scheduleDayLabel(day), DayEn: day, List: []scheduleCard{}}
 			for _, route := range routes {
-				raw, err := c.scraperWebPost(ctx, route(day), map[string]string{
-					"raw": "$('body').text().trim()",
-				}, samehadakuSource)
+				body, err := c.samehadakuHTML(ctx, route(day))
 				if err != nil {
 					continue
 				}
-				payload := decodeInto[string](raw, "raw")
 				var entries []map[string]any
-				if json.Unmarshal([]byte(payload), &entries) != nil {
+				if json.Unmarshal([]byte(body), &entries) != nil {
 					continue
 				}
 				list := make([]scheduleCard, 0, len(entries))
