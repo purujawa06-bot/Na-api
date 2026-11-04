@@ -17,8 +17,10 @@ const BottomNav = () => {
         { name: 'PurTV', href: '/purtv', icon: 'fa-tv' },
     ];
 
+    // Normalisasi pathname (hilangkan trailing slash & base path) agar deteksi /chat dan /purtv konsisten
+    const normalizedPath = (pathname || '').replace(/\/+$/, '') || '/';
     // Sembunyikan navigasi bawah pada halaman chat dan purtv agar tampilan lebih luas/mirip aplikasi native
-    if (pathname === '/chat' || pathname?.startsWith('/purtv')) return null;
+    if (normalizedPath === '/chat' || normalizedPath.startsWith('/chat/') || normalizedPath.startsWith('/purtv')) return null;
 
     return (
         <>
