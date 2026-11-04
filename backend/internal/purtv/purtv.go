@@ -58,7 +58,7 @@ func (c *client) handleHome(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.home(ctx)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	payload.Success = true
@@ -75,7 +75,7 @@ func (c *client) handleDetail(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.detail(ctx, rawURL)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	switch typed := payload.(type) {
@@ -84,7 +84,7 @@ func (c *client) handleDetail(w http.ResponseWriter, r *http.Request) {
 	case *detailDonghuaResponse:
 		typed.Success = true
 	default:
-		httpx.Error(w, http.StatusBadGateway, "unsupported detail payload")
+		writeUpstreamError(w, errors.New("payload detail tidak dikenali"))
 		return
 	}
 	httpx.OK(w, payload)
@@ -100,7 +100,7 @@ func (c *client) handleSeries(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.series(ctx, rawURL)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	switch typed := payload.(type) {
@@ -109,7 +109,7 @@ func (c *client) handleSeries(w http.ResponseWriter, r *http.Request) {
 	case *seriesDonghuaResponse:
 		typed.Success = true
 	default:
-		httpx.Error(w, http.StatusBadGateway, "unsupported series payload")
+		writeUpstreamError(w, errors.New("payload series tidak dikenali"))
 		return
 	}
 	httpx.OK(w, payload)
@@ -120,7 +120,7 @@ func (c *client) handleSchedule(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.schedule(ctx)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	payload.Success = true
@@ -138,7 +138,7 @@ func (c *client) handleSearch(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.search(ctx, query, page)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	payload.Success = true
@@ -150,7 +150,7 @@ func (c *client) handleGenres(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.genres(ctx)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	payload.Success = true
@@ -164,7 +164,7 @@ func (c *client) handleList(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.list(ctx, genre, page)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	payload.Success = true
@@ -184,7 +184,7 @@ func (c *client) handlePlayer(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := c.player(ctx, post, nume, playerType, slug)
 	if err != nil {
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		writeUpstreamError(w, err)
 		return
 	}
 	payload.Success = true
@@ -208,4 +208,25 @@ func (c *client) series(ctx context.Context, rawURL string) (any, error) {
 		return c.animeSeries(ctx, animeSlug(rawURL))
 	}
 	return c.donghuaSeries(ctx, rawURL)
+}
+
+// writeUpstreamError reports a scraper failure as a JSON envelope. It uses
+// httpx.UpstreamError so the body survives the Koyeb edge and stays readable
+// by JSON clients.
+func writeUpstreamError(w http.ResponseWriter, err error) {
+	httpx.UpstreamError(w, upstreamMessage(err))
+}
+
+// upstreamMessage maps low-level scraper errors to actionable client text.
+func upstreamMessage(err error) string {
+	switch {
+	case err == nil:
+		return "Sumber upstream tidak tersedia."
+	case errors.Is(err, context.DeadlineExceeded):
+		return "Upstream tidak merespons sebelum batas waktu habis. Coba lagi."
+	case errors.Is(err, context.Canceled):
+		return "Permintaan dibatalkan sebelum upstream selesai."
+	default:
+		return err.Error()
+	}
 }

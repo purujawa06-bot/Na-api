@@ -81,7 +81,7 @@ Environment variable menimpa file konfigurasi:
 ## Struktur
 
 ```
-cmd/server/            # entrypoint + middleware (CORS, rate limit, cache header)
+cmd/server/            # entrypoint Fiber (server + bridge streaming) + middleware (CORS, rate limit, cache header)
 internal/config/       # config.json + env
 internal/httpx/        # helper JSON/SSE/NDJSON/query
 internal/webclient/    # HTTP client upstream + UA default
@@ -122,6 +122,9 @@ berada di `legacy/next-api/`).
 - Rate limit 100 request/menit/IP, header CORS, dan aturan cache (`no-store`
   untuk chat/temp/tools/admin dan 7 hari untuk endpoint publik) dipindahkan
   dari `middleware.js` ke middleware Go.
+- Server HTTP memakai Fiber v3 (Go 1.26). Handler tetap `net/http`; `cmd/server/fiber_bridge.go`
+  menyalurkan response per chunk agar SSE/NDJSON tidak ikut ter-buffer (adaptor
+  bawaan Fiber menahan body sampai handler selesai).
 
 ## Pengujian
 

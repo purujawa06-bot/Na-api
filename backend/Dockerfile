@@ -9,7 +9,7 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # Build stage: compile the static Go binary. The build context is the repo root
 # so the EaseMate bridge can reuse the JavaScript sources from lib/.
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /src
 

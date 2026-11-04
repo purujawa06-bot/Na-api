@@ -31,12 +31,24 @@ func JSON(w http.ResponseWriter, status int, payload any) {
 func OK(w http.ResponseWriter, payload any) { JSON(w, http.StatusOK, payload) }
 
 // Error writes a uniform error envelope: {"success":false,"error":msg,"status":code}.
+// Failures are never cacheable so a transient upstream error cannot be served
+// from cache after the dependency recovers.
 func Error(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("X-Cache", "BYPASS")
 	JSON(w, status, map[string]any{
 		"success": false,
 		"error":   message,
 		"status":  status,
 	})
+}
+
+// UpstreamError reports a failed upstream dependency as JSON. It answers with
+// 424 instead of 502 because the Koyeb edge replaces every 5xx body with its
+// own HTML error page, which would hide the JSON envelope from API clients.
+func UpstreamError(w http.ResponseWriter, message string) {
+	Error(w, http.StatusFailedDependency, message)
 }
 
 // DecodeJSON decodes the request body into target, rejecting oversized or

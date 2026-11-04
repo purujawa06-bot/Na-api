@@ -67,6 +67,9 @@ func (c *client) anichinHTML(ctx context.Context, rawURL string) (string, error)
 		}
 	}
 	if body == "" {
+		if err != nil {
+			return "", fmt.Errorf("anichin.com.co gagal diakses: %w", err)
+		}
 		return "", errors.New("anichin.com.co gagal diakses (jaringan/CF)")
 	}
 	if isChallenge(body) {
@@ -113,6 +116,9 @@ func (c *client) scraperWebPost(ctx context.Context, pageURL string, output map[
 		return nil, fmt.Errorf("%s: read response: %w", service, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if strings.Contains(body, "DEPLOYMENT_NOT_FOUND") {
+			return nil, fmt.Errorf("proxy scraper-web tidak tersedia: deployment Vercel tidak ditemukan (HTTP %d)", resp.StatusCode)
+		}
 		if service == anichinSource {
 			return nil, fmt.Errorf("scraper-web gagal (HTTP %d)", resp.StatusCode)
 		}
@@ -120,7 +126,7 @@ func (c *client) scraperWebPost(ctx context.Context, pageURL string, output map[
 	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(body), &raw); err != nil {
-		return nil, fmt.Errorf("%s: invalid JSON: %w", service, err)
+		return nil, fmt.Errorf("%s: respons proxy bukan JSON: %w", service, err)
 	}
 	return raw, nil
 }

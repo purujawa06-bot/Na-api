@@ -193,8 +193,9 @@ func (c *client) searchListing(ctx context.Context, pageURL, hasNextSelector str
 		"hasNextPage": hasNextSelector,
 	}, samehadakuSource)
 	if err != nil {
-		// The JS version swallows scraper failures here and returns an empty page.
-		return shSearchResult{Results: []shCard{}}
+		// Surface the failure instead of returning an empty page: a dead proxy
+		// must be distinguishable from "no results".
+		return shSearchResult{Results: []shCard{}, Error: err.Error()}
 	}
 	cards := decodeInto[[]shCard](raw, "data")
 	hasNext := decodeInto[bool](raw, "hasNextPage")

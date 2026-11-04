@@ -114,6 +114,7 @@ type homeResponse struct {
 	Ongoing         []ongoingItem   `json:"ongoing"`
 	Recommendations recommendations `json:"recommendations"`
 	Anime           homeAnime       `json:"anime"`
+	Warnings        []string        `json:"warnings,omitempty"`
 	Pagenation      pagenation      `json:"purtv_pagenation"`
 }
 
@@ -256,6 +257,7 @@ type searchResponse struct {
 	Page       int        `json:"page"`
 	HasNext    bool       `json:"hasNext"`
 	Results    []any      `json:"results"`
+	Warnings   []string   `json:"warnings,omitempty"`
 	Pagenation pagenation `json:"purtv_pagenation"`
 }
 
@@ -266,6 +268,7 @@ type listResponse struct {
 	Page       int        `json:"page"`
 	HasNext    bool       `json:"hasNext"`
 	Results    []any      `json:"results"`
+	Warnings   []string   `json:"warnings,omitempty"`
 	Pagenation pagenation `json:"purtv_pagenation"`
 }
 

@@ -3,14 +3,16 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/purujawa06-bot/na-api/backend/internal/agenttools"
 	"github.com/purujawa06-bot/na-api/backend/internal/ai"
@@ -66,18 +68,24 @@ func main() {
 		httpx.Error(w, http.StatusNotFound, "Not Found")
 	})
 
-	server := &http.Server{
-		Addr:              ":" + strconv.Itoa(cfg.Port),
-		Handler:           withMiddleware(mux),
-		ReadHeaderTimeout: 15 * time.Second,
-		// Streaming endpoints (chat, NDJSON tools) outlive the default timeout.
+	app := fiber.New(fiber.Config{
+		AppName: "na-api",
+		// Uploads and JSON bodies share the same fasthttp limit; the default
+		// 4 MiB is too small for the image tools.
+		BodyLimit:    64 << 20,
+		ReadTimeout:  5 * time.Minute,
 		WriteTimeout: 5 * time.Minute,
 		IdleTimeout:  2 * time.Minute,
-	}
+	})
+	// One catch-all bridge keeps the existing net/http routing and middleware
+	// while Fiber owns the connection handling.
+	app.Use(fiberBridge{handler: withMiddleware(mux)}.Serve)
 
+	addr := ":" + strconv.Itoa(cfg.Port)
+	var shuttingDown atomic.Bool
 	go func() {
-		log.Printf("[startup] Na-api Go backend listening on %s (backend url %s)", server.Addr, cfg.BackendURL)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Printf("[startup] Na-api Go backend (fiber) listening on %s (backend url %s)", addr, cfg.BackendURL)
+		if err := app.Listen(addr, fiber.ListenConfig{DisableStartupMessage: true}); err != nil && !shuttingDown.Load() {
 			log.Fatalf("[fatal] server error: %v", err)
 		}
 	}()
@@ -86,9 +94,8 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer shutdownCancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	shuttingDown.Store(true)
+	if err := app.ShutdownWithTimeout(20 * time.Second); err != nil {
 		log.Printf("[shutdown] forced close: %v", err)
 	}
 	log.Println("[shutdown] backend stopped")

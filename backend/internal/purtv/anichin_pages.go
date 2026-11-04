@@ -33,15 +33,17 @@ var recommendRanges = []struct {
 // donghua sections instead of failing the request.
 func (c *client) home(ctx context.Context) (*homeResponse, error) {
 	var (
-		waitGroup sync.WaitGroup
-		doc       *html.Node
-		anime     shHomeResult
+		waitGroup  sync.WaitGroup
+		doc        *html.Node
+		anichinErr error
+		anime      shHomeResult
 	)
 	waitGroup.Add(2)
 	go func() {
 		defer waitGroup.Done()
 		body, err := c.anichinHTML(ctx, anichinHost+"/")
 		if err != nil {
+			anichinErr = err
 			return
 		}
 		parsed, parseErr := htmlx.Parse(body)
@@ -168,8 +170,22 @@ func (c *client) home(ctx context.Context) (*homeResponse, error) {
 		Ongoing:         ongoing,
 		Recommendations: recommend,
 		Anime:           homeAnime{LatestAnime: latestAnime, PopularAnime: popularAnime},
+		Warnings:        sourceWarnings(anichinErr, anime.Error),
 		Pagenation:      newPagenation(1, false),
 	}, nil
+}
+
+// sourceWarnings collects a per-source failure message so partial answers are
+// still self-describing instead of silently returning empty sections.
+func sourceWarnings(donghuaErr error, animeErr string) []string {
+	warnings := make([]string, 0, 2)
+	if donghuaErr != nil {
+		warnings = append(warnings, "Sumber donghua gagal: "+donghuaErr.Error())
+	}
+	if animeErr != "" {
+		warnings = append(warnings, "Sumber anime gagal: "+animeErr)
+	}
+	return warnings
 }
 
 // normaliseTitle lowercases a title and strips punctuation so ongoing rows can
@@ -205,34 +221,17 @@ func (c *client) search(ctx context.Context, query string, page int) (*searchRes
 	}()
 	waitGroup.Wait()
 
-	if donghuaErr != nil && !errors.Is(donghuaErr, errAnichinNotFound) {
-		return nil, donghuaErr
+	results, hasNext, warnings, mergeErr := mergeSources(donghua, donghuaHas, donghuaErr, anime)
+	if mergeErr != nil {
+		return nil, mergeErr
 	}
-	if donghuaErr != nil {
-		donghua = []card{}
-		donghuaHas = false
-	}
-	if anime.Error != "" {
-		anime = shSearchResult{Results: []shCard{}}
-	}
-
-	results := make([]any, 0, len(donghua)+len(anime.Results))
-	for _, entry := range donghua {
-		results = append(results, anichinResult{Source: anichinSource, card: entry})
-	}
-	for _, entry := range anime.Results {
-		mapped := mapSamehadakuCard(entry)
-		mapped.Source = samehadakuSource
-		results = append(results, mapped)
-	}
-
-	hasNext := donghuaHas || anime.HasNext
 	return &searchResponse{
 		Source:     purtvSource,
 		Query:      query,
 		Page:       page,
 		HasNext:    hasNext,
 		Results:    results,
+		Warnings:   warnings,
 		Pagenation: newPagenation(page, hasNext),
 	}, nil
 }
@@ -267,15 +266,42 @@ func (c *client) list(ctx context.Context, genre string, page int) (*listRespons
 	}()
 	waitGroup.Wait()
 
-	if donghuaErr != nil && !errors.Is(donghuaErr, errAnichinNotFound) {
-		return nil, donghuaErr
+	results, hasNext, warnings, mergeErr := mergeSources(donghua, donghuaHas, donghuaErr, anime)
+	if mergeErr != nil {
+		return nil, mergeErr
+	}
+	responseGenre := genre
+	if responseGenre == "" {
+		responseGenre = "semua"
+	}
+	return &listResponse{
+		Source:     purtvSource,
+		Genre:      responseGenre,
+		Page:       page,
+		HasNext:    hasNext,
+		Results:    results,
+		Warnings:   warnings,
+		Pagenation: newPagenation(page, hasNext),
+	}, nil
+}
+
+// mergeSources combines donghua and anime listings into one result slice. A
+// single failing source still yields the other source's results plus a warning;
+// only a total outage becomes an error.
+func mergeSources(donghua []card, donghuaHas bool, donghuaErr error, anime shSearchResult) ([]any, bool, []string, error) {
+	if errors.Is(donghuaErr, errAnichinNotFound) {
+		donghuaErr = nil
 	}
 	if donghuaErr != nil {
 		donghua = []card{}
 		donghuaHas = false
 	}
-	if anime.Error != "" {
+	animeErr := anime.Error
+	if animeErr != "" {
 		anime = shSearchResult{Results: []shCard{}}
+	}
+	if donghuaErr != nil && animeErr != "" {
+		return nil, false, nil, fmt.Errorf("semua sumber gagal: donghua: %v; anime: %s", donghuaErr, animeErr)
 	}
 
 	results := make([]any, 0, len(donghua)+len(anime.Results))
@@ -287,20 +313,7 @@ func (c *client) list(ctx context.Context, genre string, page int) (*listRespons
 		mapped.Source = samehadakuSource
 		results = append(results, mapped)
 	}
-
-	hasNext := donghuaHas || anime.HasNext
-	responseGenre := genre
-	if responseGenre == "" {
-		responseGenre = "semua"
-	}
-	return &listResponse{
-		Source:     purtvSource,
-		Genre:      responseGenre,
-		Page:       page,
-		HasNext:    hasNext,
-		Results:    results,
-		Pagenation: newPagenation(page, hasNext),
-	}, nil
+	return results, donghuaHas || anime.HasNext, sourceWarnings(donghuaErr, animeErr), nil
 }
 
 // listingPage parses an anichin search/listing page.
