@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,11 +27,14 @@ const (
 // chatMessage is one board entry. Column names stay snake_case because the JS
 // route returned raw pg rows.
 type chatMessage struct {
-	ID        string  `json:"id"`
-	Username  string  `json:"username"`
-	Message   string  `json:"message"`
-	DeviceID  *string `json:"device_id"`
-	CreatedAt string  `json:"created_at"`
+	ID            string  `json:"id"`
+	Username      string  `json:"username"`
+	Message       string  `json:"message"`
+	DeviceID      *string `json:"device_id"`
+	CreatedAt     string  `json:"created_at"`
+	ReplyTo       *string `json:"reply_to"`
+	ReplyUsername *string `json:"reply_username"`
+	ReplyMessage  *string `json:"reply_message"`
 }
 
 // chatPollResult is the lightweight polling payload.
@@ -44,6 +48,9 @@ const createChatsTable = `CREATE TABLE IF NOT EXISTS chats (
 	username TEXT NOT NULL,
 	message TEXT NOT NULL,
 	device_id TEXT,
+	reply_to UUID,
+	reply_username TEXT,
+	reply_message TEXT,
 	created_at TIMESTAMPTZ DEFAULT NOW()
 )`
 
@@ -57,6 +64,9 @@ func (h *handler) ensureChatsTable(ctx context.Context) {
 		return
 	}
 	_, _ = pool.Exec(ctx, `ALTER TABLE chats ADD COLUMN IF NOT EXISTS device_id TEXT`)
+	_, _ = pool.Exec(ctx, `ALTER TABLE chats ADD COLUMN IF NOT EXISTS reply_to UUID`)
+	_, _ = pool.Exec(ctx, `ALTER TABLE chats ADD COLUMN IF NOT EXISTS reply_username TEXT`)
+	_, _ = pool.Exec(ctx, `ALTER TABLE chats ADD COLUMN IF NOT EXISTS reply_message TEXT`)
 }
 
 // getChatMessages returns the newest 500 messages, or everything after a
@@ -78,13 +88,13 @@ func (h *handler) getChatMessages(ctx context.Context, after string) ([]chatMess
 			return nil, fmt.Errorf("invalid after timestamp: %w", parseErr)
 		}
 		rows, err = pool.Query(ctx, `
-			SELECT id::text, username, message, device_id, created_at
+			SELECT id::text, username, message, device_id, reply_to::text, reply_username, reply_message, created_at
 			FROM chats WHERE created_at > $1
 			ORDER BY created_at ASC LIMIT $2`, since, chatWindowLimit)
 	} else {
 		rows, err = pool.Query(ctx, `
-			SELECT id::text, username, message, device_id, created_at FROM (
-				SELECT id, username, message, device_id, created_at
+			SELECT id::text, username, message, device_id, reply_to::text, reply_username, reply_message, created_at FROM (
+				SELECT id, username, message, device_id, reply_to, reply_username, reply_message, created_at
 				FROM chats ORDER BY created_at DESC LIMIT $1
 			) sub ORDER BY created_at ASC`, chatWindowLimit)
 	}
@@ -99,7 +109,7 @@ func (h *handler) getChatMessages(ctx context.Context, after string) ([]chatMess
 			message   chatMessage
 			createdAt time.Time
 		)
-		if err := rows.Scan(&message.ID, &message.Username, &message.Message, &message.DeviceID, &createdAt); err != nil {
+		if err := rows.Scan(&message.ID, &message.Username, &message.Message, &message.DeviceID, &message.ReplyTo, &message.ReplyUsername, &message.ReplyMessage, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan chat message: %w", err)
 		}
 		message.CreatedAt = isoTime(createdAt)
@@ -159,20 +169,29 @@ func (h *handler) chatSpamBlocked(ctx context.Context, deviceID string) (bool, e
 }
 
 // addChatMessage inserts a message and prunes the board to the newest 500.
-func (h *handler) addChatMessage(ctx context.Context, username, message, deviceID string) (*chatMessage, error) {
+func (h *handler) addChatMessage(ctx context.Context, username, message, deviceID string, replyTo *string) (*chatMessage, error) {
 	pool := h.pool()
 	if pool == nil {
 		return nil, errDatabaseUnavailable
 	}
 	h.ensureChatsTable(ctx)
 
+	var replyUsername, replyMessage *string
+	if replyTo != nil && *replyTo != "" {
+		var u, m string
+		if err := pool.QueryRow(ctx, `SELECT username, message FROM chats WHERE id = $1::uuid`, *replyTo).Scan(&u, &m); err == nil {
+			replyUsername = &u
+			replyMessage = &m
+		}
+	}
+
 	id, err := newUUID()
 	if err != nil {
 		return nil, err
 	}
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO chats (id, username, message, device_id) VALUES ($1::uuid, $2, $3, $4)`,
-		id, username, message, deviceID); err != nil {
+		`INSERT INTO chats (id, username, message, device_id, reply_to, reply_username, reply_message) VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6, $7)`,
+		id, username, message, deviceID, replyTo, replyUsername, replyMessage); err != nil {
 		return nil, fmt.Errorf("insert chat message: %w", err)
 	}
 
@@ -185,11 +204,14 @@ func (h *handler) addChatMessage(ctx context.Context, username, message, deviceI
 
 	device := deviceID
 	return &chatMessage{
-		ID:        id,
-		Username:  username,
-		Message:   message,
-		DeviceID:  &device,
-		CreatedAt: isoTime(time.Now().UTC()),
+		ID:            id,
+		Username:      username,
+		Message:       message,
+		DeviceID:      &device,
+		ReplyTo:       replyTo,
+		ReplyUsername: replyUsername,
+		ReplyMessage:  replyMessage,
+		CreatedAt:     isoTime(time.Now().UTC()),
 	}, nil
 }
 
@@ -266,8 +288,10 @@ func (h *handler) postChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Username *string `json:"username"`
-		Message  *string `json:"message"`
+		Username     *string `json:"username"`
+		Message      *string `json:"message"`
+		ReplyTo      *string `json:"replyTo"`
+		ReplyToSnake *string `json:"reply_to"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.JSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
@@ -280,7 +304,24 @@ func (h *handler) postChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newChat, err := h.addChatMessage(r.Context(), *body.Username, *body.Message, deviceID)
+	replyTo := body.ReplyTo
+	if replyTo == nil {
+		replyTo = body.ReplyToSnake
+	}
+	if replyTo != nil {
+		trimmed := strings.TrimSpace(*replyTo)
+		if trimmed == "" {
+			replyTo = nil
+		} else {
+			if !validUUID(trimmed) {
+				httpx.JSON(w, http.StatusBadRequest, map[string]any{"error": "Invalid reply target"})
+				return
+			}
+			replyTo = &trimmed
+		}
+	}
+
+	newChat, err := h.addChatMessage(r.Context(), *body.Username, *body.Message, deviceID, replyTo)
 	if err != nil {
 		httpx.JSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return

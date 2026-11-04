@@ -88,7 +88,7 @@ const MEDIA_BASE = 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/ma
 const STICKER_BASE = `${MEDIA_BASE}/sticker`;
 
 // --- MEMOIZED COMPONENTS ---
-const ChatBubble = memo(({ chat, username, prevChat, index }) => {
+const ChatBubble = memo(({ chat, username, prevChat, index, onReply }) => {
     const isMe = chat.username === username;
     const isSequence = prevChat && prevChat.username === chat.username;
     const showHeader = !isSequence;
@@ -129,13 +129,37 @@ const ChatBubble = memo(({ chat, username, prevChat, index }) => {
                     </div>
                 )}
 
-                <div className={`relative max-w-[80%] md:max-w-[60%] min-w-[100px] shadow-sm ${isSticker ? 'bg-transparent shadow-none' : ''}`}>
-                    
+                <div className={`relative max-w-[80%] md:max-w-[60%] min-w-[100px] shadow-sm group/bubble ${isSticker ? 'bg-transparent shadow-none' : ''}`}>
+
+                    {/* Balasan pesan */}
+                    {chat.reply_to && (
+                        <div className="mb-1.5 ml-1 border-l-2 border-[#5865f2] pl-2.5 py-1 bg-[#1e1f22]/70 rounded-r-md overflow-hidden">
+                            <div className="text-[11px] font-bold text-[#5865f2] truncate">
+                                {chat.reply_username || 'Pesan dibalas'}
+                            </div>
+                            <div className="text-[12px] text-[#949ba4] truncate">
+                                {chat.reply_message || ''}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tombol balas muncul saat hover */}
+                    <button
+                        onClick={() => onReply?.(chat)}
+                        className="absolute top-1 right-1 opacity-0 group-hover/bubble:opacity-100 transition-opacity text-[#949ba4] hover:text-[#dbdee1] p-1"
+                        title="Balas pesan"
+                    >
+                        <i className="fas fa-reply text-[10px]"></i>
+                    </button>
+
                     {/* Header Name for Others */}
                     {!isMe && !isSequence && (
                         <div className="flex items-center gap-2 mb-1 ml-1">
                             <span className="text-[13px] font-bold text-[#f2f3f5]">{chat.username}</span>
                             <span className="text-[10px] text-[#949ba4]">{formatTime(chat.created_at)}</span>
+                            <button onClick={() => onReply?.(chat)} className="text-[#949ba4] hover:text-[#dbdee1] transition-colors" title="Balas pesan">
+                                <i className="fas fa-reply text-[10px]"></i>
+                            </button>
                         </div>
                     )}
 
@@ -166,9 +190,12 @@ const ChatBubble = memo(({ chat, username, prevChat, index }) => {
                     
                     {/* Timestamp for Me */}
                     {isMe && (
-                         <div className="text-[10px] text-[#949ba4] text-right mt-1 pr-1 opacity-70">
-                            {formatTime(chat.created_at)}
+                         <div className="text-[10px] text-[#949ba4] text-right mt-1 pr-1 opacity-70 flex items-center justify-end gap-2">
+                            <span>{formatTime(chat.created_at)}</span>
                             {isMe && <i className="fas fa-check ml-1"></i>}
+                            <button onClick={() => onReply?.(chat)} className="opacity-100 text-[#949ba4] hover:text-[#dbdee1]" title="Balas pesan">
+                                <i className="fas fa-reply text-[10px]"></i>
+                            </button>
                         </div>
                     )}
                 </div>
@@ -193,13 +220,16 @@ export default function ChatPage() {
     const [deviceId, setDeviceId] = useState('');
     const [showStickers, setShowStickers] = useState(false);
     const [isExiting, setIsExiting] = useState(false);
+    const [showScrollDown, setShowScrollDown] = useState(false);
     
     // Automatic Sticker List
     const [stickerList, setStickerList] = useState([]);
+    const [replyTarget, setReplyTarget] = useState(null);
     
     const chatsRef = useRef(chats); 
     const virtuosoRef = useRef(null);
     const stickerRef = useRef(null);
+    const inputRef = useRef(null);
 
     useEffect(() => { chatsRef.current = chats; }, [chats]);
 
@@ -311,13 +341,16 @@ export default function ChatPage() {
         setIsLoggedIn(true);
     };
 
-    const sendMessageToApi = async (messageContent) => {
+    const sendMessageToApi = async (messageContent, replyToId = null) => {
         if (sending) return;
         setSending(true);
 
         try {
             const timestamp = Date.now().toString();
             const signature = CryptoJS.SHA256(deviceId + SECRET_KEY + timestamp).toString();
+
+            const payload = { username, message: messageContent };
+            if (replyToId) payload.replyTo = replyToId;
 
             const res = await fetch(apiUrl('/api/chat'), {
                 method: 'POST',
@@ -327,12 +360,13 @@ export default function ChatPage() {
                     'x-timestamp': timestamp,
                     'x-signature': signature
                 },
-                body: JSON.stringify({ username, message: messageContent })
+                body: JSON.stringify(payload)
             });
             
             if (res.ok) {
                 fetchChats(chatsRef.current);
                 virtuosoRef.current?.scrollToIndex({ index: chats.length, align: 'end', behavior: 'smooth' });
+                setReplyTarget(null);
             } else {
                 if (res.status === 429) {
                     alert('Slow down! 2 seconds cooldown.');
@@ -352,13 +386,18 @@ export default function ChatPage() {
         if (!inputMsg.trim()) return;
         const msgToSend = inputMsg.trim();
         setInputMsg(''); 
-        await sendMessageToApi(msgToSend);
+        await sendMessageToApi(msgToSend, replyTarget ? replyTarget.id : null);
     };
+
+    const handleReply = useCallback((chat) => {
+        setReplyTarget(chat);
+        inputRef.current?.focus();
+    }, []);
 
     const handleSendSticker = async (filename) => {
         setShowStickers(false);
         const msg = `[sticker:${STICKER_BASE}/${filename}]`;
-        await sendMessageToApi(msg);
+        await sendMessageToApi(msg, replyTarget ? replyTarget.id : null);
     };
 
     const handleLogout = () => {
@@ -366,6 +405,7 @@ export default function ChatPage() {
             localStorage.removeItem('puruboy-chat-username');
             setIsLoggedIn(false);
             setUsername('');
+            setReplyTarget(null);
         }
     };
 
@@ -385,9 +425,10 @@ export default function ChatPage() {
                 username={username}
                 prevChat={chats[index - 1]}
                 index={index}
+                onReply={handleReply}
             />
         );
-    }, [username, chats]);
+    }, [username, chats, handleReply]);
 
     // Animation Classes
     const transitionClass = isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right';
@@ -478,8 +519,20 @@ export default function ChatPage() {
                         initialTopMostItemIndex={chats.length - 1}
                         followOutput="auto"
                         alignToBottom
+                        atBottomStateChange={(atBottom) => setShowScrollDown(!atBottom)}
+                        atBottomThreshold={32}
                         itemContent={renderChatBubble}
                     />
+                )}
+                {showScrollDown && chats.length > 0 && (
+                    <button
+                        type="button"
+                        aria-label="Scroll to bottom"
+                        onClick={() => virtuosoRef.current?.scrollToIndex({ index: chats.length - 1, align: 'end', behavior: 'smooth' })}
+                        className="absolute bottom-4 right-4 w-10 h-10 bg-[#5865f2] hover:bg-[#4752c4] text-white rounded-full shadow-lg flex items-center justify-center transition-colors z-20"
+                    >
+                        <i className="fas fa-arrow-down"></i>
+                    </button>
                 )}
             </div>
 
@@ -510,6 +563,17 @@ export default function ChatPage() {
                     </div>
                 )}
 
+                {replyTarget && (
+                    <div className="mb-2 flex items-center justify-between bg-[#2b2d31] border-l-4 border-[#5865f2] rounded px-3 py-2">
+                        <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#f2f3f5]">Membalas {replyTarget.username}</div>
+                            <div className="text-xs text-[#949ba4] truncate">{replyTarget.message}</div>
+                        </div>
+                        <button onClick={() => setReplyTarget(null)} className="text-[#949ba4] hover:text-white ml-2" title="Batal balas">
+                            <i className="fas fa-times"></i>
+                        </button>
+                    </div>
+                )}
                 <div className="bg-[#383a40] rounded-lg flex items-center px-4 py-2.5 gap-3">
                     {/* Sticker Button */}
                     <button 
@@ -520,6 +584,7 @@ export default function ChatPage() {
                     </button>
                     
                     <input 
+                        ref={inputRef}
                         type="text" 
                         value={inputMsg}
                         onChange={(e) => setInputMsg(e.target.value)}

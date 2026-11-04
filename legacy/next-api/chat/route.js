@@ -17,6 +17,7 @@
  * @header x-device-id - Unique client device ID
  * @param {string} body.username - Nama pengirim pesan.
  * @param {string} body.message - Isi pesan teks.
+ * @param {string} [body.replyTo] - ID pesan yang dibalas (reply).
  * @response json
  * @example
  * // GET: ambil pesan sejak tanggal tertentu
@@ -33,7 +34,7 @@
  *         'x-timestamp': String(Date.now()),
  *         'x-device-id': '<device-id>'
  *     },
- *     body: JSON.stringify({ username: 'Puru', message: 'Halo semua!' })
+ *     body: JSON.stringify({ username: 'Puru', message: 'Halo semua!', replyTo: '00000000-0000-0000-0000-000000000000' })
  * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
