@@ -88,7 +88,7 @@ const MEDIA_BASE = 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/ma
 const STICKER_BASE = `${MEDIA_BASE}/sticker`;
 
 // --- MEMOIZED COMPONENTS ---
-const ChatBubble = memo(({ chat, username, prevChat, index, onReply }) => {
+const ChatBubble = memo(({ chat, username, prevChat, index, onReply, onScrollToOriginal }) => {
     const isMe = chat.username === username;
     const isSequence = prevChat && prevChat.username === chat.username;
     const showHeader = !isSequence;
@@ -133,7 +133,12 @@ const ChatBubble = memo(({ chat, username, prevChat, index, onReply }) => {
 
                     {/* Balasan pesan */}
                     {chat.reply_to && (
-                        <div className="mb-1.5 ml-1 border-l-2 border-[#5865f2] pl-2.5 py-1 bg-[#1e1f22]/70 rounded-r-md overflow-hidden">
+                        <div
+                            onClick={() => onScrollToOriginal?.(chat.reply_to)}
+                            className="mb-1.5 ml-1 border-l-2 border-[#5865f2] pl-2.5 py-1 bg-[#1e1f22]/70 rounded-r-md overflow-hidden cursor-pointer hover:bg-[#1e1f22]"
+                            role="button"
+                            title="Lompat ke pesan asli"
+                        >
                             <div className="text-[11px] font-bold text-[#5865f2] truncate">
                                 {chat.reply_username || 'Pesan dibalas'}
                             </div>
@@ -394,6 +399,14 @@ export default function ChatPage() {
         inputRef.current?.focus();
     }, []);
 
+    const scrollToOriginalMessage = useCallback((messageId) => {
+        if (!messageId) return;
+        const index = chats.findIndex((item) => item.id === messageId);
+        if (index >= 0) {
+            virtuosoRef.current?.scrollToIndex({ index, align: 'center', behavior: 'smooth' });
+        }
+    }, [chats]);
+
     const handleSendSticker = async (filename) => {
         setShowStickers(false);
         const msg = `[sticker:${STICKER_BASE}/${filename}]`;
@@ -426,9 +439,10 @@ export default function ChatPage() {
                 prevChat={chats[index - 1]}
                 index={index}
                 onReply={handleReply}
+                onScrollToOriginal={scrollToOriginalMessage}
             />
         );
-    }, [username, chats, handleReply]);
+    }, [username, chats, handleReply, scrollToOriginalMessage]);
 
     // Animation Classes
     const transitionClass = isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right';
