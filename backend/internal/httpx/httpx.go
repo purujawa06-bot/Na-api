@@ -34,6 +34,9 @@ func OK(w http.ResponseWriter, payload any) { JSON(w, http.StatusOK, payload) }
 // Failures are never cacheable so a transient upstream error cannot be served
 // from cache after the dependency recovers.
 func Error(w http.ResponseWriter, status int, message string) {
+	if status == http.StatusBadGateway {
+		status = http.StatusInternalServerError
+	}
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("X-Cache", "BYPASS")

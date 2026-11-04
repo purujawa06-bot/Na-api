@@ -222,3 +222,10 @@ func (s *server) handleUpstreamDiag(w http.ResponseWriter, r *http.Request) {
 		"results":   results,
 	})
 }
+
+// force500 temporarily exists to observe whether the Koyeb edge rewrites an
+// application-level HTTP 500 response into its own error page, the way it
+// rewrites 502. It is safe to remove once the observation is complete.
+func (s *server) handleForce500(w http.ResponseWriter, _ *http.Request) {
+	httpx.Error(w, http.StatusInternalServerError, "forced for Koyeb edge test")
+}

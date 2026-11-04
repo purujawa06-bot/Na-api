@@ -364,7 +364,7 @@ func parseWebFetchParams(rawURL, rawOffset, rawLength any) (string, int, int, er
 func runWebFetch(ctx context.Context, urlValue string, offset, length int) (int, any) {
 	result, err := fetchWebChunk(ctx, urlValue, offset, length)
 	if err != nil {
-		status := http.StatusBadGateway
+		status := http.StatusFailedDependency
 		var fetchErr *fetchError
 		if errors.As(err, &fetchErr) && fetchErr.Status == http.StatusBadRequest {
 			status = http.StatusBadRequest
@@ -416,6 +416,7 @@ func (s *server) handleWebFetch(w http.ResponseWriter, r *http.Request) {
 		var fetchErr *fetchError
 		if errors.As(err, &fetchErr) {
 			status = fetchErr.Status
+			if status >= 500 { status = http.StatusFailedDependency }
 		}
 		httpx.JSON(w, status, map[string]any{
 			"success": false,
