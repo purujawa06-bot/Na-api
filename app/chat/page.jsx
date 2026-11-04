@@ -346,16 +346,37 @@ export default function ChatPage() {
         setIsLoggedIn(true);
     };
 
-    const sendMessageToApi = async (messageContent, replyToId = null) => {
+    const sendMessageToApi = async (messageContent) => {
         if (sending) return;
+        const activeReply = replyTarget;
         setSending(true);
+
+        const tempId = `temp-${uuidv4()}`;
+        const tempChat = {
+            id: tempId,
+            username,
+            message: messageContent,
+            device_id: deviceId,
+            created_at: new Date().toISOString(),
+            reply_to: activeReply ? activeReply.id : null,
+            reply_username: activeReply ? activeReply.username : null,
+            reply_message: activeReply ? activeReply.message : null,
+        };
+
+        // Optimistic update: tampilkan pesan langsung sebelum respons server.
+        setChats(prev => {
+            const next = [...prev, tempChat];
+            return next.length > 500 ? next.slice(-500) : next;
+        });
+        virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
+        setReplyTarget(null);
 
         try {
             const timestamp = Date.now().toString();
             const signature = CryptoJS.SHA256(deviceId + SECRET_KEY + timestamp).toString();
 
             const payload = { username, message: messageContent };
-            if (replyToId) payload.replyTo = replyToId;
+            if (activeReply) payload.replyTo = activeReply.id;
 
             const res = await fetch(apiUrl('/api/chat'), {
                 method: 'POST',
@@ -369,10 +390,12 @@ export default function ChatPage() {
             });
             
             if (res.ok) {
+                const serverChat = await res.json();
+                setChats(prev => prev.map(c => c.id === tempId ? serverChat : c));
                 fetchChats(chatsRef.current);
-                virtuosoRef.current?.scrollToIndex({ index: chats.length, align: 'end', behavior: 'smooth' });
-                setReplyTarget(null);
+                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
             } else {
+                setChats(prev => prev.filter(c => c.id !== tempId));
                 if (res.status === 429) {
                     alert('Slow down! 2 seconds cooldown.');
                 } else {
@@ -381,6 +404,7 @@ export default function ChatPage() {
             }
         } catch (e) {
             console.error("Send error", e);
+            setChats(prev => prev.filter(c => c.id !== tempId));
         } finally {
             setSending(false);
         }
@@ -391,7 +415,7 @@ export default function ChatPage() {
         if (!inputMsg.trim()) return;
         const msgToSend = inputMsg.trim();
         setInputMsg(''); 
-        await sendMessageToApi(msgToSend, replyTarget ? replyTarget.id : null);
+        await sendMessageToApi(msgToSend);
     };
 
     const handleReply = useCallback((chat) => {
@@ -410,7 +434,7 @@ export default function ChatPage() {
     const handleSendSticker = async (filename) => {
         setShowStickers(false);
         const msg = `[sticker:${STICKER_BASE}/${filename}]`;
-        await sendMessageToApi(msg, replyTarget ? replyTarget.id : null);
+        await sendMessageToApi(msg);
     };
 
     const handleLogout = () => {
