@@ -139,7 +139,7 @@ func findFirstUnderClass(root *html.Node, class string) *html.Node {
 
 // fetchSamehadakuHome fetches via cloudscraper (no proxy) and parses natively.
 func (c *client) fetchSamehadakuHome(ctx context.Context) shHomeResult {
-	body, err := samehadakuHTML(ctx, samehadakuHost+"/")
+	body, err := c.samehadakuHTML(ctx, samehadakuHost+"/")
 	if err != nil {
 		return shHomeResult{Error: err.Error()}
 	}
@@ -206,7 +206,7 @@ func (c *client) fetchSamehadakuDetail(ctx context.Context, slug string) shDetai
 	if slug == "" {
 		return shDetailResult{Error: "Parameter slug wajib diisi"}
 	}
-	body, err := samehadakuHTML(ctx, samehadakuHost+"/anime/"+slug+"/")
+	body, err := c.samehadakuHTML(ctx, samehadakuHost+"/anime/"+slug+"/")
 	if err != nil {
 		return shDetailResult{Error: err.Error()}
 	}
@@ -305,7 +305,7 @@ func (c *client) fetchSamehadakuEpisode(ctx context.Context, slug string) shEpis
 	if slug == "" {
 		return shEpisodeResult{Error: "Parameter slug wajib diisi"}
 	}
-	body, err := samehadakuHTML(ctx, samehadakuHost+"/"+slug+"/")
+	body, err := c.samehadakuHTML(ctx, samehadakuHost+"/"+slug+"/")
 	if err != nil {
 		return shEpisodeResult{Error: err.Error()}
 	}
@@ -361,4 +361,24 @@ func (c *client) fetchSamehadakuEpisode(ctx context.Context, slug string) shEpis
 
 func absSamehadakuPtr(u string) *string {
 	return absSamehadaku(u)
+}
+
+func (c *client) samehadakuHTML(ctx context.Context, rawURL string) (string, error) {
+	scraper, _ := newSamehadakuScraper()
+	if scraper != nil {
+		if response, err := scraper.Get(ctx, rawURL); err == nil {
+			if response.StatusCode >= 200 && response.StatusCode < 300 {
+				body := string(response.Body)
+				lower := strings.ToLower(body)
+				if !strings.Contains(lower, "just a moment") && !strings.Contains(body, "challenge-platform") {
+					return body, nil
+				}
+			}
+		}
+	}
+	if body, err := c.cfFetch(ctx, rawURL); err == nil {
+		return body, nil
+	} else {
+		return "", err
+	}
 }

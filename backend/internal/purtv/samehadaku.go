@@ -158,7 +158,7 @@ func slugOf(rawURL string) string {
 
 // searchListing fetches a samehadaku listing page via cloudscraper and parses it natively.
 func (c *client) searchListing(ctx context.Context, pageURL, _ string) shSearchResult {
-	body, err := samehadakuHTML(ctx, pageURL)
+	body, err := c.samehadakuHTML(ctx, pageURL)
 	if err != nil {
 		return shSearchResult{Results: []shCard{}, Error: err.Error()}
 	}

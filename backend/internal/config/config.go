@@ -44,7 +44,7 @@ func Load() *Config {
 	cfg := &Config{
 		Port:            8080,
 		BackendURL:      "http://localhost:8080",
-		CloudflareProxy: "https://vercel-api-beta-red.vercel.app/api/fetch",
+		CloudflareProxy: "https://na-api-vproxy.vercel.app/api/fetch",
 		RequestTimeout:  55 * time.Second,
 	}
 
