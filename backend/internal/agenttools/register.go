@@ -25,5 +25,4 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("POST /api/agent-tools/web-fetch", s.handleWebFetch)
 	mux.HandleFunc("GET /api/chess/maia", s.handleMaia)
 	mux.HandleFunc("GET /api/_diag/upstream", s.handleUpstreamDiag)
-	mux.HandleFunc("GET /api/_diag/force500", s.handleForce500)
 }
