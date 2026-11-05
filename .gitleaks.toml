@@ -5,5 +5,9 @@
 useDefault = true
 
 [allowlist]
-description = "Vheer encrypts uploads with a password constant embedded in their public frontend bundle; it is not a user secret."
-paths = ['''backend/internal/tools/vheer\.go''']
+description = "Vheer encrypts uploads with a password constant embedded in their public frontend bundle; it is not a user secret. Supabase anon key in wibutime.go is the public client key embedded in the app APK, not a server secret."
+paths = [
+  '''backend/internal/tools/vheer\.go''',
+  '''backend/internal/purtv/wibutime\.go''',
+]
+EOF
