@@ -14,13 +14,10 @@ const BottomNav = () => {
         { name: 'Chat', href: '/chat', icon: 'fa-comments' },
         { name: 'Blog', href: '/blog', icon: 'fa-newspaper' },
         { name: 'Scripts', href: '/userscripts', icon: 'fa-cubes' },
-        { name: 'PurTV', href: '/purtv', icon: 'fa-tv' },
     ];
 
-    // Normalisasi pathname (hilangkan trailing slash & base path) agar deteksi /chat dan /purtv konsisten
     const normalizedPath = (pathname || '').replace(/\/+$/, '') || '/';
-    // Sembunyikan navigasi bawah pada halaman chat dan purtv agar tampilan lebih luas/mirip aplikasi native
-    if (normalizedPath === '/chat' || normalizedPath.startsWith('/chat/') || normalizedPath.startsWith('/purtv')) return null;
+    if (normalizedPath === '/chat' || normalizedPath.startsWith('/chat/')) return null;
 
     return (
         <>
