@@ -1,8 +1,8 @@
 /**
  * @title PurTV Detail Episode
- * @summary Detail episode — gabungan donghua (anichin) + anime (samehadaku).
- * @description Mengambil detail halaman episode. URL dari anichin.com.co → donghua;
- *              URL dari v2.samehadaku.how → anime. Mencakup judul, seri induk,
+ * @summary Detail episode — data Wibutime (single source).
+ * @description Mengambil detail halaman episode. URL dari wibutime (Supabase) → donghua;
+ *              URL dari v2.wibutime.how → anime. Mencakup judul, seri induk,
  *              sinopsis, player default, daftar server video (halaman mirror
  *              /v/N/ di-resolve ke iframe utk donghua), navigasi episode, dan
  *              `purtv_pagenation`. Situs baru tidak menyediakan link download
@@ -12,7 +12,7 @@
  * @param {string} query.url - URL halaman episode (diambil dari hasil home/search/list).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://anichin.com.co/soul-land-episode-1/')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://wibutime.local/episode/<episode-id>/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

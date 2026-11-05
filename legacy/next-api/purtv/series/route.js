@@ -1,15 +1,15 @@
 /**
  * @title PurTV Series
- * @summary Halaman seri — gabungan donghua (anichin) + anime (samehadaku).
- * @description Mengambil halaman seri. URL `/series/<slug>/` (anichin.com.co) → donghua;
- *              URL `/anime/<slug>/` (v2.samehadaku.how) → anime. Menyertakan judul,
+ * @summary Halaman seri — data Wibutime (single source).
+ * @description Mengambil halaman seri. URL `/series/<slug>/` atau `/anime/<slug>/` (wibutime.local) → data Wibutime.
+ *               Menyertakan judul,
  *              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.
  * @method GET
  * @path /api/purtv/series
  * @param {string} query.url - URL halaman seri (bisa dari navigation.allEpisodes).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://anichin.com.co/series/soul-land/')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://wibutime.local/series/<slug>/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

@@ -1,6 +1,6 @@
 /**
  * @title PurTV Pencarian
- * @summary Cari donghua (anichin) + anime (samehadaku).
+ * @summary Cari data Wibutime + data Wibutime.
  * @description Mencari berdasarkan kata kunci, sama seperti kotak pencarian di
  *              purtv.vercel.app — hasil digabung dari dua sumber. Mendukung
  *              paginasi, tiap item diberi penanda `source`, dan respon menyertakan

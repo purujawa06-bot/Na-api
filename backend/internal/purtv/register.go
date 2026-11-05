@@ -16,5 +16,4 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("GET /api/purtv/search", c.handleSearch)
 	mux.HandleFunc("GET /api/purtv/genres", c.handleGenres)
 	mux.HandleFunc("GET /api/purtv/list", c.handleList)
-	mux.HandleFunc("GET /api/purtv/player", c.handlePlayer)
 }
