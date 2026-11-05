@@ -11,7 +11,7 @@
  * @param {string} query.q - Kata kunci pencarian lagu SoundCloud (wajib).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/play/soundcloud?q=dj%20ya%20odna')
+ * fetch('http://na-api.puruboy.duckdns.org/api/play/soundcloud?q=dj%20ya%20odna')
  *     .then(res => res.json())
  *     .then(console.log);
  */

@@ -18,7 +18,7 @@
  *        @choice 21:9 - Ultrawide 21:9
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/text2video', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/text2video', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ prompt: 'a fox in snowy forest cinematic', aspect: '16:9' })

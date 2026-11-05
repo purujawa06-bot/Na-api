@@ -21,12 +21,12 @@
  * @response json
  * @example
  * // GET: ambil pesan sejak tanggal tertentu
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat?mode=poll&lastDate=2024-01-01T00%3A00%3A00.000Z')
+ * fetch('http://na-api.puruboy.duckdns.org/api/chat?mode=poll&lastDate=2024-01-01T00%3A00%3A00.000Z')
  *     .then(res => res.json())
  *     .then(console.log);
  *
  * // POST: kirim pesan baru (wajib header security)
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/chat', {
  *     method: 'POST',
  *     headers: {
  *         'content-type': 'application/json',

@@ -14,7 +14,7 @@
  * @param {number} [query.page=1] - Halaman hasil.
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/list?genre=action')
+ * fetch('http://na-api.puruboy.duckdns.org/api/purtv/list?genre=action')
  *     .then(res => res.json())
  *     .then(console.log);
  */

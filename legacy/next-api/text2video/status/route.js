@@ -11,7 +11,7 @@
  * @param {string} query.cookie - Cookie identitas dari POST /api/text2video (wajib).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/text2video/status?job_id=JOB_ANDA&cookie=COOKIE_ANDA')
+ * fetch('http://na-api.puruboy.duckdns.org/api/text2video/status?job_id=JOB_ANDA&cookie=COOKIE_ANDA')
  *     .then(res => res.json())
  *     .then(console.log);
  */

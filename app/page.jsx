@@ -248,7 +248,7 @@ export default async function HomePage() {
                     <a href="http://na-api.puruboy.duckdns.org" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">purujawa06-bot.github.io/Na-api</span>
+                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">na-api.puruboy.duckdns.org</span>
                         </div>
                         <span className="text-[9px] bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-blue-500/20">Cloud</span>
                     </a>

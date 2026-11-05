@@ -14,7 +14,7 @@
  * @param {number} query.length - Jumlah karakter yang diminta (wajib, integer 1..20000).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/agent-tools/web-fetch?url=https%3A%2F%2Fexample.com&offset=0&length=5000')
+ * fetch('http://na-api.puruboy.duckdns.org/api/agent-tools/web-fetch?url=https%3A%2F%2Fexample.com&offset=0&length=5000')
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */

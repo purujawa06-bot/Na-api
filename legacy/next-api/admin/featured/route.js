@@ -12,12 +12,12 @@
  * @response json
  * @example
  * // GET: ambil konfigurasi featured saat ini
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/admin/featured')
+ * fetch('http://na-api.puruboy.duckdns.org/api/admin/featured')
  *     .then(res => res.json())
  *     .then(console.log);
  *
  * // POST: set konfigurasi featured (admin only)
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/admin/featured', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/admin/featured', {
  *     method: 'POST',
  *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
  *     body: JSON.stringify({ featured: ['chat', 'models'] })

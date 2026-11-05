@@ -16,12 +16,12 @@
  * @response json
  * @example
  * // GET: daftar blog dengan pagination
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/blogs?page=1&limit=5')
+ * fetch('http://na-api.puruboy.duckdns.org/api/blogs?page=1&limit=5')
  *     .then(res => res.json())
  *     .then(console.log);
  *
  * // POST: buat postingan baru (admin only)
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/blogs', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/blogs', {
  *     method: 'POST',
  *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
  *     body: JSON.stringify({ title: 'Judul Post', content: 'Isi konten', category: 'Berita' })

@@ -11,7 +11,7 @@
  * @param {string} query.url - URL track SoundCloud publik (wajib, https only).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')
+ * fetch('http://na-api.puruboy.duckdns.org/api/downloader/soundcloud?url=https%3A%2F%2Fsoundcloud.com%2Fdeanlofi%2Fwinter-night-lofi-hip-hop')
  *     .then(res => res.json())
  *     .then(console.log);
  */

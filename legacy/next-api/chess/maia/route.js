@@ -39,7 +39,7 @@ const pgnToUci = (pgn) => {
  * @error {string} [error.detail] - Detail error dari upstream Maiachess
  *
  * @example Request — Maia KDD 2200
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')
+ * fetch('http://na-api.puruboy.duckdns.org/api/chess/maia?pgn=1.%20e4%20e6%202.%20Nf3')
  *     .then(res => res.json())
  *     .then(console.log);
  * // { top_move: "d7d5", move_delay: 0.0, inference_time: null }

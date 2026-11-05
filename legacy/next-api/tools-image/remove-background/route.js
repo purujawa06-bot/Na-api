@@ -10,7 +10,7 @@
  * @param {string} body.file - URL publik gambar (http/https; png/jpg/webp) (wajib).
  * @response stream
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools-image/remove-background', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/tools-image/remove-background', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg' })

@@ -8,7 +8,7 @@
  * @param {string} [query.search] - Filter pencarian nama/deskripsi.
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/user-scripts?page=1&search=')
+ * fetch('http://na-api.puruboy.duckdns.org/api/user-scripts?page=1&search=')
  *     .then(res => res.json())
  *     .then(console.log);
  */

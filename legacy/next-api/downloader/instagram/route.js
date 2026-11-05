@@ -11,7 +11,7 @@
  * @param {string} query.url - URL Instagram publik (wajib, https only).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')
+ * fetch('http://na-api.puruboy.duckdns.org/api/downloader/instagram?url=https%3A%2F%2Fwww.instagram.com%2Freel%2FDVDX96NCdXc%2F')
  *     .then(res => res.json())
  *     .then(console.log);
  */

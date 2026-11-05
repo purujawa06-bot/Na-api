@@ -19,14 +19,14 @@
  *        @choice false - Tidak (JSON Default)
  * @response stream
  * @example Chat baru (non-streaming)
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/instant', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/deepseek/instant', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ userID: 'TOKEN_ANDA', prompt: 'Apa itu Next.js?' })
  * }).then(res => res.json()).then(console.log);
  *
  * @example Lanjutkan percakapan + streaming SSE
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/instant', {
+ * fetch('http://na-api.puruboy.duckdns.org/api/deepseek/instant', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID_DARI_RESPONS', parentID: 2, prompt: 'Lanjutkan', stream: true })

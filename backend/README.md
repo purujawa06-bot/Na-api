@@ -51,7 +51,7 @@ Bersama frontend, backend membaca `config.json` di root repo:
 
 ```json
 {
-  "backendUrl": "https://na-api-nue-api-e7bfd3f4.koyeb.app",
+  "backendUrl": "http://na-api.puruboy.duckdns.org",
   "port": 8081,
   "requestTimeoutMs": 55000
 }
