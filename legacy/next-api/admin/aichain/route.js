@@ -12,12 +12,12 @@
  * @response json
  * @example
  * // GET: ambil urutan fallback saat ini
- * fetch('http://na-api.puruboy.duckdns.org/api/admin/aichain')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/admin/aichain')
  *     .then(res => res.json())
  *     .then(console.log);
  *
  * // POST: set urutan fallback (admin only)
- * fetch('http://na-api.puruboy.duckdns.org/api/admin/aichain', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/admin/aichain', {
  *     method: 'POST',
  *     headers: { 'content-type': 'application/json', 'Authorization': '<PURUBOY_ADMIN_KEY>' },
  *     body: JSON.stringify({ chain: ['gemini-pro', 'deepseek-chat'] })

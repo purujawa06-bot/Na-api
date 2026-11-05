@@ -25,7 +25,7 @@
  *        @choice false - Tidak (JSON)
  * @response stream
  * @example Tanya isi gambar
- * fetch('http://na-api.puruboy.duckdns.org/api/deepseek/vision', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/vision', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
@@ -38,7 +38,7 @@
  * }).then(res => res.json()).then(console.log);
  *
  * @example Lanjutkan tanya-jawab tentang gambar yang sama
- * fetch('http://na-api.puruboy.duckdns.org/api/deepseek/vision', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/deepseek/vision', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ userID: 'TOKEN_ANDA', chatID: 'CHAT_ID', parentID: 4, prompt: 'Jelaskan lebih detail bagian kirinya' })

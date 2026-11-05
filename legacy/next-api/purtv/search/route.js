@@ -11,7 +11,7 @@
  * @param {number} [query.page=1] - Halaman hasil pencarian.
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/purtv/search?q=soul+land')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/search?q=soul+land')
  *     .then(res => res.json())
  *     .then(console.log);
  */

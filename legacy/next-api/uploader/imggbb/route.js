@@ -11,7 +11,7 @@
  * @example
  * const fd = new FormData();
  * fd.append('file', fileInput.files[0]);
- * fetch('http://na-api.puruboy.duckdns.org/api/uploader/imggbb', { method: 'POST', body: fd })
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/uploader/imggbb', { method: 'POST', body: fd })
  *     .then(res => res.json())
  *     .then(console.log);
  */

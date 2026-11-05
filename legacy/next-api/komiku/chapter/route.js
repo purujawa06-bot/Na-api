@@ -10,7 +10,7 @@
  * @param {string} query.url - Permalink chapter (wajib, tanpa domain).
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/chapter?url=my-wife-waited-for-me-in-the-wheat-field-chapter-27')
  *     .then(res => res.json())
  *     .then(console.log);
  */

@@ -12,7 +12,7 @@
  * @param {string} [body.to_format] - Format output: jpg atau svg (default: jpg).
  * @response stream
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/tools-image/html-to-image', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools-image/html-to-image', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ file: 'https://example.com', view_width: 1920, to_format: 'jpg' })

@@ -10,7 +10,7 @@
  * @param {string} query.slug - Slug permalink komik (wajib, mis. "one-piece").
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/detail?slug=my-wife-waited-for-me-in-the-wheat-field')
  *     .then(res => res.json())
  *     .then(console.log);
  */

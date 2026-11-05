@@ -13,7 +13,7 @@ export const metadata = {
     openGraph: {
         title: 'PuruBoy API - REST API Gratis Indonesia',
         description: 'Platform REST API gratis untuk developer Indonesia. AI, Downloader, Anime, Tools — semua gratis!',
-        url: 'http://na-api.puruboy.duckdns.org',
+        url: 'https://na-api-nue-api-e7bfd3f4.koyeb.app',
         siteName: 'PuruBoy API',
         type: 'website',
     },
@@ -238,19 +238,12 @@ export default async function HomePage() {
                     Official Domains
                 </h3>
                 <div className="space-y-2">
-                    <a href="https://www.puruboy.kozow.com" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">www.puruboy.kozow.com</span>
-                        </div>
-                        <span className="text-[9px] bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-green-500/20">Stabil</span>
-                    </a>
-                    <a href="http://na-api.puruboy.duckdns.org" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
+                    <a href="https://na-api-nue-api-e7bfd3f4.koyeb.app" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between bg-input/50 hover:bg-input p-3 rounded-xl border border-default transition-all group">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">na-api.puruboy.duckdns.org</span>
+                            <span className="text-xs font-mono text-gray-300 group-hover:text-accent transition-colors">na-api-nue-api-e7bfd3f4.koyeb.app</span>
                         </div>
-                        <span className="text-[9px] bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-blue-500/20">Cloud</span>
+                        <span className="text-[9px] bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider border border-blue-500/20">Backend</span>
                     </a>
                 </div>
             </div>

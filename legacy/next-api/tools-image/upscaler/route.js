@@ -11,7 +11,7 @@
  * @param {number} [body.scale] - Faktor skala (2, 3, atau 4). Default 2.
  * @response stream
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/tools-image/upscaler', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools-image/upscaler', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({ file: 'https://raw.githubusercontent.com/purujawa06-bot/Na-media/main/example.jpg', scale: 2 })

@@ -10,7 +10,7 @@
  * @path /api/models
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/models')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/models')
  *     .then(res => res.json())
  *     .then(console.log);
  */

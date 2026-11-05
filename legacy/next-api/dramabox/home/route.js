@@ -22,7 +22,7 @@
  *        @choice zh - Chinese
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/dramabox/home')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/home')
  *     .then(res => res.json())
  *     .then(console.log);
  */

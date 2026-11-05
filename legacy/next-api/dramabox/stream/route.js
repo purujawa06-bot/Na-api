@@ -24,7 +24,7 @@
  *        @choice zh - Chinese
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/dramabox/stream?id=41000105764&chapter=578668219')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/dramabox/stream?id=41000105764&chapter=578668219')
  *     .then(res => res.json())
  *     .then(console.log);
  */

@@ -9,7 +9,7 @@
  * @param {string} query.url - URL halaman seri (bisa dari navigation.allEpisodes).
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/purtv/series?url=https://wibutime.local/series/ancient-war-soul/')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://wibutime.local/series/ancient-war-soul/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

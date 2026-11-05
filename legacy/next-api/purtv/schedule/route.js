@@ -11,7 +11,7 @@
  * @path /api/purtv/schedule
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/purtv/schedule')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/schedule')
  *     .then(res => res.json())
  *     .then(console.log);
  */

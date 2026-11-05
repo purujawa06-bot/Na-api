@@ -1,5 +1,5 @@
 {
-  "backendUrl": "http://na-api.puruboy.duckdns.org",
+  "backendUrl": "https://na-api-nue-api-e7bfd3f4.koyeb.app",
   "port": 8081,
   "requestTimeoutMs": 55000
 }

@@ -10,7 +10,7 @@
  *              Cocok untuk tugas-tugas sederhana (pencarian, fetch data, cuaca, translate, dll).
  *              Bukan untuk tugas coding kompleks.
  *              Bisa dipakai langsung dari SDK OpenAI dengan baseURL custom:
- *              OPENAI_BASE_URL=http://na-api.puruboy.duckdns.org/api
+ *              OPENAI_BASE_URL=https://na-api-nue-api-e7bfd3f4.koyeb.app/api
  * @method POST
  * @path /api/chat/completions
  * @response stream
@@ -24,7 +24,7 @@
  *                               Diemulasi via MorphXML protocol (XML element per function call).
  *                               Cocok untuk tugas sederhana (pencarian, fetch, cuaca, translate, dll).
  * @example Kembalikan jawaban langsung (non-streaming, model auto)
- * fetch('http://na-api.puruboy.duckdns.org/api/chat/completions', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
@@ -34,7 +34,7 @@
  * }).then(res => res.json()).then(console.log);
  *
  * @example Streaming SSE
- * fetch('http://na-api.puruboy.duckdns.org/api/chat/completions', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({
@@ -58,7 +58,7 @@
  * });
  *
  * @example Function calling (tools) — balasan berisi message.tool_calls
- * fetch('http://na-api.puruboy.duckdns.org/api/chat/completions', {
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/chat/completions', {
  *     method: 'POST',
  *     headers: { 'Content-Type': 'application/json' },
  *     body: JSON.stringify({

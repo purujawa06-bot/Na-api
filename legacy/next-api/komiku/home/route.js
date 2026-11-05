@@ -9,7 +9,7 @@
  * @path /api/komiku/home
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/komiku/home')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/home')
  *     .then(res => res.json())
  *     .then(console.log);
  */

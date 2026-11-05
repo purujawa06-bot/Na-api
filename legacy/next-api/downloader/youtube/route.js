@@ -23,7 +23,7 @@
  *        @choice 1080 - 1080p (Full HD)
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/youtube?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ')
  *     .then(res => res.json())
  *     .then(console.log);
  */

@@ -17,7 +17,7 @@
  * @param {string} query.skill - Nama skill, mis. web-design-guidelines (wajib).
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/agent-tools/install-skills?source=vercel-labs%2Fagent-skills&skill=web-design-guidelines')
  *     .then(res => res.json())
  *     .then(data => console.log(data.markdown));
  */

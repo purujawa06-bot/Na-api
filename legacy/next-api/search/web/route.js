@@ -13,7 +13,7 @@
  * @param {number} [query.limit] - Max total results (default 10, max 20, alias: result, count).
  * @response json
  * @example
- * fetch('http://na-api.puruboy.duckdns.org/api/search/web?query=nodejs+tutorial&limit=10')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/search/web?query=nodejs+tutorial&limit=10')
  *     .then(res => res.json())
  *     .then(data => console.log(data));
  */
