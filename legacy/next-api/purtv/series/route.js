@@ -1,7 +1,7 @@
 /**
  * @title PurTV Series
  * @summary Halaman seri — data Wibutime (single source).
- * @description Mengambil halaman seri. URL `/series/<slug>/` atau `/anime/<slug>/` (wibutime.local) → data Wibutime.
+ * @description Mengambil halaman seri. URL `/series/ancient-war-soul/` (wibutime.local) → data Wibutime.
  *               Menyertakan judul,
  *              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.
  * @method GET
@@ -9,7 +9,7 @@
  * @param {string} query.url - URL halaman seri (bisa dari navigation.allEpisodes).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://wibutime.local/series/<slug>/')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://wibutime.local/series/ancient-war-soul/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

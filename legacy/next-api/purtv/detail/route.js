@@ -12,7 +12,7 @@
  * @param {string} query.url - URL halaman episode (diambil dari hasil home/search/list).
  * @response json
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://wibutime.local/episode/<episode-id>/')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://wibutime.local/episode/tensei-shitara-ken-deshita-ii-ep-1/')
  *     .then(res => res.json())
  *     .then(console.log);
  */

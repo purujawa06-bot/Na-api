@@ -1291,7 +1291,7 @@
       "method": "GET",
       "path": "/api/purtv/detail",
       "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://wibutime.local/episode/<episode-id>/')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/detail?url=https://wibutime.local/episode/tensei-shitara-ken-deshita-ii-ep-1/')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
@@ -1325,7 +1325,7 @@
     {
       "title": "PurTV List Genre",
       "summary": "Listing per genre — data Wibutime (single source).",
-      "description": "Menampilkan daftar donghua dan anime yang difilter berdasarkan\n              genre dan halaman, mengikuti pola PurTV: wibutime\n              (`/series/?genre[]=<slug>&page=N`) + wibutime\n              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda\n              `source` ('wibutime'/'wibutime'). Halaman di luar daftar\n              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan\n              `purtv_pagenation`.",
+      "description": "Menampilkan daftar donghua dan anime yang difilter berdasarkan\n              genre dan halaman, mengikuti pola PurTV: wibutime\n              (`/series/?genre[]=action&page=1`) + wibutime\n              (`/genre/action/?order=latest`). Setiap item diberi penanda\n              `source` ('wibutime'/'wibutime'). Halaman di luar daftar\n              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan\n              `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/list",
       "responseType": "json",
@@ -1371,11 +1371,11 @@
     {
       "title": "PurTV Series",
       "summary": "Halaman seri — data Wibutime (single source).",
-      "description": "Mengambil halaman seri. URL `/series/<slug>/` atau `/anime/<slug>/` (wibutime.local) → data Wibutime.\n               Menyertakan judul,\n              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.",
+      "description": "Mengambil halaman seri. URL `/series/ancient-war-soul/` (wibutime.local) → data Wibutime.\n               Menyertakan judul,\n              genre, sinopsis, info produksi, daftar episode, dan `purtv_pagenation`.",
       "method": "GET",
       "path": "/api/purtv/series",
       "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://wibutime.local/series/<slug>/')\n     .then(res => res.json())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purtv/series?url=https://wibutime.local/series/ancient-war-soul/')\n     .then(res => res.json())\n     .then(console.log);",
       "params": [
         {
           "name": "url",

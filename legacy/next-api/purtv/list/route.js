@@ -3,8 +3,8 @@
  * @summary Listing per genre — data Wibutime (single source).
  * @description Menampilkan daftar donghua dan anime yang difilter berdasarkan
  *              genre dan halaman, mengikuti pola PurTV: wibutime
- *              (`/series/?genre[]=<slug>&page=N`) + wibutime
- *              (`/genre/<slug>/?order=latest`). Setiap item diberi penanda
+ *              (`/series/?genre[]=action&page=1`) + wibutime
+ *              (`/genre/action/?order=latest`). Setiap item diberi penanda
  *              `source` ('wibutime'/'wibutime'). Halaman di luar daftar
  *              mengembalikan hasil kosong (bukan error). Setiap respon menyertakan
  *              `purtv_pagenation`.
