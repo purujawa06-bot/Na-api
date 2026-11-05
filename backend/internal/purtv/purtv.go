@@ -56,7 +56,7 @@ func (c *client) requestContext(parent context.Context) (context.Context, contex
 func (c *client) handleHome(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := c.requestContext(r.Context())
 	defer cancel()
-	payload, err := c.home(ctx)
+	payload, err := c.homeWibu(ctx)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -118,7 +118,7 @@ func (c *client) handleSeries(w http.ResponseWriter, r *http.Request) {
 func (c *client) handleSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := c.requestContext(r.Context())
 	defer cancel()
-	payload, err := c.schedule(ctx)
+	payload, err := c.scheduleWibu(ctx)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -136,7 +136,7 @@ func (c *client) handleSearch(w http.ResponseWriter, r *http.Request) {
 	page := httpx.QueryInt(r, "page", 1, 1, 1_000_000)
 	ctx, cancel := c.requestContext(r.Context())
 	defer cancel()
-	payload, err := c.search(ctx, query, page)
+	payload, err := c.searchWibu(ctx, query, page)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -148,7 +148,7 @@ func (c *client) handleSearch(w http.ResponseWriter, r *http.Request) {
 func (c *client) handleGenres(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := c.requestContext(r.Context())
 	defer cancel()
-	payload, err := c.genres(ctx)
+	payload, err := c.genresWibu(ctx)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -162,7 +162,7 @@ func (c *client) handleList(w http.ResponseWriter, r *http.Request) {
 	page := httpx.QueryInt(r, "page", 1, 1, 1_000_000)
 	ctx, cancel := c.requestContext(r.Context())
 	defer cancel()
-	payload, err := c.list(ctx, genre, page)
+	payload, err := c.listWibu(ctx, genre, page)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -191,23 +191,14 @@ func (c *client) handlePlayer(w http.ResponseWriter, r *http.Request) {
 	httpx.OK(w, payload)
 }
 
-// detail routes the request to the source matching the URL host.
+// detail routes all requests to the wibutime source.
 func (c *client) detail(ctx context.Context, rawURL string) (any, error) {
-	if isAnimeURL(rawURL) {
-		if animeIsSeriesURL(rawURL) {
-			return nil, errors.New("URL seri anime harus dipanggil lewat /api/purtv/series")
-		}
-		return c.animeDetail(ctx, animeSlug(rawURL))
-	}
-	return c.donghuaDetail(ctx, rawURL)
+	return c.detailWibu(ctx, rawURL)
 }
 
-// series routes the request to the source matching the URL host.
+// series routes all requests to the wibutime source.
 func (c *client) series(ctx context.Context, rawURL string) (any, error) {
-	if isAnimeURL(rawURL) {
-		return c.animeSeries(ctx, animeSlug(rawURL))
-	}
-	return c.donghuaSeries(ctx, rawURL)
+	return c.seriesWibu(ctx, rawURL)
 }
 
 // writeUpstreamError reports a scraper failure as a JSON envelope. It uses
