@@ -222,7 +222,7 @@ func (h *handler) downloadYoutube(ctx context.Context, rawURL, mediaType, qualit
 // parseYoutube asks vidssave for the metadata and quality list.
 func (h *handler) parseYoutube(ctx context.Context, rawURL string) (*vidssaveMedia, error) {
 	data, err := h.postVidssaveForm(ctx, "media/parse", url.Values{
-		"origin": {"source"},
+		"origin": {"cache"},
 		"link":   {rawURL},
 	})
 	if err != nil {
