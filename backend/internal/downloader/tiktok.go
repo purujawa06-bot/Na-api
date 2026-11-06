@@ -114,7 +114,14 @@ func (h *handler) tiktokPOST(w http.ResponseWriter, r *http.Request) {
 
 func tiktokHostAllowed(host string) bool { return hostIsDomainOrSubdomain(host, "tiktok.com") }
 
-func (h *handler) produceTiktok(ctx context.Context, rawURL string) (int, any) {
+func (h *handler) produceTiktok(ctx context.Context, rawURL string) (status int, payload any) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			status = http.StatusInternalServerError
+			payload = map[string]any{"success": false, "error": fmt.Sprintf("panic: %v", recovered)}
+		}
+	}()
+
 	if invalid := validateDownloadURL(rawURL, tiktokHostAllowed, "URL harus dari domain tiktok.com"); invalid != nil {
 		return http.StatusBadRequest, map[string]any{"error": invalid.message}
 	}
