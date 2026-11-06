@@ -108,7 +108,24 @@ func (h *handler) tiktokGET(w http.ResponseWriter, r *http.Request) {
 			httpx.JSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "step": "token"})
 			return
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"status": "token_ok", "token": token})
+		rawURL := r.URL.Query().Get("url")
+		if rawURL == "" {
+			rawURL = "https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534"
+		}
+		extracted, err := fetchTikdownExtract(r.Context(), client, rawURL, token)
+		if err != nil {
+			httpx.JSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "step": "extract"})
+			return
+		}
+		if !extracted.OK {
+			httpx.JSON(w, http.StatusBadGateway, map[string]any{"error": extracted.Error, "step": "extract_not_ok", "cooldown": extracted.CooldownSeconds})
+			return
+		}
+		var firstV5 string
+		if len(extracted.Result.MediaItems) > 0 {
+			firstV5 = extracted.Result.MediaItems[0].V5URL
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"status": "extract_ok", "cooldown": extracted.CooldownSeconds, "media_count": len(extracted.Result.MediaItems), "first_v5": firstV5})
 		return
 	}
 	h.cachedGET(w, r, func(ctx context.Context) (int, any) {
