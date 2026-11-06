@@ -12,6 +12,8 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --no-deprecation
 jobs:
   audit:
     name: npm audit (high+)
