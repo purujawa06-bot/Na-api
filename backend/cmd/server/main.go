@@ -17,7 +17,6 @@ import (
 	"github.com/purujawa06-bot/na-api/backend/internal/agenttools"
 	"github.com/purujawa06-bot/na-api/backend/internal/ai"
 	"github.com/purujawa06-bot/na-api/backend/internal/app"
-	"github.com/purujawa06-bot/na-api/backend/internal/bill"
 	"github.com/purujawa06-bot/na-api/backend/internal/cache"
 	"github.com/purujawa06-bot/na-api/backend/internal/config"
 	"github.com/purujawa06-bot/na-api/backend/internal/content"
@@ -52,7 +51,6 @@ func main() {
 	mux := http.NewServeMux()
 	ai.Register(mux, deps)
 	agenttools.Register(mux, deps)
-	bill.Register(mux, deps)
 	content.Register(mux, deps)
 	deepseek.Register(mux, deps)
 	downloader.Register(mux, deps)

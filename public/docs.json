@@ -541,54 +541,6 @@
       ]
     }
   ],
-  "bill": [
-    {
-      "title": "IESCO Bill Checker",
-      "summary": "Ambil detail/URL tagihan listrik IESCO via nomor referensi atau customer ID.",
-      "description": "Endpoint untuk mengambil tagihan listrik IESCO dari portal PITC.\n              Masukkan nomor referensi 14 digit atau customer ID 10 digit.\n              Gunakan fetch=true agar server mencoba mengambil halaman bill upstream\n              dan mengekstrak informasi dasar (judul, teks, amount/due date best-effort).\n              Upstream: bill.pitc.com.pk.",
-      "method": "GET",
-      "path": "/api/bill/iesco",
-      "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/bill/iesco?refno=19146131061801')\n     .then(res => res.json())\n     .then(console.log);",
-      "params": [
-        {
-          "name": "number",
-          "in": "query",
-          "type": "string",
-          "description": "Nomor referensi (14 digit) atau customer ID (10 digit).",
-          "required": false
-        },
-        {
-          "name": "refno",
-          "in": "query",
-          "type": "string",
-          "description": "Nomor referensi 14 digit (alias number).",
-          "required": false
-        },
-        {
-          "name": "customer_id",
-          "in": "query",
-          "type": "string",
-          "description": "Customer ID 10 digit.",
-          "required": false
-        },
-        {
-          "name": "type",
-          "in": "query",
-          "type": "string",
-          "description": "Jenis nomor: reference (default) atau customer.",
-          "required": false
-        },
-        {
-          "name": "fetch",
-          "in": "query",
-          "type": "string",
-          "description": "\"1\" atau \"true\" untuk fetch upstream dan ekstrak data.",
-          "required": false
-        }
-      ]
-    }
-  ],
   "downloader": [
     {
       "title": "Instagram Downloader",
