@@ -103,6 +103,19 @@ func (h *handler) youtubeGET(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.URL.Query().Get("url")
 	mediaType := r.URL.Query().Get("type")
 	quality := r.URL.Query().Get("quality")
+	if r.URL.Query().Get("_diag") == "1" {
+		if invalid := validateDownloadURL(rawURL, youtubeHostAllowed, "URL harus dari domain youtube.com atau youtu.be"); invalid != nil {
+			httpx.JSON(w, http.StatusBadRequest, map[string]any{"error": invalid.message})
+			return
+		}
+		parsed, err := h.parseYoutube(r.Context(), rawURL)
+		if err != nil {
+			httpx.JSON(w, http.StatusBadGateway, map[string]any{"success": false, "step": "parse", "error": err.Error()})
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"success": true, "step": "parse_ok", "title": parsed.Title, "resources": len(parsed.Resources)})
+		return
+	}
 	h.cachedGET(w, r, func(ctx context.Context) (int, any) {
 		return h.produceYoutube(ctx, rawURL, mediaType, quality)
 	})
