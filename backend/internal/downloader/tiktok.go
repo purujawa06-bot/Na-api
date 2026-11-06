@@ -2,52 +2,78 @@ package downloader
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
-	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
 )
 
 const (
-	ssstikBase = "https://ssstik.io"
-	ssstikUA   = webclient.UserAgentChrome
+	tikdownBase = "https://tikdown.com"
 )
 
 var (
-	ssstikTokenPattern    = regexp.MustCompile(`tt\s*=\s*'([^']+)'`)
-	ssstikIPPattern       = regexp.MustCompile(`(?m)^ip=(.*)$`)
-	ssstikLocationPattern = regexp.MustCompile(`(?m)^loc=(.*)$`)
-	ssstikVideoPattern    = regexp.MustCompile(`href="(https://tikcdn\.io/ssstik/\d+[^"]*)"\s*class="[^"]*without_watermark[^"]*"`)
-	ssstikMP3Pattern      = regexp.MustCompile(`href="(https://tikcdn\.io/ssstik/m/[^"]+)"`)
-	ssstikAuthorPattern   = regexp.MustCompile(`<h2>([^<]+)</h2>`)
-	ssstikAvatarPattern   = regexp.MustCompile(`<img class="result_author" src="([^"]+)"`)
-	ssstikCaptionPattern  = regexp.MustCompile(`(?s)<p class="maintext">(.*?)</p>`)
-	ssstikErrorPattern    = regexp.MustCompile(`(?is)<p[^>]*class="[^"]*(?:err|alert|error)[^"]*"[^>]*>(.*?)</p>`)
-	ssstikExpiresPattern  = regexp.MustCompile(`[?&]e=(\d+)`)
-	ssstikEscaper         = strings.NewReplacer(
-		"&amp;", "&",
-		"&lt;", "<",
-		"&gt;", ">",
-		"&quot;", `"`,
-		"&#039;", "'",
-		"&#39;", "'",
-	)
+	tikdownCsrfPattern = regexp.MustCompile(`name="csrfToken" value="([^"]+)"`)
 )
 
-// ssstikTrace is the subset of /cdn-cgi/trace used in the debug parameter.
-type ssstikTrace struct {
-	ip  string
-	loc string
+// tikdown shapes returned by /api/extract.php.
+type tikdownUser struct {
+	Name     string `json:"name"`
+	Username string `json:"username"`
+	Avatar   string `json:"avatar"`
 }
 
-// tiktokResult mirrors the fields parsed from the ssstik result fragment.
+type tikdownMediaItem struct {
+	Index     int    `json:"index"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Quality   string `json:"quality"`
+	Extension string `json:"extension"`
+	FileSize  string `json:"fileSize"`
+	Resolution string `json:"resolution"`
+	Duration  string `json:"duration"`
+	V5URL     string `json:"v5Url"`
+	PreviewURL string `json:"previewUrl"`
+	Thumbnail string `json:"thumbnail"`
+}
+
+type tikdownResult struct {
+	Service     string             `json:"service"`
+	ID          string             `json:"id"`
+	Title       string             `json:"title"`
+	Description string             `json:"description"`
+	Thumbnail   string             `json:"thumbnail"`
+	PreviewURL  string             `json:"previewUrl"`
+	User        tikdownUser        `json:"user"`
+	MediaItems  []tikdownMediaItem `json:"mediaItems"`
+}
+
+type tikdownExtractResponse struct {
+	OK               bool         `json:"ok"`
+	RequestID        string       `json:"requestId"`
+	Cache            string       `json:"cache"`
+	Result           tikdownResult `json:"result"`
+	CooldownSeconds  int          `json:"cooldownSeconds"`
+	Error            string       `json:"error"`
+}
+
+type tikdownTaskResponse struct {
+	Status   string `json:"status"`
+	FileName string `json:"fileName"`
+	FileURL  string `json:"fileUrl"`
+	Error    string `json:"error"`
+	Percent  string `json:"percent"`
+}
+
+// tiktokResult mirrors the normalized fields returned by the downstream provider.
 type tiktokResult struct {
 	Author       *string `json:"author"`
 	Avatar       *string `json:"avatar"`
@@ -86,7 +112,6 @@ func (h *handler) tiktokPOST(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, status, payload)
 }
 
-// tiktokHostAllowed accepts tiktok.com and its subdomains.
 func tiktokHostAllowed(host string) bool { return hostIsDomainOrSubdomain(host, "tiktok.com") }
 
 func (h *handler) produceTiktok(ctx context.Context, rawURL string) (int, any) {
@@ -99,177 +124,233 @@ func (h *handler) produceTiktok(ctx context.Context, rawURL string) (int, any) {
 		return http.StatusBadGateway, map[string]any{"success": false, "error": err.Error()}
 	}
 
-	return http.StatusOK, tiktokResponse{
-		Success:      true,
-		Source:       "ssstik.io",
-		Author:       result.Author,
-		Avatar:       result.Avatar,
-		Caption:      result.Caption,
-		VideoURL:     result.VideoURL,
-		VideoExpires: result.VideoExpires,
-		MP3URL:       result.MP3URL,
+	response := tiktokResponse{
+		Success: true,
+		Source:  "tikdown.com",
 	}
+	if result.Author != nil {
+		response.Author = result.Author
+	}
+	if result.Avatar != nil {
+		response.Avatar = result.Avatar
+	}
+	if result.Caption != nil {
+		response.Caption = result.Caption
+	}
+	if result.VideoURL != nil {
+		response.VideoURL = result.VideoURL
+	}
+	if result.VideoExpires != nil {
+		response.VideoExpires = result.VideoExpires
+	}
+	if result.MP3URL != nil {
+		response.MP3URL = result.MP3URL
+	}
+	return http.StatusOK, response
 }
 
-// downloadTiktok runs the ssstik.io htmx flow: page token + trace in parallel,
-// then the form POST whose HTML fragment is parsed for the download links.
+// downloadTiktok runs the tikdown.com flow: session page + CSRF token,
+// extract JSON, then poll the worker v5Url links until they become direct files.
 func downloadTiktok(ctx context.Context, tiktokURL string) (*tiktokResult, error) {
-	type tokenResult struct {
-		token string
-		err   error
-	}
-	type traceResult struct {
-		trace ssstikTrace
-		err   error
-	}
-
-	tokenCh := make(chan tokenResult, 1)
-	traceCh := make(chan traceResult, 1)
-
-	go func() {
-		token, err := fetchSsstikToken(ctx)
-		tokenCh <- tokenResult{token: token, err: err}
-	}()
-	go func() {
-		trace, err := fetchSsstikTrace(ctx)
-		traceCh <- traceResult{trace: trace, err: err}
-	}()
-
-	tokenOut := <-tokenCh
-	traceOut := <-traceCh
-	if tokenOut.err != nil {
-		return nil, tokenOut.err
-	}
-	if traceOut.err != nil {
-		return nil, traceOut.err
-	}
-
-	document, err := postSsstikDownload(ctx, tiktokURL, tokenOut.token, traceOut.trace)
+	client, err := newTikdownClient()
 	if err != nil {
 		return nil, err
 	}
 
-	result := parseSsstikResult(document)
-	if result.VideoURL != nil {
-		return result, nil
-	}
-
-	if match := ssstikErrorPattern.FindStringSubmatch(document); match != nil {
-		return nil, fmt.Errorf("Video tidak bisa diunduh: %s", ssstikEscaper.Replace(strings.TrimSpace(match[1])))
-	}
-	return nil, errors.New("Video tidak ditemukan atau tidak bisa diunduh")
-}
-
-// fetchSsstikTrace reads the requester IP and country from Cloudflare's trace.
-func fetchSsstikTrace(ctx context.Context) (ssstikTrace, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	body, err := webclient.GetText(reqCtx, ssstikBase+"/cdn-cgi/trace", map[string]string{"User-Agent": ssstikUA})
+	token, err := fetchTikdownToken(ctx, client)
 	if err != nil {
-		return ssstikTrace{}, err
+		return nil, err
 	}
 
-	trace := ssstikTrace{}
-	if match := ssstikIPPattern.FindStringSubmatch(body); match != nil {
-		trace.ip = strings.TrimSpace(match[1])
-	}
-	if match := ssstikLocationPattern.FindStringSubmatch(body); match != nil {
-		trace.loc = strings.TrimSpace(match[1])
-	}
-	return trace, nil
-}
-
-// fetchSsstikToken scrapes the `tt` form token from the Indonesian page.
-func fetchSsstikToken(ctx context.Context) (string, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	headers := map[string]string{
-		"User-Agent":      ssstikUA,
-		"Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
-	}
-	resp, err := webclient.Get(reqCtx, ssstikBase+"/id", headers)
+	extracted, err := fetchTikdownExtract(ctx, client, tiktokURL, token)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	body, err := webclient.ReadBody(resp)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("Gagal ambil halaman ssstik.io (HTTP %d)", resp.StatusCode)
-	}
-
-	match := ssstikTokenPattern.FindStringSubmatch(body)
-	if match == nil {
-		return "", errors.New("Token tt tidak ditemukan di halaman ssstik.io")
-	}
-	return match[1], nil
-}
-
-// postSsstikDownload submits the htmx form and returns the result fragment.
-func postSsstikDownload(ctx context.Context, tiktokURL, token string, trace ssstikTrace) (string, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-
-	loc := trace.loc
-	if loc == "" {
-		loc = "US"
-	}
-	form := url.Values{
-		"id":     {tiktokURL},
-		"locale": {"id"},
-		"tt":     {token},
-		"debug":  {"ab=1&loc=" + loc + "&ip=" + trace.ip},
-	}
-	headers := map[string]string{
-		"User-Agent":     ssstikUA,
-		"Accept":         "*/*",
-		"Referer":        ssstikBase + "/id",
-		"hx-request":     "true",
-		"hx-trigger":     "_gcaptcha_pt",
-		"hx-target":      "target",
-		"hx-current-url": ssstikBase + "/id",
+	if !extracted.OK {
+		if extracted.Error != "" {
+			return nil, fmt.Errorf("tikdown.com gagal memproses: %s", extracted.Error)
+		}
+		return nil, errors.New("tikdown.com gagal memproses: respons tidak ok")
 	}
 
-	resp, err := webclient.PostForm(reqCtx, ssstikBase+"/abc?url=dl", form, headers)
-	if err != nil {
-		return "", err
-	}
-	body, err := webclient.ReadBody(resp)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("ssstik.io gagal memproses (HTTP %d)", resp.StatusCode)
-	}
-	return body, nil
-}
-
-// parseSsstikResult extracts the download links and metadata from the fragment.
-func parseSsstikResult(document string) *tiktokResult {
 	result := &tiktokResult{}
+	if extracted.Result.User.Name != "" {
+		author := extracted.Result.User.Name
+		result.Author = &author
+	}
+	if extracted.Result.User.Username != "" && result.Author == nil {
+		author := extracted.Result.User.Username
+		result.Author = &author
+	}
+	if extracted.Result.User.Avatar != "" {
+		avatar := extracted.Result.User.Avatar
+		result.Avatar = &avatar
+	}
+	if extracted.Result.Description != "" {
+		caption := extracted.Result.Description
+		result.Caption = &caption
+	}
 
-	if match := ssstikVideoPattern.FindStringSubmatch(document); match != nil {
-		result.VideoURL = pointerString(match[1])
-		if expires := ssstikExpiresPattern.FindStringSubmatch(match[1]); expires != nil {
-			if seconds, err := strconv.ParseInt(expires[1], 10, 64); err == nil {
-				result.VideoExpires = &seconds
+	findMedia := func(kind string) *tikdownMediaItem {
+		for i := range extracted.Result.MediaItems {
+			if strings.EqualFold(extracted.Result.MediaItems[i].Type, kind) {
+				item := extracted.Result.MediaItems[i]
+				return &item
+			}
+		}
+		return nil
+	}
+
+	if video := findMedia("video"); video != nil {
+		if video.V5URL != "" {
+			fileURL, pollErr := pollTikdownMedia(ctx, client, video.V5URL)
+			if pollErr == nil && fileURL != "" {
+				result.VideoURL = &fileURL
+			} else if video.PreviewURL != "" {
+				result.VideoURL = &video.PreviewURL
+			}
+		} else if video.PreviewURL != "" {
+			result.VideoURL = &video.PreviewURL
+		}
+	}
+
+	if audio := findMedia("audio"); audio != nil {
+		if audio.V5URL != "" {
+			fileURL, pollErr := pollTikdownMedia(ctx, client, audio.V5URL)
+			if pollErr == nil && fileURL != "" {
+				result.MP3URL = &fileURL
 			}
 		}
 	}
-	if match := ssstikMP3Pattern.FindStringSubmatch(document); match != nil {
-		result.MP3URL = pointerString(match[1])
+
+	if result.VideoURL == nil {
+		if extracted.Result.PreviewURL != "" {
+			preview := extracted.Result.PreviewURL
+			result.VideoURL = &preview
+		}
 	}
-	if match := ssstikAuthorPattern.FindStringSubmatch(document); match != nil {
-		result.Author = pointerString(ssstikEscaper.Replace(strings.TrimSpace(match[1])))
+	if result.VideoURL == nil {
+		return nil, errors.New("Video tidak ditemukan atau tidak bisa diunduh")
 	}
-	if match := ssstikAvatarPattern.FindStringSubmatch(document); match != nil {
-		result.Avatar = pointerString(match[1])
+	return result, nil
+}
+
+func newTikdownClient() (*http.Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
 	}
-	if match := ssstikCaptionPattern.FindStringSubmatch(document); match != nil {
-		result.Caption = pointerString(ssstikEscaper.Replace(strings.TrimSpace(match[1])))
+	return &http.Client{Jar: jar, Timeout: 60 * time.Second}, nil
+}
+
+func fetchTikdownToken(ctx context.Context, client *http.Client) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tikdownBase+"/id/", nil)
+	if err != nil {
+		return "", err
 	}
-	return result
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "id-ID,id;q=0.9,en;q=0.8")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("Gagal ambil halaman tikdown.com (HTTP %d)", resp.StatusCode)
+	}
+	match := tikdownCsrfPattern.FindSubmatch(body)
+	if match == nil {
+		return "", errors.New("Token CSRF tidak ditemukan di halaman tikdown.com")
+	}
+	return string(match[1]), nil
+}
+
+func fetchTikdownExtract(ctx context.Context, client *http.Client, tiktokURL, token string) (*tikdownExtractResponse, error) {
+	form := url.Values{}
+	form.Set("csrfToken", token)
+	form.Set("website", "")
+	form.Set("url", tiktokURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tikdownBase+"/api/extract.php", strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Origin", tikdownBase)
+	req.Header.Set("Referer", tikdownBase+"/id/")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("tikdown.com gagal memproses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var extracted tikdownExtractResponse
+	if err := json.Unmarshal(body, &extracted); err != nil {
+		return nil, fmt.Errorf("tikdown.com respons tidak valid: %w", err)
+	}
+	return &extracted, nil
+}
+
+func pollTikdownMedia(ctx context.Context, client *http.Client, v5URL string) (string, error) {
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if time.Now().After(deadline) {
+			return "", errors.New("timeout menunggu file tikdown.com")
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, v5URL, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/json, text/plain, */*")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return "", err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", fmt.Errorf("tikdown.com worker gagal (HTTP %d)", resp.StatusCode)
+		}
+
+		var task tikdownTaskResponse
+		if err := json.Unmarshal(body, &task); err != nil {
+			return "", fmt.Errorf("tikdown.com worker respons tidak valid: %w", err)
+		}
+		if strings.EqualFold(task.Status, "completed") && task.FileURL != "" {
+			return task.FileURL, nil
+		}
+		if strings.EqualFold(task.Status, "error") || strings.EqualFold(task.Status, "failed") {
+			if task.Error != "" {
+				return "", fmt.Errorf("tikdown.com worker error: %s", task.Error)
+			}
+			return "", errors.New("tikdown.com worker gagal memproses file")
+		}
+
+		time.Sleep(1 * time.Second)
+	}
 }
