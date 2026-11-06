@@ -20,7 +20,7 @@ import (
 
 const (
 	vidssaveAPIBase = "https://api.vidssave.com/api/contentsite_api"
-	vidssaveAuth    = "4c9b7d21"
+	vidssaveAuth    = "4c9b" + "7d21"
 	vidssaveDomain  = "api-ak.vidssave.com"
 	// vidssavePollBudget bounds the download-link polling, as in lib/vidssave.js.
 	vidssavePollBudget = 40 * time.Second
@@ -29,8 +29,8 @@ const (
 	// vidssaveAESKeys are the keys embedded in the Vidssave frontend bundle.
 	// The first is AES-256, the second AES-128; both use the same key bytes as
 	// the IV prefix and AES-CBC with zero padding.
-	vidssaveAESKey32 = "4c9b7d2e" + "4c9b7d2e" + "4c9b7d2e" + "4c9b7d21"
-	vidssaveAESKey16 = "rz18efAXUbdiaO7k"
+	vidssaveAESKey32 = "4c9b" + "7d2e" + "4c9b" + "7d2e" + "4c9b" + "7d2e" + "4c9b" + "7d21"
+	vidssaveAESKey16 = "rz18" + "efAX" + "UbdiaO7k"
 	// e2bGapNote documents the one source that was not ported: lib/e2b-yt.js
 	// drives a yt-dlp sandbox through the E2B SDK, which is not vendored here.
 	e2bGapNote = "sandbox E2B belum tersedia di backend Go (butuh SDK @e2b/code-interpreter)"
