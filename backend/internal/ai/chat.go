@@ -150,7 +150,7 @@ func (h *handlers) autoChain(ctx context.Context) []string {
 // isPortedModel reports whether the Go backend implements a provider.
 func isPortedModel(id string) bool {
 	switch id {
-	case "gemini-3.6-flash", "gemini", "gemini-1.5-flash", "gpt-4.1-mini":
+	case "gemini-3.6-flash", "gemini", "gemini-1.5-flash", "gpt-4.1-mini", "freeanonymous-ai":
 		return true
 	default:
 		return false
@@ -173,7 +173,7 @@ func candidateIDs(model string, chain []string) []string {
 			candidates = append(candidates, id)
 		}
 	}
-	for _, id := range []string{"gemini-3.6-flash", "gemini"} {
+	for _, id := range []string{"gemini-3.6-flash", "gemini", "freeanonymous-ai"} {
 		if !seen[id] {
 			candidates = append(candidates, id)
 		}
@@ -193,6 +193,9 @@ func (h *handlers) generateOne(ctx context.Context, modelID, prompt string) (str
 		return generateEasemate(ctx, prompt)
 	case "gpt-4.1-mini":
 		return generateQuillbot(ctx, prompt)
+	case "freeanonymous-ai":
+		text, err := generateFreeAnonymous(ctx, prompt)
+		return text, err
 	default:
 		return "", fmt.Errorf("Model %s belum tersedia di backend Go", modelID)
 	}

@@ -21,11 +21,12 @@ var Models = []Model{
 	{ID: "gemini", Label: "Gemini", Desc: "Model AI dari Gemini", OwnedBy: "gemini-share", Chainable: true},
 	{ID: "gemini-1.5-flash", Label: "Gemini 1.5 Flash", Desc: "Model AI Gemini 1.5 Flash", OwnedBy: "easemate-web", Chainable: true},
 	{ID: "gpt-4.1-mini", Label: "GPT-4.1 Mini", Desc: "Model AI chat GPT-4.1 Mini", OwnedBy: "quillbot-web", Chainable: true},
+	{ID: "freeanonymous-ai", Label: "Free Anonymous AI", Desc: "Router otomatis Free Anonymous AI (Gemini/Mistral/Pollinations)", OwnedBy: "freeanonymous-web", Chainable: true},
 	{ID: "auto", Label: "Auto (Fallback)", Desc: "Otomatis memilih model terbaik", OwnedBy: "auto-web"},
 }
 
 // ChainDefault is the default fallback order for the auto model.
-var ChainDefault = []string{"gemini-3.6-flash", "gemini-1.5-flash"}
+var ChainDefault = []string{"gemini-3.6-flash", "gemini-1.5-flash", "freeanonymous-ai"}
 
 // IDs returns every public model ID in display order.
 func IDs() []string {

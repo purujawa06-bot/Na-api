@@ -1,0 +1,2 @@
+backend/internal/ai/freeanonymous.go:generateFreeAnonymous - Sends one prompt to Free Anonymous AI router
+backend/internal/ai/freeanonymous.go:refreshFreeAnonymousSession - Opens/renews anonymous session cookie
