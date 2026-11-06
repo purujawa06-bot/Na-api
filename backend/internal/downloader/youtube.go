@@ -108,6 +108,10 @@ func (h *handler) youtubeGET(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.URL.Query().Get("url")
 	mediaType := r.URL.Query().Get("type")
 	quality := r.URL.Query().Get("quality")
+	if r.URL.Query().Get("_diag") == "ping" {
+		httpx.JSON(w, http.StatusOK, map[string]any{"pong": true})
+		return
+	}
 	if r.URL.Query().Get("_diag") == "1" {
 		if invalid := validateDownloadURL(rawURL, youtubeHostAllowed, "URL harus dari domain youtube.com atau youtu.be"); invalid != nil {
 			httpx.JSON(w, http.StatusBadRequest, map[string]any{"error": invalid.message})
