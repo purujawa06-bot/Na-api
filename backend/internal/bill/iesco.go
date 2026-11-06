@@ -114,20 +114,43 @@ func (h *handler) respond(w http.ResponseWriter, r *http.Request, number, billTy
 	}
 
 	if fetch {
-		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
-		defer cancel()
-		resp, err := webclient.Get(ctx, billURL, map[string]string{
-			"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-		})
+		var resp *http.Response
+		var err error
+		var body string
+		for attempt := 0; attempt < 2; attempt++ {
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			resp, err = webclient.Get(ctx, billURL, map[string]string{
+				"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+			})
+			if err != nil {
+				cancel()
+				result.Error = err.Error()
+				if attempt == 1 {
+					httpx.JSON(w, http.StatusFailedDependency, result)
+					return
+				}
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			body, err = webclient.ReadBody(resp)
+			cancel()
+			if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 400 {
+				if err == nil {
+					err = fmt.Errorf("upstream HTTP %d", resp.StatusCode)
+				}
+				result.Error = err.Error()
+				if attempt == 1 {
+					httpx.JSON(w, http.StatusFailedDependency, result)
+					return
+				}
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			break
+		}
+		result.UpstreamStatus = resp.StatusCode
 		if err != nil {
 			result.Error = err.Error()
-			httpx.JSON(w, http.StatusFailedDependency, result)
-			return
-		}
-		body, readErr := webclient.ReadBody(resp)
-		result.UpstreamStatus = resp.StatusCode
-		if readErr != nil {
-			result.Error = readErr.Error()
 		}
 		if resp.StatusCode >= 200 && resp.StatusCode < 400 {
 			result.Reachable = true
