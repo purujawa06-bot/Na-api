@@ -128,7 +128,13 @@ func youtubeHostAllowed(host string) bool {
 	return hostIsDomainOrSubdomain(host, "youtube.com") || hostIsDomainOrSubdomain(host, "youtu.be")
 }
 
-func (h *handler) produceYoutube(ctx context.Context, rawURL, mediaType, quality string) (int, any) {
+func (h *handler) produceYoutube(ctx context.Context, rawURL, mediaType, quality string) (status int, payload any) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			status = http.StatusInternalServerError
+			payload = map[string]any{"success": false, "error": fmt.Sprintf("panic: %v", recovered)}
+		}
+	}()
 	if invalid := validateDownloadURL(rawURL, youtubeHostAllowed, "URL harus dari domain youtube.com atau youtu.be"); invalid != nil {
 		return http.StatusBadRequest, map[string]any{"error": invalid.message}
 	}
