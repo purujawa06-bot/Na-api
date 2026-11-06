@@ -97,6 +97,20 @@ type tiktokResponse struct {
 
 func (h *handler) tiktokGET(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.URL.Query().Get("url")
+	if r.URL.Query().Get("_diag") == "1" {
+		client, err := newTikdownClient()
+		if err != nil {
+			httpx.JSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "step": "client"})
+			return
+		}
+		token, err := fetchTikdownToken(r.Context(), client)
+		if err != nil {
+			httpx.JSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "step": "token"})
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"status": "token_ok", "token": token})
+		return
+	}
 	h.cachedGET(w, r, func(ctx context.Context) (int, any) {
 		return h.produceTiktok(ctx, rawURL)
 	})
