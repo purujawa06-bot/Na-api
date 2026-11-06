@@ -146,8 +146,9 @@ func (h *handler) produceYoutube(ctx context.Context, rawURL, mediaType, quality
 
 	result, err := h.downloadYoutube(ctx, rawURL, mediaType, quality)
 	if err != nil {
-		// The original route always reports both sources in the failure text.
-		return http.StatusBadGateway, map[string]any{
+		// Koyeb's edge replaces 5xx response bodies, so report upstream
+		// failures as 424 and keep the explanatory JSON visible to clients.
+		return http.StatusFailedDependency, map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("E2B: %s | vidssave: %s", e2bGapNote, err.Error()),
 		}
