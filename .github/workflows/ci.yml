@@ -51,7 +51,7 @@ jobs:
           cache: npm
 
       - name: Install deps (npm ci)
-        run: npm ci
+        run: npm ci --silent
 
       - name: Lint
         run: npm run lint --if-present

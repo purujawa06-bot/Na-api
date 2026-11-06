@@ -28,8 +28,7 @@ jobs:
           cache: npm
 
       - name: Install deps (npm ci)
-        run: npm ci --ignore-scripts
-
+        run: npm ci --ignore-scripts --silent
       - name: npm audit high/critical (advisory, non-blocking)
         run: npm audit --audit-level=high
         continue-on-error: true
