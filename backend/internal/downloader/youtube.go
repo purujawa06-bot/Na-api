@@ -100,6 +100,11 @@ type youtubeResponse struct {
 }
 
 func (h *handler) youtubeGET(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			httpx.JSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": fmt.Sprintf("panic: %v", recovered)})
+		}
+	}()
 	rawURL := r.URL.Query().Get("url")
 	mediaType := r.URL.Query().Get("type")
 	quality := r.URL.Query().Get("quality")
