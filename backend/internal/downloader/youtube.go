@@ -2,6 +2,9 @@ package downloader
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,12 +20,17 @@ import (
 
 const (
 	vidssaveAPIBase = "https://api.vidssave.com/api/contentsite_api"
-	vidssaveAuth    = "20250901majwlqo"
+	vidssaveAuth    = "4c9b7d21"
 	vidssaveDomain  = "api-ak.vidssave.com"
 	// vidssavePollBudget bounds the download-link polling, as in lib/vidssave.js.
 	vidssavePollBudget = 40 * time.Second
 	// vidssavePollInterval matches the 2.5s sleep between polls.
 	vidssavePollInterval = 2500 * time.Millisecond
+	// vidssaveAESKeys are the keys embedded in the Vidssave frontend bundle.
+	// The first is AES-256, the second AES-128; both use the same key bytes as
+	// the IV prefix and AES-CBC with zero padding.
+	vidssaveAESKey32 = "4c9b7d2e" + "4c9b7d2e" + "4c9b7d2e" + "4c9b7d21"
+	vidssaveAESKey16 = "rz18efAXUbdiaO7k"
 	// e2bGapNote documents the one source that was not ported: lib/e2b-yt.js
 	// drives a yt-dlp sandbox through the E2B SDK, which is not vendored here.
 	e2bGapNote = "sandbox E2B belum tersedia di backend Go (butuh SDK @e2b/code-interpreter)"
@@ -31,6 +39,8 @@ const (
 // vidssaveResource is one downloadable quality of a parsed video.
 type vidssaveResource struct {
 	ResourceContent string `json:"resource_content"`
+	DownloadURL     string `json:"download_url"`
+	DownloadMode    string `json:"download_mode"`
 	Quality         string `json:"quality"`
 	Format          string `json:"format"`
 	Type            string `json:"type"`
@@ -158,9 +168,17 @@ func (h *handler) downloadYoutube(ctx context.Context, rawURL, mediaType, qualit
 		return nil, errors.New("Kualitas yang diminta tidak tersedia")
 	}
 
-	link, err := h.resolveVidssaveLink(ctx, picked.ResourceContent)
-	if err != nil {
-		return nil, err
+	link := picked.DownloadURL
+	if link == "" {
+		// Older Vidssave payloads only expose a task-based resource_content.
+		taskLink, err := h.resolveVidssaveLink(ctx, picked.ResourceContent)
+		if err != nil {
+			return nil, err
+		}
+		link = taskLink
+	}
+	if link == "" {
+		return nil, errors.New("Link download tidak tersedia dari vidssave")
 	}
 
 	qualities := make([]youtubeQuality, 0, len(parsed.Resources))
@@ -217,12 +235,17 @@ func (h *handler) resolveVidssaveLink(ctx context.Context, resourceContent strin
 	}
 
 	var started struct {
-		TaskID json.Number `json:"task_id"`
+		TaskID json.RawMessage `json:"task_id"`
 	}
-	if err := decodeNumberAware(data, &started); err != nil {
+	if err := decodeNumberAware(data, &started); err != nil || len(started.TaskID) == 0 {
 		return "", errors.New("task_id tidak diterima dari vidssave")
 	}
-	taskID := started.TaskID.String()
+	var taskID string
+	if err := json.Unmarshal(started.TaskID, &taskID); err != nil {
+		// Fall back to the raw scalar form (numeric or stringified).
+		taskID = strings.TrimSpace(string(started.TaskID))
+		taskID = strings.Trim(taskID, `"`)
+	}
 	if taskID == "" {
 		return "", errors.New("task_id tidak diterima dari vidssave")
 	}
@@ -299,7 +322,17 @@ func (h *handler) postVidssaveForm(ctx context.Context, path string, extra url.V
 	if envelope.Status != 1 {
 		return nil, errors.New(vidssaveErrorMessage(envelope.Msg, envelope.StatusCode, path))
 	}
-	return envelope.Data, nil
+
+	data := envelope.Data
+	var encoded string
+	if json.Unmarshal(data, &encoded) == nil && strings.TrimSpace(encoded) != "" {
+		decrypted, err := vidssaveDecrypt(encoded)
+		if err != nil {
+			return nil, fmt.Errorf("gagal mendekripsi respons vidssave (%s): %w", path, err)
+		}
+		data = json.RawMessage(decrypted)
+	}
+	return data, nil
 }
 
 // vidssaveErrorMessage mirrors `json.msg || json.status_code || default`.
@@ -435,4 +468,43 @@ func decodeNumberAwareMap(raw []byte) (map[string]any, error) {
 		return nil, err
 	}
 	return payload, nil
+}
+
+// vidssaveDecrypt mirrors the frontend transform: AES-CBC with zero padding and
+// the embedded static key material, trying each candidate key in order.
+func vidssaveDecrypt(encoded string) (string, error) {
+	encoded = strings.TrimSpace(encoded)
+	for _, key := range []string{vidssaveAESKey32, vidssaveAESKey16} {
+		ciphertext, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			continue
+		}
+		if len(ciphertext) == 0 || len(ciphertext)%aes.BlockSize != 0 {
+			continue
+		}
+		block, err := aes.NewCipher([]byte(key))
+		if err != nil {
+			continue
+		}
+		iv := []byte(key)
+		if len(iv) > aes.BlockSize {
+			iv = iv[:aes.BlockSize]
+		}
+		if len(iv) < aes.BlockSize {
+			continue
+		}
+	mode := cipher.NewCBCDecrypter(block, iv)
+	mode.CryptBlocks(ciphertext, ciphertext)
+		plaintext := strings.TrimRight(string(ciphertext), "\x00")
+		plaintext = strings.TrimSpace(plaintext)
+		if plaintext == "" {
+			continue
+		}
+		var check any
+		if err := json.Unmarshal([]byte(plaintext), &check); err != nil {
+			continue
+		}
+		return plaintext, nil
+	}
+	return "", errors.New("AES decrypt failed: no candidate key produced valid JSON")
 }
