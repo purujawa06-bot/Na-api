@@ -289,9 +289,6 @@ func (h *handler) downloadYoutube(ctx context.Context, rawURL, mediaType, qualit
 
 // resolveYoutube calls the YTDownloader metadata endpoint.
 func (h *handler) resolveYoutube(ctx context.Context, rawURL, cookie string) (*ytDownloaderResolve, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
 	headers := map[string]string{
 		"Origin":  ytDownloaderBase,
 		"Referer": ytDownloaderBase + "/",
@@ -300,20 +297,46 @@ func (h *handler) resolveYoutube(ctx context.Context, rawURL, cookie string) (*y
 	if cookie != "" {
 		headers["Cookie"] = cookie
 	}
-	resp, err := webclient.PostJSON(reqCtx, ytDownloaderBase+"/api/resolve", map[string]string{"url": rawURL}, headers)
-	if err != nil {
-		return nil, err
+
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		resp, err := webclient.PostJSON(reqCtx, ytDownloaderBase+"/api/resolve", map[string]string{"url": rawURL}, headers)
+		if err != nil {
+			cancel()
+			lastErr = err
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		body, readErr := webclient.ReadBody(resp)
+		cancel()
+		if readErr != nil {
+			lastErr = readErr
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			msg := strings.TrimSpace(body)
+			lastErr = fmt.Errorf("ytdownloader.tech resolve gagal (HTTP %d): %s", resp.StatusCode, msg)
+			if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests || strings.Contains(strings.ToLower(msg), "busy") {
+				time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+				continue
+			}
+			return nil, lastErr
+		}
+		var parsed ytDownloaderResolve
+		if err := json.Unmarshal([]byte(body), &parsed); err != nil {
+			return nil, fmt.Errorf("respons ytdownloader.tech tidak valid: %w", err)
+		}
+		return &parsed, nil
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := webclient.ReadBody(resp)
-		return nil, fmt.Errorf("ytdownloader.tech resolve gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(body))
+	if lastErr == nil {
+		lastErr = errors.New("ytdownloader.tech resolve gagal tanpa detail")
 	}
-	var parsed ytDownloaderResolve
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, fmt.Errorf("respons ytdownloader.tech tidak valid: %w", err)
-	}
-	return &parsed, nil
+	return nil, lastErr
 }
 
 // startYoutubePrepare starts a server-side download job.
@@ -324,9 +347,6 @@ func startYoutubePrepare(ctx context.Context, videoID, formatID string, fallback
 		"fallbackFormatIds": fallback,
 		"media":             media,
 	}
-	reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
 	headers := map[string]string{
 		"Origin":  ytDownloaderBase,
 		"Referer": ytDownloaderBase + "/",
@@ -335,30 +355,59 @@ func startYoutubePrepare(ctx context.Context, videoID, formatID string, fallback
 	if cookie != "" {
 		headers["Cookie"] = cookie
 	}
-	resp, err := webclient.PostJSON(reqCtx, ytDownloaderBase+"/api/prepare", payload, headers)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := webclient.ReadBody(resp)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("ytdownloader.tech prepare gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(body))
-	}
 
-	var started ytDownloaderPrepareStart
-	if err := json.Unmarshal([]byte(body), &started); err != nil {
-		return "", fmt.Errorf("respons prepare tidak valid: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		resp, err := webclient.PostJSON(reqCtx, ytDownloaderBase+"/api/prepare", payload, headers)
+		if err != nil {
+			cancel()
+			lastErr = err
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		body, readErr := webclient.ReadBody(resp)
+		cancel()
+		if readErr != nil {
+			lastErr = readErr
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			msg := strings.TrimSpace(body)
+			lastErr = fmt.Errorf("ytdownloader.tech prepare gagal (HTTP %d): %s", resp.StatusCode, msg)
+			if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests || strings.Contains(strings.ToLower(msg), "busy") {
+				time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+				continue
+			}
+			return "", lastErr
+		}
+		var started ytDownloaderPrepareStart
+		if err := json.Unmarshal([]byte(body), &started); err != nil {
+			return "", fmt.Errorf("respons prepare tidak valid: %w", err)
+		}
+		if started.Error != "" {
+			lastErr = fmt.Errorf("ytdownloader.tech prepare error: %s", started.Error)
+			if strings.Contains(strings.ToLower(started.Error), "busy") {
+				time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+				continue
+			}
+			return "", lastErr
+		}
+		if started.Job == "" {
+			lastErr = errors.New("job id tidak diterima dari ytdownloader.tech")
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		return started.Job, nil
 	}
-	if started.Error != "" {
-		return "", fmt.Errorf("ytdownloader.tech prepare error: %s", started.Error)
+	if lastErr == nil {
+		lastErr = errors.New("ytdownloader.tech prepare gagal tanpa detail")
 	}
-	if started.Job == "" {
-		return "", errors.New("job id tidak diterima dari ytdownloader.tech")
-	}
-	return started.Job, nil
+	return "", lastErr
 }
 
 // pollYoutubePrepare polls until a prepared download URL is ready.
