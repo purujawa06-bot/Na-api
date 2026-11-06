@@ -248,7 +248,15 @@ func upscaleImage(ctx context.Context, rawURL string, scale int) (iloveResult, e
 		return iloveResult{}, err
 	}
 	filename := filenameFromURL(rawURL)
-	api := "https://" + session.server + "/v1"
+	server := session.server
+	if !strings.Contains(server, ".") && !strings.HasPrefix(server, "http") {
+		server += ".iloveimg.com"
+	}
+	if !strings.HasPrefix(server, "http") {
+		server = "https://" + server
+	}
+	server = strings.TrimRight(server, "/")
+	api := server + "/v1"
 
 	serverFilename, err := iloveUploadFile(ctx, api, session.token, session.taskID, &multipartFile{
 		field:       "file",
@@ -315,7 +323,15 @@ func removeImageBackground(ctx context.Context, rawURL string) (iloveResult, err
 		filename = base + "." + extension
 	}
 
-	api := "https://" + session.server + "/v1"
+	server := session.server
+	if !strings.Contains(server, ".") && !strings.HasPrefix(server, "http") {
+		server += ".iloveimg.com"
+	}
+	if !strings.HasPrefix(server, "http") {
+		server = "https://" + server
+	}
+	server = strings.TrimRight(server, "/")
+	api := server + "/v1"
 	serverFilename, err := iloveUploadFile(ctx, api, session.token, session.taskID, &multipartFile{
 		field:       "file",
 		filename:    filename,
