@@ -55,7 +55,8 @@ jobs:
 
       - name: Ensure Flutter Android project scaffold
         run: |
-          if [ ! -d "android" ]; then
+          if [ ! -f "android/app/build.gradle" ] && [ ! -f "android/app/build.gradle.kts" ]; then
+            rm -rf android
             flutter create --platforms=android --org com.puruboy --project-name purulocal_bot .
           fi
           mkdir -p assets
