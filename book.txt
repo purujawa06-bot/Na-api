@@ -1,2 +1,8 @@
 backend/internal/ai/freeanonymous.go:generateFreeAnonymous - Sends one prompt to Free Anonymous AI router
 backend/internal/ai/freeanonymous.go:refreshFreeAnonymousSession - Opens/renews anonymous session cookie
+purulocal-bot/go_backend/internal/bot/config.go - Config dasar bot (nama bot/owner/nomor, block self chat)
+purulocal-bot/go_backend/internal/bot/manager.go - Whatsmeow manager lokal: sesi, QR/pair, auto-reconnect, command ping/menu
+purulocal-bot/go_backend/internal/web/server.go - HTTP API/UI lokal untuk status, config, koneksi WA
+purulocal-bot/flutter_app/lib/screens/home_screen.dart - UI Flutter: config, QR/pair, auto-update check
+purulocal-bot/flutter_app/lib/services/update_service.dart - OTA update manifest/download/verify/install
+.github/workflows/build-purulocal-apk.yml - Build APK puruLocal via GitHub Actions (no local OOM)

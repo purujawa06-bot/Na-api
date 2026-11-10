@@ -1,0 +1,10 @@
+{
+  "app": "puruLocalBot",
+  "versionName": "0.1.1",
+  "buildNumber": 2,
+  "minBuild": 1,
+  "apkUrl": "https://example.com/releases/puruLocalBot-0.1.1.apk",
+  "sha256": "<isi_dengan_sha256_apk>",
+  "force": false,
+  "changelog": "- Perbaikan koneksi QR/Pairing\n- Peningkatan stabilitas sesi lokal"
+}

@@ -119,6 +119,50 @@ const ChannelPromo = () => (
     </div>
 );
 
+const PuruLocalPromo = () => (
+    <div className="native-card overflow-hidden relative group mb-8 border-none ring-1 ring-white/10">
+        <div className="relative h-40 w-full bg-gradient-to-br from-emerald-900 via-gray-900 to-black flex items-center justify-center">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_60%)]"></div>
+            <div className="relative z-10 text-center px-5">
+                <div className="w-14 h-14 mx-auto mb-2 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center overflow-hidden">
+                    <Image src="/favicon.ico" alt="puruLocal Bot" width={40} height={40} className="object-contain" unoptimized />
+                </div>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                    <span className="bg-amber-500/15 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/20">
+                        <i className="fas fa-flask mr-1"></i>Experiment
+                    </span>
+                </div>
+                <h3 className="text-xl font-bold text-white drop-shadow-md">puruLocal Bot</h3>
+                <p className="text-[11px] text-gray-300 mt-1">WhatsApp bot lokal (whatsmeow) • Flutter APK • Auto-update</p>
+            </div>
+        </div>
+        <div className="p-5 pt-3 bg-[#121215]">
+            <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                Aplikasi bot WhatsApp sederhana: atur nama/nomor owner & bot, proteksi chat diri sendiri, koneksi via Pairing Code atau QR. Masih tahap percobaan (experiment) — fitur dan build dapat berubah.
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+                <a
+                    href="https://github.com/purujawa06-bot/Na-api/releases/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
+                >
+                    <i className="fas fa-download text-sm"></i>
+                    <span>Download APK (Experiment)</span>
+                </a>
+                <Link
+                    href="/blog"
+                    className="w-full bg-card border border-default hover:bg-white/5 text-secondary font-semibold py-2.5 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    <i className="fas fa-newspaper text-sm"></i>
+                    <span>Info & Update di Blog</span>
+                </Link>
+            </div>
+            <p className="text-[10px] text-muted mt-3 text-center">Catatan: WhatsApp unofficial. Gunakan dengan bijak.</p>
+        </div>
+    </div>
+);
+
 const staticContributors = [
     {
         id: 7004559855,
@@ -147,6 +191,7 @@ export default async function HomePage() {
         <div className="pb-4">
             <Hero />
             
+            <PuruLocalPromo />
             <ChannelPromo />
 
             {/* Stats */}

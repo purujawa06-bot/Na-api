@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>puruLocal Bot</title>
+  <style>
+    :root{--bg:#0b0b0f;--card:#14141a;--text:#f4f4f5;--muted:#a1a1aa;--accent:#10b981;--border:#27272a;--danger:#ef4444}
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:520px;margin:0 auto;padding:16px} h1{font-size:20px;margin:0 0 4px} .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+    label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px} input[type=text]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0f0f14;color:var(--text)}
+    .row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px}
+    .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    button{padding:11px 12px;border-radius:10px;border:1px solid var(--border);background:#1c1c24;color:var(--text);font-weight:600;cursor:pointer}
+    button.primary{background:var(--accent);color:#062016;border:none} button:active{transform:scale(.98)}
+    .status{font-size:12px;color:var(--muted)} .ok{color:var(--accent)} .err{color:var(--danger)}
+    #qrBox{display:flex;justify-content:center;align-items:center;min-height:180px;background:#fff;border-radius:10px;margin-top:10px;padding:10px}
+    #qrBox img{max-width:100%;height:auto} .code{font-size:28px;letter-spacing:4px;font-weight:800;text-align:center;color:var(--accent);margin:8px 0}
+    .hint{font-size:11px;color:var(--muted);margin-top:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>puruLocal Bot</h1>
+    <div class="sub">WhatsApp bot lokal (whatsmeow) • sesi berjalan di perangkat ini, bukan backend na-api</div>
+
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:6px">Status</div>
+      <div id="status" class="status">Memuat...</div>
+      <div class="btns" style="grid-template-columns:1fr 1fr;margin-top:10px">
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:6px">Konfigurasi Dasar</div>
+      <label>Nama Bot (bisa di set)</label>
+      <input id="bot_name" type="text" placeholder="puruLocal Bot" />
+      <label>Nama Owner</label>
+      <input id="owner_name" type="text" placeholder="Mas Puru" />
+      <label>Nomor Owner (tanpa +, format internasional)</label>
+      <input id="owner_number" type="text" placeholder="628123456789" />
+      <label>Nomor Bot (boleh sama dengan owner)</label>
+      <input id="bot_number" type="text" placeholder="628123456789" />
+      <div class="row"><input id="block_self_chat" type="checkbox" checked /> <span>Bot tidak bisa chat diri sendiri</span></div>
+      <div class="btns" style="grid-template-columns:1fr"><button class="primary" onclick="saveConfig()">Simpan Konfigurasi</button></div>
+      <div id="cfgMsg" class="hint"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:6px">Koneksi WhatsApp</div>
+      <div class="btns">
+        <button class="primary" onclick="connectQR()">Connect via QR</button>
+        <button onclick="connectPair()">Connect via Pairing Code</button>
+      </div>
+      <div id="pairBox" style="display:none;margin-top:10px">
+        <div class="hint">Masukkan kode ini di WhatsApp &gt; Perangkat tertaut &gt; Tautkan dengan nomor telepon</div>
+        <div id="pairCode" class="code">-</div>
+      </div>
+      <div id="qrWrap" style="display:none">
+        <div class="hint">Scan QR ini dari WhatsApp &gt; Perangkat tertaut</div>
+        <div id="qrBox"><span class="hint">Menunggu QR...</span></div>
+      </div>
+      <div id="connMsg" class="hint"></div>
+    </div>
+
+    <div class="hint" style="text-align:center;margin-top:8px">puruLocal Bot (experiment) • auto-update dikelola app Flutter/APK</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    const $ = (id)=>document.getElementById(id);
+    async function api(path, opts={}){
+      const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
+      return r.json();
+    }
+    async function refresh(){
+      try{
+        const d = await api('/api/status');
+        const s = d.status||{}; const c = d.config||{};
+        $('status').innerHTML = `Connected: <b class="${s.connected?'ok':'err'}">${!!s.connected}</b> · Logged in: <b class="${s.logged_in?'ok':'err'}">${!!s.logged_in}</b>` + (s.jid?`<br/>JID: ${s.jid}`:'') + (s.last_error?`<br/><span class="err">${s.last_error}</span>`:'');
+        if(!$('owner_name').dataset.touched){
+          $('bot_name').value=c.bot_name||'puruLocal Bot'; $('owner_name').value=c.owner_name||''; $('owner_number').value=c.owner_number||''; $('bot_number').value=c.bot_number||''; $('block_self_chat').checked=c.block_self_chat!==false;
+        }
+      }catch(e){ $('status').innerHTML='<span class="err">Gagal memuat status (backend lokal aktif?)</span>'; }
+    }
+    ['bot_name','owner_name','owner_number','bot_number','block_self_chat'].forEach(id=>$(id).addEventListener('input',()=>$(id).dataset.touched=1));
+    async function saveConfig(){
+      const body={bot_name:$('bot_name').value, owner_name:$('owner_name').value, owner_number:$('owner_number').value, bot_number:$('bot_number').value, block_self_chat:$('block_self_chat').checked};
+      const d = await api('/api/config',{method:'POST',body:JSON.stringify(body)});
+      $('cfgMsg').innerHTML = d.ok ? '<span class="ok">Tersimpan.</span>' : '<span class="err">'+(d.error||'Gagal')+'</span>';
+      if(d.ok){ ['bot_name','owner_name','owner_number','bot_number','block_self_chat'].forEach(id=>delete $(id).dataset.touched); }
+      refresh();
+    }
+    async function connectQR(){
+      $('qrWrap').style.display='block'; $('pairBox').style.display='none'; $('connMsg').textContent='Meminta QR...';
+      $('qrBox').innerHTML='';
+      const d = await api('/api/connect/qr',{method:'POST'});
+      if(d.ok && d.qr){
+        $('connMsg').innerHTML='<span class="ok">QR siap, silakan scan.</span>';
+        try{ new QRCode($('qrBox'), {text:d.qr,width:220,height:220}); }catch(e){ $('qrBox').textContent=d.qr; }
+        // minta QR berikutnya setelah beberapa detik jika belum login
+        setTimeout(()=>{ if(!$('pairBox').style.display || $('pairBox').style.display==='none') connectQR(); }, 20000);
+      } else {
+        $('connMsg').innerHTML='<span class="err">'+(d.error||d.event||'Gagal')+'</span>';
+      }
+      refresh();
+    }
+    async function connectPair(){
+      await saveConfig();
+      $('pairBox').style.display='block'; $('qrWrap').style.display='none'; $('connMsg').textContent='Meminta pairing code...';
+      const phone = $('bot_number').value || $('owner_number').value;
+      const d = await api('/api/connect/pair',{method:'POST',body:JSON.stringify({phone})});
+      if(d.ok){ $('pairCode').textContent=d.pairing_code||'-'; $('connMsg').innerHTML='<span class="ok">Pairing code diterima.</span>'; }
+      else { $('connMsg').innerHTML='<span class="err">'+(d.error||'Gagal')+'</span>'; }
+      refresh();
+    }
+    async function disconnect(){ await api('/api/disconnect',{method:'POST'}); refresh(); }
+    async function logout(){ if(confirm('Logout sesi WhatsApp di perangkat ini?')){ await api('/api/logout',{method:'POST'}); refresh(); } }
+    refresh(); setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

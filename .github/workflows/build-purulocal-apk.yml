@@ -1,0 +1,106 @@
+name: Build puruLocal Bot APK (experiment)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional tag to create/update GitHub Release (e.g. purulocal-v0.1.0)'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'purulocal-bot/**'
+      - '.github/workflows/build-purulocal-apk.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: purulocal-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: purulocal-bot/flutter_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Install Android tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip zip
+
+      - name: Ensure Flutter Android project scaffold
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android --org com.puruboy --project-name purulocal_bot .
+          fi
+          mkdir -p assets
+          if [ -f "../assets/favicon.ico" ]; then cp ../assets/favicon.ico assets/icon.ico; fi
+          if [ -f "../assets/favicon.jpg" ]; then cp ../assets/favicon.jpg assets/icon.jpg; fi
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Go backend (host check)
+        working-directory: purulocal-bot/go_backend
+        run: |
+          go mod tidy
+          go build ./...
+
+      # Catatan: integrasi penuh Go whatsmeow ke APK (gomobile bind/service) dapat ditambahkan di sini.
+      # Untuk saat ini workflow membangun APK Flutter (UI + auto-update + bridge ke backend lokal).
+
+      - name: Build APK (release)
+        run: flutter build apk --release
+
+      - name: Compute checksum
+        working-directory: purulocal-bot/flutter_app/build/app/outputs/flutter-apk
+        run: |
+          sha256sum app-release.apk > app-release.apk.sha256
+          cat app-release.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: puruLocalBot-apk
+          path: |
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
+
+      - name: Publish GitHub Release (optional)
+        if: ${{ inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: puruLocal Bot ${{ inputs.release_tag }} (experiment)
+          draft: false
+          prerelease: true
+          files: |
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
