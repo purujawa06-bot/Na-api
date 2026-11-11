@@ -16,12 +16,24 @@ class _HomeScreenState extends State<HomeScreen> {
   final ownerName = TextEditingController();
   final ownerNumber = TextEditingController();
   final botNumber = TextEditingController();
+  final pluginServer = TextEditingController(text: 'https://na-api-nue-api-e7bfd3f4.koyeb.app');
   bool blockSelf = true;
-  String status = 'Memuat...';
+
+  bool backendOk = false;
+  bool connected = false;
+  bool loggedIn = false;
+  bool hasSession = false;
+  bool paused = false;
+  String jid = '';
+  String statusText = 'Memuat...';
+
   String? qrData;
   String? pairCode;
   String? msg;
   bool loading = false;
+
+  List<dynamic> installedPlugins = [];
+  List<dynamic> availablePlugins = [];
 
   @override
   void initState() {
@@ -38,10 +50,32 @@ class _HomeScreenState extends State<HomeScreen> {
       ownerNumber.text = c.ownerNumber;
       botNumber.text = c.botNumber;
       blockSelf = c.blockSelfChat;
-      final st = s['status'] ?? {};
-      setState(() => status = 'Connected: ${st['connected'] == true} · Logged in: ${st['logged_in'] == true}\n${st['jid'] ?? ''}');
+      final st = (s['status'] ?? {}) as Map<String, dynamic>;
+      final con = st['connected'] == true;
+      final lin = st['logged_in'] == true;
+      final hs = st['has_session'] == true || lin;
+      final pau = st['paused'] == true;
+      List<dynamic> plugs = [];
+      try { plugs = await api.plugins(); } catch (_) {}
+      setState(() {
+        backendOk = true;
+        connected = con;
+        loggedIn = lin;
+        hasSession = hs;
+        paused = pau;
+        jid = (st['jid'] ?? '').toString();
+        installedPlugins = plugs;
+        statusText = 'Connected: $con · Logged in: $lin${pau ? ' · Paused' : ''}${jid.isNotEmpty ? '\n$jid' : ''}';
+      });
     } catch (e) {
-      setState(() => status = 'Backend lokal belum aktif. Jalankan service puruLocal di perangkat.\n$e');
+      setState(() {
+        backendOk = false;
+        connected = false;
+        loggedIn = false;
+        hasSession = false;
+        paused = false;
+        statusText = 'Backend lokal belum aktif.\n$e';
+      });
     }
   }
 
@@ -68,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() { loading = true; msg = 'Meminta QR...'; pairCode = null; });
     try {
       final code = await api.connectQR();
-      setState(() { qrData = code; msg = 'QR siap, scan dari WhatsApp > Perangkat tertaut.'; });
+      setState(() { qrData = code; msg = 'Scan QR dari WhatsApp > Perangkat tertaut.'; });
     } catch (e) {
       setState(() => msg = 'QR gagal: $e');
     } finally { setState(() => loading = false); }
@@ -80,10 +114,71 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final phone = botNumber.text.trim().isEmpty ? ownerNumber.text.trim() : botNumber.text.trim();
       final code = await api.pair(phone);
-      setState(() { pairCode = code; msg = 'Masukkan kode di WhatsApp > Perangkat tertaut > Tautkan dengan nomor telepon.'; });
+      setState(() { pairCode = code; msg = 'Masukkan kode di WhatsApp > Perangkat tertaut.'; });
     } catch (e) {
       setState(() => msg = 'Pairing gagal: $e');
     } finally { setState(() => loading = false); }
+  }
+
+  Future<void> _pause() async {
+    setState(() { loading = true; msg = null; });
+    try { await api.pause(); msg = 'Bot dipause.'; } catch (e) { msg = 'Gagal: $e'; }
+    await _load();
+    setState(() => loading = false);
+  }
+
+  Future<void> _start() async {
+    setState(() { loading = true; msg = null; });
+    try { await api.start(); msg = 'Bot dijalankan.'; } catch (e) { msg = 'Gagal: $e'; }
+    await _load();
+    setState(() => loading = false);
+  }
+
+  Future<void> _logout() async {
+    final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+      title: const Text('Logout'),
+      content: const Text('Hapus sesi WhatsApp dari perangkat ini?'),
+      actions: [
+        TextButton(onPressed: ()=>Navigator.pop(c,false), child: const Text('Batal')),
+        FilledButton(onPressed: ()=>Navigator.pop(c,true), child: const Text('Logout')),
+      ],
+    ));
+    if (ok != true) return;
+    setState(() { loading = true; msg = null; });
+    try { await api.logout(); msg = 'Logout berhasil.'; } catch (e) { msg = 'Gagal: $e'; }
+    await _load();
+    setState(() => loading = false);
+  }
+
+  Future<void> _loadAvailable() async {
+    setState(() { loading = true; msg = null; });
+    try {
+      final list = await api.availablePlugins(server: pluginServer.text.trim().isEmpty ? 'https://na-api-five.vercel.app' : pluginServer.text.trim());
+      setState(() { availablePlugins = list; msg = 'Plugin server dimuat.'; });
+    } catch (e) {
+      setState(() => msg = 'Gagal memuat plugin: $e');
+    } finally { setState(() => loading = false); }
+  }
+
+  Future<void> _installPlugin(Map<String, dynamic> p) async {
+    setState(() { loading = true; msg = null; });
+    try {
+      await api.installPlugin(p);
+      msg = 'Plugin .${p['command']} terpasang.';
+      availablePlugins = [];
+      await _load();
+    } catch (e) { msg = 'Gagal install: $e'; }
+    setState(() => loading = false);
+  }
+
+  Future<void> _removePlugin(String id) async {
+    setState(() { loading = true; msg = null; });
+    try {
+      await api.removePlugin(id);
+      msg = 'Plugin dihapus.';
+      await _load();
+    } catch (e) { msg = 'Gagal hapus: $e'; }
+    setState(() => loading = false);
   }
 
   Future<void> _checkUpdate() async {
@@ -116,51 +211,116 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally { setState(() => loading = false); }
   }
 
+  Widget _statusCard() {
+    return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 6), Text(statusText, style: const TextStyle(fontSize: 12)),
+      if (msg != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(msg!, style: const TextStyle(fontSize: 12, color: Color(0xFF10B981)))),
+    ])));
+  }
+
+  Widget _pluginsCard() {
+    return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Plugin', style: TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 6),
+      if (installedPlugins.isEmpty) const Text('Belum ada plugin terpasang.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+      ...installedPlugins.map((p) {
+        final m = (p as Map).cast<String, dynamic>();
+        final id = (m['id'] ?? m['command'] ?? '').toString();
+        final cmd = (m['command'] ?? '').toString();
+        final name = (m['name'] ?? cmd).toString();
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text('$name (.${cmd.isEmpty ? id : cmd})', style: const TextStyle(fontSize: 13)),
+          subtitle: Text((m['description'] ?? m['exec_url'] ?? '').toString(), style: const TextStyle(fontSize: 11)),
+          trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), onPressed: loading?null:()=>_removePlugin(id)),
+        );
+      }),
+      const Divider(height: 16),
+      TextField(controller: pluginServer, decoration: const InputDecoration(labelText: 'Server plugin (na-api)', isDense: true)),
+      const SizedBox(height: 8),
+      SizedBox(width: double.infinity, child: OutlinedButton(onPressed: loading?null:_loadAvailable, child: const Text('Muat Plugin dari Server'))),
+      ...availablePlugins.map((p) {
+        final m = (p as Map).cast<String, dynamic>();
+        final cmd = (m['command'] ?? '').toString();
+        final name = (m['name'] ?? cmd).toString();
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text('$name (.${cmd})', style: const TextStyle(fontSize: 13)),
+          subtitle: Text((m['description'] ?? '').toString(), style: const TextStyle(fontSize: 11)),
+          trailing: FilledButton(onPressed: loading?null:()=>_installPlugin(m), child: const Text('Install')),
+        );
+      }),
+    ])));
+  }
+
+  Widget _controlView() {
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      _statusCard(),
+      Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('Kontrol Bot', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        FilledButton(onPressed: loading?null:_pause, child: const Text('Pause')),
+        const SizedBox(height: 8),
+        FilledButton(onPressed: loading?null:_start, child: const Text('Start')),
+        const SizedBox(height: 8),
+        OutlinedButton(onPressed: loading?null:_logout, child: const Text('Logout')),
+      ]))),
+      _pluginsCard(),
+      const SizedBox(height: 8),
+      const Text('Bot berjalan lokal di HP • bisa jalan di latar belakang', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+    ]);
+  }
+
+  Widget _setupView() {
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      _statusCard(),
+      Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Konfigurasi Dasar', style: TextStyle(fontWeight: FontWeight.bold)),
+        TextField(controller: botName, decoration: const InputDecoration(labelText: 'Nama Bot')),
+        TextField(controller: ownerName, decoration: const InputDecoration(labelText: 'Nama Owner')),
+        TextField(controller: ownerNumber, decoration: const InputDecoration(labelText: 'Nomor Owner (tanpa +)'), keyboardType: TextInputType.phone),
+        TextField(controller: botNumber, decoration: const InputDecoration(labelText: 'Nomor Bot (boleh sama)'), keyboardType: TextInputType.phone),
+        SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Bot tidak bisa chat diri sendiri'), value: blockSelf, onChanged: (v)=>setState(()=>blockSelf=v)),
+        SizedBox(width: double.infinity, child: FilledButton(onPressed: loading?null:_save, child: const Text('Simpan Konfigurasi'))),
+      ]))),
+      Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Koneksi WhatsApp', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: FilledButton(onPressed: loading?null:_connectQR, child: const Text('Connect with QR'))),
+          const SizedBox(width: 8),
+          Expanded(child: OutlinedButton(onPressed: loading?null:_connectPair, child: const Text('Pairing Code'))),
+        ]),
+        if (pairCode != null) ...[
+          const SizedBox(height: 12),
+          const Text('Kode Pairing:', style: TextStyle(fontSize: 12)),
+          SelectableText(pairCode!, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 4, color: Color(0xFF10B981))),
+        ],
+        if (qrData != null) ...[
+          const SizedBox(height: 12),
+          const Text('Scan QR:', style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 8),
+          Center(child: Container(color: Colors.white, padding: const EdgeInsets.all(8), child: QrImageView(data: qrData!, size: 220))),
+        ],
+      ]))),
+      _pluginsCard(),
+      const SizedBox(height: 8),
+      const Text('Sesi & data tersimpan lokal di HP • auto-update via manifest', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final connectedMode = backendOk && (hasSession || loggedIn);
     return Scaffold(
       appBar: AppBar(title: const Text('puruLocal Bot'), actions: [
-        IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-        IconButton(onPressed: _checkUpdate, icon: const Icon(Icons.system_update)),
+        IconButton(onPressed: loading?null:_load, icon: const Icon(Icons.refresh)),
+        IconButton(onPressed: loading?null:_checkUpdate, icon: const Icon(Icons.system_update)),
       ]),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Status (sesi lokal di perangkat)', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6), Text(status, style: const TextStyle(fontSize: 12)),
-        ]))),
-        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Konfigurasi Dasar', style: TextStyle(fontWeight: FontWeight.bold)),
-          TextField(controller: botName, decoration: const InputDecoration(labelText: 'Nama Bot (bisa di set)')),
-          TextField(controller: ownerName, decoration: const InputDecoration(labelText: 'Nama Owner')),
-          TextField(controller: ownerNumber, decoration: const InputDecoration(labelText: 'Nomor Owner (tanpa +)'), keyboardType: TextInputType.phone),
-          TextField(controller: botNumber, decoration: const InputDecoration(labelText: 'Nomor Bot (boleh sama)'), keyboardType: TextInputType.phone),
-          SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Bot tidak bisa chat diri sendiri'), value: blockSelf, onChanged: (v)=>setState(()=>blockSelf=v)),
-          SizedBox(width: double.infinity, child: FilledButton(onPressed: loading?null:_save, child: const Text('Simpan Konfigurasi'))),
-        ]))),
-        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Koneksi WhatsApp', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: FilledButton(onPressed: loading?null:_connectQR, child: const Text('Connect with QR'))),
-            const SizedBox(width: 8),
-            Expanded(child: OutlinedButton(onPressed: loading?null:_connectPair, child: const Text('Pairing Code'))),
-          ]),
-          if (pairCode != null) ...[
-            const SizedBox(height: 12),
-            const Text('Kode Pairing:', style: TextStyle(fontSize: 12)),
-            SelectableText(pairCode!, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 4, color: Color(0xFF10B981))),
-          ],
-          if (qrData != null) ...[
-            const SizedBox(height: 12),
-            const Text('Scan QR:', style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 8),
-            Center(child: Container(color: Colors.white, padding: const EdgeInsets.all(8), child: QrImageView(data: qrData!, size: 220))),
-          ],
-          if (msg != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(msg!, style: const TextStyle(fontSize: 12))),
-        ]))),
-        const SizedBox(height: 8),
-        const Text('Experiment build • sesi & data tersimpan lokal di HP • auto-update via manifest', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
-      ]),
+      body: connectedMode ? _controlView() : _setupView(),
     );
   }
 }

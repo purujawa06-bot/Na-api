@@ -25,6 +25,7 @@ import (
 	"github.com/purujawa06-bot/na-api/backend/internal/downloader"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 	"github.com/purujawa06-bot/na-api/backend/internal/purtv"
+	"github.com/purujawa06-bot/na-api/backend/internal/purulocal"
 	"github.com/purujawa06-bot/na-api/backend/internal/reader"
 	"github.com/purujawa06-bot/na-api/backend/internal/settings"
 	"github.com/purujawa06-bot/na-api/backend/internal/tools"
@@ -54,6 +55,7 @@ func main() {
 	content.Register(mux, deps)
 	deepseek.Register(mux, deps)
 	downloader.Register(mux, deps)
+	purulocal.Register(mux, deps)
 	purtv.Register(mux, deps)
 	reader.Register(mux, deps)
 	tools.Register(mux, deps)

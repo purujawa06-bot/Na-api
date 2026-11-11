@@ -32,6 +32,13 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("POST /api/connect/pair", s.handlePair)
 	mux.HandleFunc("POST /api/disconnect", s.handleDisconnect)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
+	mux.HandleFunc("POST /api/pause", s.handlePause)
+	mux.HandleFunc("POST /api/start", s.handleStart)
+	mux.HandleFunc("GET /api/plugins", s.handlePlugins)
+	mux.HandleFunc("GET /api/plugins/available", s.handlePluginsAvailable)
+	mux.HandleFunc("POST /api/plugins/install", s.handlePluginInstall)
+	mux.HandleFunc("POST /api/plugins/remove", s.handlePluginRemove)
+	mux.HandleFunc("POST /api/plugins/toggle", s.handlePluginToggle)
 	return s
 }
 
@@ -136,4 +143,89 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
+	s.mgr.SetPaused(true)
+	writeJSON(w, 200, map[string]any{"ok": true, "status": s.mgr.Status()})
+}
+
+func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
+	s.mgr.SetPaused(false)
+	// pastikan terkoneksi jika sudah pernah login
+	_ = s.mgr.AutoReconnect(r.Context())
+	writeJSON(w, 200, map[string]any{"ok": true, "status": s.mgr.Status()})
+}
+
+func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
+	if s.mgr.Plugins() == nil {
+		writeJSON(w, 200, map[string]any{"ok": true, "plugins": []any{}})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "plugins": s.mgr.Plugins().ListInstalled()})
+}
+
+func (s *Server) handlePluginsAvailable(w http.ResponseWriter, r *http.Request) {
+	server := r.URL.Query().Get("server")
+	if server == "" {
+		server = "https://na-api-nue-api-e7bfd3f4.koyeb.app"
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	list, err := bot.FetchAvailable(ctx, server)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "plugins": list, "server": server})
+}
+
+func (s *Server) handlePluginInstall(w http.ResponseWriter, r *http.Request) {
+	var p bot.Plugin
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	if s.mgr.Plugins() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "plugin store tidak tersedia"})
+		return
+	}
+	if err := s.mgr.Plugins().Install(p); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "plugins": s.mgr.Plugins().ListInstalled()})
+}
+
+func (s *Server) handlePluginRemove(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.Plugins() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "plugin store tidak tersedia"})
+		return
+	}
+	if err := s.mgr.Plugins().Remove(body.ID); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "plugins": s.mgr.Plugins().ListInstalled()})
+}
+
+func (s *Server) handlePluginToggle(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID      string `json:"id"`
+		Enabled bool   `json:"enabled"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.Plugins() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "plugin store tidak tersedia"})
+		return
+	}
+	if err := s.mgr.Plugins().SetEnabled(body.ID, body.Enabled); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "plugins": s.mgr.Plugins().ListInstalled()})
 }

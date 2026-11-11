@@ -41,6 +41,8 @@ func init() {
 type Status struct {
 	Connected bool   `json:"connected"`
 	LoggedIn  bool   `json:"logged_in"`
+	Paused    bool   `json:"paused"`
+	HasSession bool  `json:"has_session"`
 	JID       string `json:"jid,omitempty"`
 	PushName  string `json:"push_name,omitempty"`
 	LastError string `json:"last_error,omitempty"`
@@ -50,10 +52,12 @@ type Manager struct {
 	cfgStore *ConfigStore
 	dataDir  string
 
-	mu      sync.RWMutex
-	client  *whatsmeow.Client
-	qrChan  <-chan whatsmeow.QRChannelItem
-	status  Status
+	mu       sync.RWMutex
+	client   *whatsmeow.Client
+	qrChan   <-chan whatsmeow.QRChannelItem
+	status   Status
+	paused   bool
+	plugins  *PluginStore
 }
 
 func NewManager(configPath, dataDir string) (*Manager, error) {
@@ -64,7 +68,11 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{cfgStore: cfgStore, dataDir: dataDir}, nil
+	pstore, err := NewPluginStore(filepath.Join(dataDir, "plugins.json"))
+	if err != nil {
+		return nil, err
+	}
+	return &Manager{cfgStore: cfgStore, dataDir: dataDir, plugins: pstore}, nil
 }
 
 func (m *Manager) Config() Config { return m.cfgStore.Get() }
@@ -73,18 +81,55 @@ func (m *Manager) SaveConfig(cfg Config) error { return m.cfgStore.Save(cfg) }
 
 func (m *Manager) Status() Status {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	s := m.status
-	if m.client != nil {
-		s.Connected = m.client.IsConnected()
-		s.LoggedIn = m.client.IsLoggedIn()
-		if m.client.Store != nil && m.client.Store.ID != nil {
-			s.JID = m.client.Store.ID.String()
-			s.PushName = m.client.Store.PushName
+	client := m.client
+	paused := m.paused
+	base := m.status
+	m.mu.RUnlock()
+
+	s := base
+	s.Paused = paused
+	if client != nil {
+		s.Connected = client.IsConnected()
+		s.LoggedIn = client.IsLoggedIn()
+		if client.Store != nil && client.Store.ID != nil {
+			s.JID = client.Store.ID.String()
+			s.PushName = client.Store.PushName
+			s.HasSession = true
+		}
+	}
+	if !s.HasSession {
+		if _, err := os.Stat(filepath.Join(m.dataDir, "store.db")); err == nil {
+			// ada store lokal -> kemungkinan sudah pernah login / sesi tersimpan
+			// coba init client cepat untuk status akurat (best effort)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if c, err := m.ensureClient(ctx); err == nil && c != nil && c.Store != nil && c.Store.ID != nil {
+				s.HasSession = true
+				s.LoggedIn = c.IsLoggedIn()
+				s.Connected = c.IsConnected()
+				s.JID = c.Store.ID.String()
+				s.PushName = c.Store.PushName
+			} else {
+				s.HasSession = true
+			}
 		}
 	}
 	return s
 }
+
+func (m *Manager) SetPaused(paused bool) {
+	m.mu.Lock()
+	m.paused = paused
+	m.mu.Unlock()
+}
+
+func (m *Manager) IsPaused() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.paused
+}
+
+func (m *Manager) Plugins() *PluginStore { return m.plugins }
 
 func (m *Manager) ensureClient(ctx context.Context) (*whatsmeow.Client, error) {
 	m.mu.Lock()
@@ -122,20 +167,27 @@ func (m *Manager) eventHandler(evt interface{}) {
 }
 
 func (m *Manager) onMessage(evt *events.Message) {
+	if m.IsPaused() {
+		return
+	}
 	cfg := m.Config()
 	if cfg.BlockSelfChat && evt.Info.IsFromMe {
-		return // proteksi: bot tidak chat/merespon diri sendiri
+		return
 	}
 	text := extractText(evt)
 	if text == "" {
 		return
 	}
-	reply, ok := handleCommand(text, cfg)
-	if !ok {
+	cmd, args := parseCommand(text)
+	if cmd == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	reply, ok := m.resolveCommand(ctx, cmd, args, cfg)
+	if !ok || reply == "" {
+		return
+	}
 	_ = m.sendText(ctx, evt.Info.Chat, reply)
 }
 
@@ -168,40 +220,64 @@ func extractText(evt *events.Message) string {
 	return ""
 }
 
-func handleCommand(text string, cfg Config) (string, bool) {
+func parseCommand(text string) (cmd, args string) {
 	t := strings.TrimSpace(text)
 	if t == "" {
-		return "", false
+		return "", ""
 	}
 	// dukung prefix simbol umum (., /, !, #, dll) + tanpa prefix
-	body := strings.ToLower(t)
-	if len(body) > 0 {
-		c := body[0]
-		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
-			body = strings.TrimSpace(body[1:])
+	if len(t) > 0 {
+		c := t[0]
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
+			t = strings.TrimSpace(t[1:])
 		}
 	}
-	switch body {
-	case "ping":
-		return fmt.Sprintf("pong 🏓\n%s aktif", cfg.BotName), true
-	case "menu":
-		menu := fmt.Sprintf(
-			"╭─〔 %s 〕\n"+
-				"│ Owner : %s\n"+
-				"│ Bot   : %s\n"+
-				"├─〔 Menu 〕\n"+
-				"│ • .ping / /ping - cek respon bot\n"+
-				"│ • .menu - tampilkan menu\n"+
-				"├─〔 Info 〕\n"+
-				"│ • Prefix: semua simbol (., /, !, dll)\n"+
-				"│ • Block self chat: %v\n"+
-				"╰────────────",
-			cfg.BotName, cfg.OwnerName, cfg.BotNumber, cfg.BlockSelfChat,
-		)
-		return menu, true
-	default:
-		return "", false
+	if t == "" {
+		return "", ""
 	}
+	parts := strings.Fields(t)
+	cmd = strings.ToLower(parts[0])
+	if len(parts) > 1 {
+		args = strings.TrimSpace(t[len(parts[0]):])
+	}
+	return cmd, args
+}
+
+func (m *Manager) resolveCommand(ctx context.Context, cmd, args string, cfg Config) (string, bool) {
+	switch cmd {
+	case "ping":
+		return "pong 🏓", true
+	case "menu":
+		return m.buildMenu(cfg), true
+	case "owner":
+		return fmt.Sprintf("Owner: %s\nNomor: %s", cfg.OwnerName, cfg.OwnerNumber), true
+	}
+	if m.plugins != nil {
+		if reply, ok, err := m.plugins.Handle(ctx, cmd, args, cfg); err == nil && ok {
+			return reply, true
+		} else if err != nil {
+			return "Plugin error: " + err.Error(), true
+		}
+	}
+	return "", false
+}
+
+func (m *Manager) buildMenu(cfg Config) string {
+	lines := []string{
+		"╭─〔 " + cfg.BotName + " 〕",
+		"│ .ping",
+		"│ .menu",
+		"│ .owner",
+	}
+	if m.plugins != nil {
+		for _, p := range m.plugins.ListInstalled() {
+			if p.Enabled && p.Command != "" {
+				lines = append(lines, "│ ."+p.Command)
+			}
+		}
+	}
+	lines = append(lines, "╰────────")
+	return strings.Join(lines, "\n")
 }
 
 // ConnectQR memulai login via QR. Mengembalikan channel kode QR (string).
