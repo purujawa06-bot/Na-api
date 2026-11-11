@@ -112,82 +112,9 @@ jobs:
             exit 0
           fi
           mkdir -p android/app
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
-          cat > android/key.properties <<EOF
-          storePassword=${ANDROID_KEYSTORE_PASSWORD}
-          keyPassword=${ANDROID_KEY_PASSWORD}
-          keyAlias=${ANDROID_KEY_ALIAS}
-          storeFile=release-keystore.jks
-          EOF
-          python3 - <<'PY'
-          import pathlib, re
-          for p in [pathlib.Path('android/app/build.gradle'), pathlib.Path('android/app/build.gradle.kts')]:
-            if not p.exists():
-              continue
-            s = p.read_text()
-            if 'key.properties' in s and 'signingConfigs' in s:
-              print(f'signing already configured in {p}')
-              continue
-            if p.suffix == '.kts':
-              pre = '''
-import java.util.Properties
-import java.io.FileInputStream
-
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-}
-'''
-              sc = '''
-    signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
-            storePassword = keystoreProperties["storePassword"] as String?
-        }
-    }
-'''
-              if 'import java.util.Properties' not in s:
-                s = pre + s
-              # insert signingConfigs inside android block
-              m = re.search(r'\nandroid\s*\{', s)
-              if m:
-                s = s[:m.end()] + sc + s[m.end():]
-              # set release buildType signingConfig
-              s = re.sub(r'(buildTypes\s*\{[\s\S]*?release\s*\{)', r'\1\n            signingConfig = signingConfigs.getByName("release")', s, count=1)
-            else:
-              pre = '''
-def keystoreProperties = new Properties()
-def keystorePropertiesFile = rootProject.file('key.properties')
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-}
-'''
-              sc = '''
-    signingConfigs {
-        release {
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword keystoreProperties['storePassword']
-        }
-    }
-'''
-              if "def keystoreProperties" not in s:
-                s = pre + s
-              m = re.search(r'\nandroid\s*\{', s)
-              if m:
-                s = s[:m.end()] + sc + s[m.end():]
-              # replace debug signing in release with release signingConfig, or add it
-              if re.search(r'buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+signingConfigs\.\w+', s):
-                s = re.sub(r'(buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?)signingConfig\s+signingConfigs\.\w+', r'\1signingConfig signingConfigs.release', s, count=1)
-              else:
-                s = re.sub(r'(buildTypes\s*\{[\s\S]*?release\s*\{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
-            p.write_text(s)
-            print(f'patched release signing in {p}')
-          PY
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=release-keystore.jks\n' "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" > android/key.properties
+          python3 "$GITHUB_WORKSPACE/scripts/patch-android-release-signing.py"
           echo "Production signing configured."
 
       - name: Flutter pub get
