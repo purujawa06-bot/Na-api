@@ -29,6 +29,7 @@ def patch():
                 '            keyPassword = keystoreProperties["keyPassword"] as String?\n'
                 '            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }\n'
                 '            storePassword = keystoreProperties["storePassword"] as String?\n'
+                '            storeType = (keystoreProperties["storeType"] as String?) ?: "PKCS12"\n'
                 '        }\n'
                 '    }\n'
             )
@@ -57,6 +58,7 @@ def patch():
                 "            keyPassword keystoreProperties['keyPassword']\n"
                 "            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\n"
                 "            storePassword keystoreProperties['storePassword']\n"
+                "            storeType (keystoreProperties['storeType'] ?: 'PKCS12')\n"
                 "        }\n"
                 "    }\n"
             )
