@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Environment
 import android.os.IBinder
 import android.util.Log
 import java.io.File
@@ -168,11 +169,13 @@ class BackendService : Service() {
                 try { Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor() } catch (_: Exception) {}
                 Log.i("puruLocal", "Using backend binary: ${bin.absolutePath} exists=${bin.exists()} canExec=${bin.canExecute()} len=${bin.length()}")
 
-                val dataDir = File(filesDir, "purulocal")
+                val dataDir = getPersistentDataDir(this)
                 dataDir.mkdirs()
+                migrateLegacyDataIfNeeded(dataDir)
                 val cfg = File(dataDir, "config.json").absolutePath
                 val storeDir = File(dataDir, "data")
                 storeDir.mkdirs()
+                Log.i("puruLocal", "Using persistent data dir: ${dataDir.absolutePath}")
 
                 val cmd = buildStartCommand(bin)
                 Log.i("puruLocal", "Starting backend cmd=${cmd.joinToString(" ")}")
@@ -207,5 +210,55 @@ class BackendService : Service() {
                 starting = false
             }
         }.start()
+    }
+
+    private fun getPersistentDataDir(ctx: Context): File {
+        // Simpan di penyimpanan bersama agar sesi tetap aman saat APK dihapus (Android 10/legacy)
+        return try {
+            val ext = Environment.getExternalStorageDirectory()
+            val dir = File(ext, "puruLocalBot")
+            if (dir.exists() || dir.mkdirs()) dir else File(ctx.filesDir, "purulocal")
+        } catch (e: Exception) {
+            Log.w("puruLocal", "Falling back to app-private data dir", e)
+            File(ctx.filesDir, "purulocal")
+        }
+    }
+
+    private fun migrateLegacyDataIfNeeded(target: File) {
+        try {
+            val legacy = File(filesDir, "purulocal")
+            if (!legacy.exists() || legacy.absolutePath == target.absolutePath) return
+            val marker = File(target, ".migrated")
+            if (marker.exists()) return
+            // copy basic files/dirs if missing in target
+            copyIfMissing(File(legacy, "config.json"), File(target, "config.json"))
+            copyDirIfMissing(File(legacy, "data"), File(target, "data"))
+            marker.writeText("ok")
+            Log.i("puruLocal", "Migrated legacy data from ${legacy.absolutePath} to ${target.absolutePath}")
+        } catch (e: Exception) {
+            Log.w("puruLocal", "Legacy data migration failed", e)
+        }
+    }
+
+    private fun copyIfMissing(src: File, dst: File) {
+        try {
+            if (!src.exists() || dst.exists()) return
+            dst.parentFile?.mkdirs()
+            src.copyTo(dst, overwrite = false)
+        } catch (_: Exception) {}
+    }
+
+    private fun copyDirIfMissing(src: File, dst: File) {
+        try {
+            if (!src.exists() || !src.isDirectory) return
+            if (!dst.exists()) {
+                src.copyRecursively(dst, overwrite = false)
+                return
+            }
+            src.listFiles()?.forEach { f ->
+                val d = File(dst, f.name)
+                if (f.isDirectory) copyDirIfMissing(f, d) else copyIfMissing(f, d)
+            }
+        } catch (_: Exception) {}
     }
 }

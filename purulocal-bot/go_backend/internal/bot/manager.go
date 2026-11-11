@@ -99,8 +99,7 @@ func (m *Manager) Status() Status {
 	}
 	if !s.HasSession {
 		if _, err := os.Stat(filepath.Join(m.dataDir, "store.db")); err == nil {
-			// ada store lokal -> kemungkinan sudah pernah login / sesi tersimpan
-			// coba init client cepat untuk status akurat (best effort)
+			// cek apakah store menyimpan identitas perangkat (sudah pernah login)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			if c, err := m.ensureClient(ctx); err == nil && c != nil && c.Store != nil && c.Store.ID != nil {
@@ -109,8 +108,6 @@ func (m *Manager) Status() Status {
 				s.Connected = c.IsConnected()
 				s.JID = c.Store.ID.String()
 				s.PushName = c.Store.PushName
-			} else {
-				s.HasSession = true
 			}
 		}
 	}
@@ -355,10 +352,19 @@ func (m *Manager) Logout(ctx context.Context) error {
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
-	if c == nil {
-		return nil
+	var err error
+	if c != nil {
+		err = c.Logout(ctx)
+		c.Disconnect()
 	}
-	return c.Logout(ctx)
+	// reset client agar status/sesi benar-benar bersih (kembali ke state login)
+	m.mu.Lock()
+	m.client = nil
+	m.qrChan = nil
+	m.paused = false
+	m.status = Status{}
+	m.mu.Unlock()
+	return err
 }
 
 func (m *Manager) AutoReconnect(ctx context.Context) error {
