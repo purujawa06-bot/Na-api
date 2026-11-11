@@ -1,9 +1,12 @@
 package com.puruboy.purulocal_bot
 
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipFile
 
 class MainActivity : FlutterActivity() {
     private var backendProcess: Process? = null
@@ -22,23 +25,55 @@ class MainActivity : FlutterActivity() {
             candidates.add(File(parent, "arm64-v8a/libpurulocal.so"))
             candidates.add(File(parent, "arm64/libpurulocal.so"))
             candidates.add(File(parent, "armeabi-v7a/libpurulocal.so"))
-            // scan subdirs
             parent.listFiles()?.forEach { dir ->
                 if (dir.isDirectory) candidates.add(File(dir, "libpurulocal.so"))
             }
         }
-        // also check common locations
         candidates.add(File("/data/data/$packageName/lib/libpurulocal.so"))
         for (c in candidates) {
-            try {
-                if (c.exists() && c.canExecute()) return c
-            } catch (_: Exception) {}
+            try { if (c.exists() && c.canExecute()) return c } catch (_: Exception) {}
         }
-        // fallback: first existing even if canExecute check is odd
         for (c in candidates) {
             try { if (c.exists()) return c } catch (_: Exception) {}
         }
+
+        // Fallback: extract from APK (handles extractNativeLibs=false / non-extracted libs)
+        try {
+            val extracted = extractBackendFromApk()
+            if (extracted != null && extracted.exists()) return extracted
+        } catch (e: Exception) {
+            Log.e("puruLocal", "Failed to extract backend from APK", e)
+        }
+
         Log.e("puruLocal", "Backend binary not found. nativeLibraryDir=$nativeDir candidates=${candidates.map { it.absolutePath }}")
+        return null
+    }
+
+    private fun extractBackendFromApk(): File? {
+        val outDir = File(filesDir, "purulocal/bin")
+        outDir.mkdirs()
+        val outFile = File(outDir, "libpurulocal.so")
+        val abis = try { Build.SUPPORTED_ABIS?.toList() ?: emptyList() } catch (_: Exception) { emptyList() }
+        val apkPath = applicationInfo.sourceDir ?: return null
+        ZipFile(apkPath).use { zip ->
+            val entries = abis.map { "lib/$it/libpurulocal.so" } +
+                listOf("lib/arm64-v8a/libpurulocal.so", "lib/armeabi-v7a/libpurulocal.so", "lib/x86_64/libpurulocal.so")
+            for (name in entries.distinct()) {
+                val entry = zip.getEntry(name) ?: continue
+                // reuse if size matches
+                if (outFile.exists() && outFile.length() == entry.size) {
+                    outFile.setExecutable(true)
+                    Log.i("puruLocal", "Using cached extracted backend: ${outFile.absolutePath}")
+                    return outFile
+                }
+                zip.getInputStream(entry).use { input ->
+                    FileOutputStream(outFile).use { output -> input.copyTo(output) }
+                }
+                outFile.setExecutable(true)
+                Log.i("puruLocal", "Extracted backend from APK ($name): ${outFile.absolutePath}")
+                return outFile
+            }
+        }
         return null
     }
 
