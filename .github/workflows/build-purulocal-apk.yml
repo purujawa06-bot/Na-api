@@ -48,19 +48,6 @@ jobs:
         with:
           go-version: '1.22.x'
 
-      - name: Cache Android debug keystore (stable signing for OTA updates)
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: purulocal-debug-keystore-v1
-
-      - name: Ensure Android debug keystore
-        run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-
       - name: Install Android tools
         run: |
           sudo apt-get update
@@ -112,6 +99,96 @@ jobs:
             p.write_text(s)
             print(f'patched {p}')
           PY
+
+      - name: Configure production signing (from secrets)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "${ANDROID_KEYSTORE_BASE64}" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 not set; building without production signing config (release may be debug-signed)."
+            exit 0
+          fi
+          mkdir -p android/app
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=${ANDROID_KEYSTORE_PASSWORD}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          storeFile=release-keystore.jks
+          EOF
+          python3 - <<'PY'
+          import pathlib, re
+          for p in [pathlib.Path('android/app/build.gradle'), pathlib.Path('android/app/build.gradle.kts')]:
+            if not p.exists():
+              continue
+            s = p.read_text()
+            if 'key.properties' in s and 'signingConfigs' in s:
+              print(f'signing already configured in {p}')
+              continue
+            if p.suffix == '.kts':
+              pre = '''
+import java.util.Properties
+import java.io.FileInputStream
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+'''
+              sc = '''
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+            storePassword = keystoreProperties["storePassword"] as String?
+        }
+    }
+'''
+              if 'import java.util.Properties' not in s:
+                s = pre + s
+              # insert signingConfigs inside android block
+              m = re.search(r'\nandroid\s*\{', s)
+              if m:
+                s = s[:m.end()] + sc + s[m.end():]
+              # set release buildType signingConfig
+              s = re.sub(r'(buildTypes\s*\{[\s\S]*?release\s*\{)', r'\1\n            signingConfig = signingConfigs.getByName("release")', s, count=1)
+            else:
+              pre = '''
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+'''
+              sc = '''
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+'''
+              if "def keystoreProperties" not in s:
+                s = pre + s
+              m = re.search(r'\nandroid\s*\{', s)
+              if m:
+                s = s[:m.end()] + sc + s[m.end():]
+              # replace debug signing in release with release signingConfig, or add it
+              if re.search(r'buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+signingConfigs\.\w+', s):
+                s = re.sub(r'(buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?)signingConfig\s+signingConfigs\.\w+', r'\1signingConfig signingConfigs.release', s, count=1)
+              else:
+                s = re.sub(r'(buildTypes\s*\{[\s\S]*?release\s*\{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
+            p.write_text(s)
+            print(f'patched release signing in {p}')
+          PY
+          echo "Production signing configured."
 
       - name: Flutter pub get
         run: flutter pub get
