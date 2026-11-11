@@ -129,6 +129,22 @@ func runAI(r *http.Request, prompt string) (string, error) {
 			{"role": "user", "content": prompt},
 		},
 		"stream": true,
+		"tools": []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "getWeather",
+					"description": "Cuaca sebuah kota",
+					"parameters": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"city": map[string]any{"type": "string"},
+						},
+						"required": []string{"city"},
+					},
+				},
+			},
+		},
 	}
 	b, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, bytes.NewReader(b))
