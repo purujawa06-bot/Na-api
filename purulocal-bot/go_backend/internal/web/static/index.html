@@ -176,8 +176,6 @@
       <div class="card-h"><div class="card-title">Plugin</div><button class="small-btn" onclick="loadPlugins()">Reload</button></div>
       <div id="installedPlugins" class="muted">Memuat plugin...</div>
       <div style="height:10px"></div>
-      <label>Server plugin (na-api)</label>
-      <input id="plugin_server" type="text" value="https://na-api-nue-api-e7bfd3f4.koyeb.app" />
       <button class="btn" style="margin-top:8px" onclick="loadAvailable()">Muat Plugin dari Server</button>
       <div id="availablePlugins" style="margin-top:8px"></div>
     </div>
@@ -187,6 +185,7 @@
 
   <script>
     const $ = (id)=>document.getElementById(id);
+    const PLUGIN_SERVER = 'https://na-api-nue-api-e7bfd3f4.koyeb.app';
     let cfgTouched = false;
     let lastCfg = null;
     let qrTimer = null;
@@ -364,7 +363,7 @@
 
     async function loadAvailable(){
       $('availablePlugins').innerHTML = '<span class="muted">Memuat...</span>';
-      const server = $('plugin_server').value || 'https://na-api-nue-api-e7bfd3f4.koyeb.app';
+      const server = PLUGIN_SERVER;
       const d = await api('/api/plugins/available?server='+encodeURIComponent(server));
       if(!d.ok){ $('availablePlugins').innerHTML = `<span class="err">${esc(d.error||'Gagal')}</span>`; return; }
       const list = d.plugins||[];
