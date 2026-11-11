@@ -92,14 +92,16 @@ jobs:
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
 
-      - name: Publish GitHub Release (optional)
-        if: ${{ inputs.release_tag != '' }}
+      - name: Publish rolling experiment release (APK download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag }}
-          name: puruLocal Bot ${{ inputs.release_tag }} (experiment)
+          tag_name: purulocal-experiment
+          name: puruLocal Bot (experiment)
+          body: "Rolling experiment build APK puruLocal Bot. Sesi bot berjalan lokal di perangkat."
           draft: false
           prerelease: true
+          make_latest: false
+          overwrite_files: true
           files: |
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256

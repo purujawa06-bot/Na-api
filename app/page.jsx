@@ -142,13 +142,22 @@ const PuruLocalPromo = () => (
             </p>
             <div className="grid grid-cols-1 gap-2">
                 <a
-                    href="https://github.com/purujawa06-bot/Na-api/releases/latest"
+                    href="https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/app-release.apk"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
                 >
                     <i className="fas fa-download text-sm"></i>
                     <span>Download APK (Experiment)</span>
+                </a>
+                <a
+                    href="https://github.com/purujawa06-bot/Na-api/releases/tag/purulocal-experiment"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-card border border-default hover:bg-white/5 text-secondary font-semibold py-2.5 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    <i className="fab fa-github text-sm"></i>
+                    <span>Halaman Release & SHA-256</span>
                 </a>
                 <Link
                     href="/blog"
