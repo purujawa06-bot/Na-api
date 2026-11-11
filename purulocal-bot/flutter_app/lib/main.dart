@@ -140,6 +140,11 @@ class _ShellScreenState extends State<ShellScreen> {
     }
   }
 
+  void _notifyWebUpdate(String msg, {bool isErr = false}) {
+    final safe = msg.replaceAll("\\", "\\\\").replaceAll("'", "\\'").replaceAll("\n", " ");
+    _controller.runJavaScript("window.puruUpdateDone && window.puruUpdateDone('$safe', ${isErr ? 'true' : 'false'})").catchError((_){});
+  }
+
   Future<void> _manualCheckUpdate() async {
     if (_checkingUpdate || !mounted) return;
     final manifestUrl = await _getManifestUrl();
@@ -147,6 +152,7 @@ class _ShellScreenState extends State<ShellScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URL manifest tidak tersedia')));
       }
+      _notifyWebUpdate('URL manifest tidak tersedia.', isErr: true);
       return;
     }
     _checkingUpdate = true;
@@ -156,14 +162,17 @@ class _ShellScreenState extends State<ShellScreen> {
       if (!mounted) return;
       if (info == null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada update tersedia (atau gagal mengecek).')));
+        _notifyWebUpdate('Tidak ada update tersedia.');
         return;
       }
       _updatePrompted = true;
+      _notifyWebUpdate('Update tersedia: ${info.versionName}');
       await _showUpdateDialog(svc, info);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cek update: $e')));
       }
+      _notifyWebUpdate('Gagal cek update.', isErr: true);
     } finally {
       _checkingUpdate = false;
     }
