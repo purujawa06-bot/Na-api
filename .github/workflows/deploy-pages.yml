@@ -3,6 +3,32 @@ name: Deploy Frontend to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'legacy/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'utils/**'
+      - '*.js'
+      - '*.jsx'
+      - '*.mjs'
+      - '*.ts'
+      - '*.tsx'
+      - '*.json'
+      - '*.css'
+      - 'next.config.*'
+      - 'tailwind.config.*'
+      - 'postcss.config.*'
+      - 'jsconfig.json'
+      - 'tsconfig*.json'
+      - '.eslintrc*'
+      - 'instrumentation.*'
+      - 'middleware.*'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:

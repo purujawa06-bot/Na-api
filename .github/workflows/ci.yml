@@ -3,6 +3,33 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'legacy/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'utils/**'
+      - 'backend/**'
+      - '*.js'
+      - '*.jsx'
+      - '*.mjs'
+      - '*.ts'
+      - '*.tsx'
+      - '*.json'
+      - '*.css'
+      - 'next.config.*'
+      - 'tailwind.config.*'
+      - 'postcss.config.*'
+      - 'jsconfig.json'
+      - 'tsconfig*.json'
+      - '.eslintrc*'
+      - 'instrumentation.*'
+      - 'middleware.*'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
