@@ -50,70 +50,100 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun extractBackendFromApk(): File? {
-        val outDir = File(filesDir, "purulocal/bin")
-        outDir.mkdirs()
-        val outFile = File(outDir, "libpurulocal.so")
+        val dirs = listOf(
+            File(codeCacheDir, "purulocal"),
+            File(filesDir, "purulocal/bin"),
+            File(cacheDir, "purulocal")
+        )
         val abis = try { Build.SUPPORTED_ABIS?.toList() ?: emptyList() } catch (_: Exception) { emptyList() }
         val apkPath = applicationInfo.sourceDir ?: return null
-        ZipFile(apkPath).use { zip ->
-            val entries = abis.map { "lib/$it/libpurulocal.so" } +
-                listOf("lib/arm64-v8a/libpurulocal.so", "lib/armeabi-v7a/libpurulocal.so", "lib/x86_64/libpurulocal.so")
-            for (name in entries.distinct()) {
-                val entry = zip.getEntry(name) ?: continue
-                // reuse if size matches
-                if (outFile.exists() && outFile.length() == entry.size) {
-                    outFile.setExecutable(true)
-                    Log.i("puruLocal", "Using cached extracted backend: ${outFile.absolutePath}")
-                    return outFile
+        val names = (abis.map { "lib/$it/libpurulocal.so" } +
+            listOf("lib/arm64-v8a/libpurulocal.so", "lib/armeabi-v7a/libpurulocal.so", "lib/x86_64/libpurulocal.so")).distinct()
+
+        for (outDir in dirs) {
+            try {
+                outDir.mkdirs()
+                val outFile = File(outDir, "libpurulocal.so")
+                ZipFile(apkPath).use { zip ->
+                    for (name in names) {
+                        val entry = zip.getEntry(name) ?: continue
+                        if (!outFile.exists() || outFile.length() != entry.size) {
+                            zip.getInputStream(entry).use { input ->
+                                FileOutputStream(outFile).use { output -> input.copyTo(output) }
+                            }
+                            Log.i("puruLocal", "Extracted backend from APK ($name) to ${outFile.absolutePath}")
+                        } else {
+                            Log.i("puruLocal", "Using cached extracted backend: ${outFile.absolutePath}")
+                        }
+                        outFile.setReadable(true, true)
+                        outFile.setExecutable(true, false)
+                        try { Runtime.getRuntime().exec(arrayOf("chmod", "755", outFile.absolutePath)).waitFor() } catch (_: Exception) {}
+                        return outFile
+                    }
                 }
-                zip.getInputStream(entry).use { input ->
-                    FileOutputStream(outFile).use { output -> input.copyTo(output) }
-                }
-                outFile.setExecutable(true)
-                Log.i("puruLocal", "Extracted backend from APK ($name): ${outFile.absolutePath}")
-                return outFile
+            } catch (e: Exception) {
+                Log.e("puruLocal", "Extract failed for dir ${outDir.absolutePath}", e)
             }
         }
+        Log.e("puruLocal", "extractBackendFromApk: no libpurulocal.so found in APK $apkPath for abis=$abis")
         return null
     }
 
     private fun startLocalBackend() {
-        try {
-            // avoid duplicate if already listening (e.g. debug/manual run)
-            if (isPortInUse(8787)) {
-                Log.i("puruLocal", "Backend port 8787 already in use, skipping start")
-                return
-            }
-            val bin = findBackendBinary() ?: return
-            try { bin.setExecutable(true) } catch (_: Exception) {}
+        Thread {
+            try {
+                if (isPortInUse(8787)) {
+                    Log.i("puruLocal", "Backend port 8787 already in use, skipping start")
+                    return@Thread
+                }
+                Log.i("puruLocal", "Starting local backend. nativeLibraryDir=${applicationInfo.nativeLibraryDir} sourceDir=${applicationInfo.sourceDir} abi=${Build.SUPPORTED_ABIS?.joinToString()}")
+                val bin = findBackendBinary() ?: run {
+                    Log.e("puruLocal", "No backend binary available")
+                    return@Thread
+                }
+                try { bin.setReadable(true, true); bin.setExecutable(true, false) } catch (_: Exception) {}
+                try { Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor() } catch (_: Exception) {}
+                Log.i("puruLocal", "Using backend binary: ${bin.absolutePath} exists=${bin.exists()} canExec=${bin.canExecute()} len=${bin.length()}")
 
-            val dataDir = File(filesDir, "purulocal")
-            dataDir.mkdirs()
-            val cfg = File(dataDir, "config.json").absolutePath
-            val storeDir = File(dataDir, "data")
-            storeDir.mkdirs()
+                val dataDir = File(filesDir, "purulocal")
+                dataDir.mkdirs()
+                val cfg = File(dataDir, "config.json").absolutePath
+                val storeDir = File(dataDir, "data")
+                storeDir.mkdirs()
 
-            val pb = ProcessBuilder(bin.absolutePath)
-            pb.redirectErrorStream(true)
-            val env = pb.environment()
-            env["PURULOCAL_ADDR"] = "127.0.0.1:8787"
-            env["PURULOCAL_CONFIG"] = cfg
-            env["PURULOCAL_DATA"] = storeDir.absolutePath
-            pb.directory(dataDir)
-            backendProcess = pb.start()
+                val pb = ProcessBuilder(bin.absolutePath)
+                pb.redirectErrorStream(true)
+                val env = pb.environment()
+                env["PURULOCAL_ADDR"] = "127.0.0.1:8787"
+                env["PURULOCAL_CONFIG"] = cfg
+                env["PURULOCAL_DATA"] = storeDir.absolutePath
+                pb.directory(dataDir)
+                val proc = pb.start()
+                backendProcess = proc
+                Log.i("puruLocal", "Local backend process started pid=? bin=${bin.absolutePath}")
 
-            // Drain output to avoid blocking
-            Thread {
-                try {
-                    backendProcess?.inputStream?.bufferedReader()?.useLines { lines ->
-                        lines.forEach { Log.i("puruLocal-backend", it) }
+                Thread {
+                    try {
+                        proc.inputStream.bufferedReader().useLines { lines ->
+                            lines.forEach { Log.i("puruLocal-backend", it) }
+                        }
+                    } catch (e: Exception) {
+                        Log.w("puruLocal", "backend output reader ended", e)
                     }
-                } catch (_: Exception) {}
-            }.start()
-            Log.i("puruLocal", "Local backend started: ${bin.absolutePath}")
-        } catch (e: Exception) {
-            Log.e("puruLocal", "Failed to start backend", e)
-        }
+                }.start()
+
+                Thread {
+                    try {
+                        val code = proc.waitFor()
+                        Log.e("puruLocal", "Backend exited with code=$code")
+                    } catch (e: Exception) {
+                        Log.e("puruLocal", "Backend wait error", e)
+                    }
+                }.start()
+            } catch (e: Exception) {
+                Log.e("puruLocal", "Failed to start backend", e)
+            }
+        }.start()
     }
 
     private fun isPortInUse(port: Int): Boolean {
