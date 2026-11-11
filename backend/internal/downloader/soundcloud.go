@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -813,6 +815,120 @@ func trackDurationMS(item *soundcloudItem) *int64 {
 	return item.Duration
 }
 
+func fetchHLSAudio(ctx context.Context, client *http.Client, playlistURL string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, playlistURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("User-Agent", soundcloudUA)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("playlist HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	base, err := url.Parse(playlistURL)
+	if err != nil {
+		return nil, "", err
+	}
+	resolve := func(u string) string {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			return ""
+		}
+		pu, err := url.Parse(u)
+		if err != nil {
+			return u
+		}
+		return base.ResolveReference(pu).String()
+	}
+
+	var initURI string
+	var segments []string
+	lines := strings.Split(string(body), "\n")
+	for _, ln := range lines {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		if strings.HasPrefix(ln, "#EXT-X-MAP:") {
+			// contoh: #EXT-X-MAP:URI="..."
+			if i := strings.Index(ln, "URI=\""); i >= 0 {
+				rest := ln[i+5:]
+				if j := strings.Index(rest, "\""); j >= 0 {
+					initURI = resolve(rest[:j])
+				}
+			}
+			continue
+		}
+		if strings.HasPrefix(ln, "#") {
+			continue
+		}
+		// baris URI segmen
+		segments = append(segments, resolve(ln))
+	}
+	if len(segments) == 0 {
+		return nil, "", errors.New("playlist HLS kosong/tidak valid")
+	}
+
+	var out bytes.Buffer
+	// batas aman ~25MB
+	const maxAudio = 25 << 20
+	fetchPart := func(u string) error {
+		if u == "" {
+			return nil
+		}
+		rq, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return err
+		}
+		rq.Header.Set("User-Agent", soundcloudUA)
+		rs, err := client.Do(rq)
+		if err != nil {
+			return err
+		}
+		defer rs.Body.Close()
+		if rs.StatusCode < 200 || rs.StatusCode >= 300 {
+			return fmt.Errorf("segmen HTTP %d", rs.StatusCode)
+		}
+		n, err := io.Copy(&out, io.LimitReader(rs.Body, int64(maxAudio-out.Len()+1)))
+		if err != nil {
+			return err
+		}
+		_ = n
+		if out.Len() > maxAudio {
+			return errors.New("audio terlalu besar")
+		}
+		return nil
+	}
+	if initURI != "" {
+		if err := fetchPart(initURI); err != nil {
+			return nil, "", err
+		}
+	}
+	for _, seg := range segments {
+		if err := fetchPart(seg); err != nil {
+			return nil, "", err
+		}
+	}
+	data := out.Bytes()
+	if len(data) == 0 {
+		return nil, "", errors.New("audio kosong")
+	}
+	ct := "audio/mp4"
+	if initURI == "" {
+		// tanpa init segment, kemungkinan segmen MPEG-TS/AAC; fallback umum
+		ct = "audio/aac"
+	}
+	return data, ct, nil
+}
+
 // soundcloudAudioGET mem-proxy audio SoundCloud agar bisa diunduh/diputar klien
 // tanpa terkena proteksi/CORS/URL langsung. Param: q=<judul> atau url=<permalink track>.
 func (h *handler) soundcloudAudioGET(w http.ResponseWriter, r *http.Request) {
@@ -855,9 +971,30 @@ func (h *handler) soundcloudAudioGET(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusBadGateway, map[string]any{"success": false, "error": "Stream audio tidak tersedia"})
 		return
 	}
-	// tolak HLS playlist (bukan file audio langsung)
+	client := &http.Client{Timeout: 120 * time.Second}
+
+	// HLS/fMP4: unduh init + segmen lalu gabungkan agar bisa diputar sebagai satu file audio
 	if strings.Contains(strings.ToLower(stream), ".m3u8") || strings.EqualFold(dl.Protocol, "hls") {
-		httpx.JSON(w, http.StatusBadGateway, map[string]any{"success": false, "error": "Audio HLS tidak didukung untuk pemutaran langsung"})
+		audio, ct, err := fetchHLSAudio(ctx, client, stream)
+		if err != nil {
+			httpx.JSON(w, http.StatusBadGateway, map[string]any{"success": false, "error": err.Error()})
+			return
+		}
+		if ct == "" {
+			ct = "audio/mp4"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Length", strconv.FormatInt(int64(len(audio)), 10))
+		if dl.Filename != "" {
+			name := dl.Filename
+			if strings.HasSuffix(strings.ToLower(name), ".mp3") {
+				name = strings.TrimSuffix(name, filepath.Ext(name)) + ".m4a"
+			}
+			w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", name))
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(audio)
 		return
 	}
 
@@ -867,7 +1004,6 @@ func (h *handler) soundcloudAudioGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header.Set("User-Agent", soundcloudUA)
-	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		httpx.JSON(w, http.StatusBadGateway, map[string]any{"success": false, "error": err.Error()})
