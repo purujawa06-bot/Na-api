@@ -315,8 +315,12 @@ func runPlay(r *http.Request, query string) (map[string]any, error) {
 	if durSec > 0 {
 		out["duration_sec"] = durSec
 	}
-	if strings.TrimSpace(j.Track.StreamURL) != "" {
-		out["audio_url"] = j.Track.StreamURL
+	// gunakan proxy na-api untuk audio agar tidak gagal/CORS/proteksi saat diunduh bot
+	if link != "" {
+		out["audio_url"] = base + "/api/play/soundcloud/audio?url=" + url.QueryEscape(link)
+		out["mimetype"] = "audio/mpeg"
+	} else if strings.TrimSpace(j.Track.StreamURL) != "" {
+		out["audio_url"] = base + "/api/play/soundcloud/audio?q=" + url.QueryEscape(query)
 		out["mimetype"] = "audio/mpeg"
 	}
 	return out, nil

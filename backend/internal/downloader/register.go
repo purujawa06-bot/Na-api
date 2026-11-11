@@ -31,4 +31,5 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("GET /api/search/soundcloud", h.soundcloudSearchGET)
 	mux.HandleFunc("POST /api/search/soundcloud", h.soundcloudSearchPOST)
 	mux.HandleFunc("GET /api/play/soundcloud", h.soundcloudPlayGET)
+	mux.HandleFunc("GET /api/play/soundcloud/audio", h.soundcloudAudioGET)
 }
