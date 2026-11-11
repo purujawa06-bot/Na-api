@@ -13,15 +13,45 @@ class MainActivity : FlutterActivity() {
         startLocalBackend()
     }
 
+    private fun findBackendBinary(): File? {
+        val nativeDir = applicationInfo.nativeLibraryDir
+        val candidates = mutableListOf<File>()
+        candidates.add(File(nativeDir, "libpurulocal.so"))
+        val parent = File(nativeDir).parentFile
+        if (parent != null) {
+            candidates.add(File(parent, "arm64-v8a/libpurulocal.so"))
+            candidates.add(File(parent, "arm64/libpurulocal.so"))
+            candidates.add(File(parent, "armeabi-v7a/libpurulocal.so"))
+            // scan subdirs
+            parent.listFiles()?.forEach { dir ->
+                if (dir.isDirectory) candidates.add(File(dir, "libpurulocal.so"))
+            }
+        }
+        // also check common locations
+        candidates.add(File("/data/data/$packageName/lib/libpurulocal.so"))
+        for (c in candidates) {
+            try {
+                if (c.exists() && c.canExecute()) return c
+            } catch (_: Exception) {}
+        }
+        // fallback: first existing even if canExecute check is odd
+        for (c in candidates) {
+            try { if (c.exists()) return c } catch (_: Exception) {}
+        }
+        Log.e("puruLocal", "Backend binary not found. nativeLibraryDir=$nativeDir candidates=${candidates.map { it.absolutePath }}")
+        return null
+    }
+
     private fun startLocalBackend() {
         try {
-            val nativeDir = applicationInfo.nativeLibraryDir
-            val bin = File(nativeDir, "libpurulocal.so")
-            if (!bin.exists()) {
-                Log.e("puruLocal", "Backend binary not found: ${bin.absolutePath}")
+            // avoid duplicate if already listening (e.g. debug/manual run)
+            if (isPortInUse(8787)) {
+                Log.i("puruLocal", "Backend port 8787 already in use, skipping start")
                 return
             }
-            bin.setExecutable(true)
+            val bin = findBackendBinary() ?: return
+            try { bin.setExecutable(true) } catch (_: Exception) {}
+
             val dataDir = File(filesDir, "purulocal")
             dataDir.mkdirs()
             val cfg = File(dataDir, "config.json").absolutePath
@@ -48,6 +78,14 @@ class MainActivity : FlutterActivity() {
             Log.i("puruLocal", "Local backend started: ${bin.absolutePath}")
         } catch (e: Exception) {
             Log.e("puruLocal", "Failed to start backend", e)
+        }
+    }
+
+    private fun isPortInUse(port: Int): Boolean {
+        return try {
+            java.net.Socket("127.0.0.1", port).use { true }
+        } catch (_: Exception) {
+            false
         }
     }
 
