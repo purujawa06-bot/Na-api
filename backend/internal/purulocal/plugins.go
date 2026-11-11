@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -104,12 +103,12 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "reply": reply})
 	case "play", "music-play":
-		reply, err := runPlay(r, args)
+		res, err := runPlay(r, args)
 		if err != nil {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "reply": reply})
+		_ = json.NewEncoder(w).Encode(res)
 	default:
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "plugin command tidak dikenali"})
 	}
@@ -248,9 +247,9 @@ func (h *handlers) updateManifest(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
-func runPlay(r *http.Request, query string) (string, error) {
+func runPlay(r *http.Request, query string) (map[string]any, error) {
 	if strings.TrimSpace(query) == "" {
-		return "Gunakan: .play <judul lagu>", nil
+		return map[string]any{"ok": true, "reply": "Gunakan: .play <judul lagu>"}, nil
 	}
 	base := strings.TrimRight(baseURL(r), "/")
 	if strings.Contains(base, "127.0.0.1") || strings.Contains(base, "localhost") {
@@ -259,20 +258,20 @@ func runPlay(r *http.Request, query string) (string, error) {
 	endpoint := base + "/api/play/soundcloud?q=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	client := &http.Client{Timeout: 30 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		return "Gagal mencari musik: " + err.Error(), nil
+		return map[string]any{"ok": true, "reply": "Gagal mencari musik: " + err.Error()}, nil
 	}
 	defer res.Body.Close()
 	rb, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode >= 400 {
-		return "Gagal mencari musik: " + strings.TrimSpace(string(rb)), nil
+		return map[string]any{"ok": true, "reply": "Gagal mencari musik: " + strings.TrimSpace(string(rb))}, nil
 	}
 	var j struct {
-		Success bool `json:"success"`
+		Success bool   `json:"success"`
 		Query   string `json:"query"`
 		Track   struct {
 			Title        string `json:"title"`
@@ -284,30 +283,30 @@ func runPlay(r *http.Request, query string) (string, error) {
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(rb, &j); err != nil {
-		return "Hasil musik tidak dapat dibaca.", nil
+		return map[string]any{"ok": true, "reply": "Hasil musik tidak dapat dibaca."}, nil
 	}
 	if !j.Success || j.Track.Title == "" {
 		if j.Error != "" {
-			return "Gagal: " + j.Error, nil
+			return map[string]any{"ok": true, "reply": "Gagal: " + j.Error}, nil
 		}
-		return "Lagu tidak ditemukan.", nil
+		return map[string]any{"ok": true, "reply": "Lagu tidak ditemukan."}, nil
 	}
-	dur := ""
-	if j.Track.DurationMs > 0 {
-		sec := j.Track.DurationMs / 1000
-		dur = fmt.Sprintf(" (%d:%02d)", sec/60, sec%60)
+	title := strings.TrimSpace(j.Track.Title)
+	link := strings.TrimSpace(j.Track.PermalinkURL)
+	reply := title
+	if link != "" {
+		reply = title + "\n" + link
 	}
-	lines := []string{
-		"🎵 " + j.Track.Title + dur,
+	out := map[string]any{
+		"ok":            true,
+		"reply":         reply,
+		"notice":        "mengirim audio..",
+		"title":         title,
+		"permalink_url": link,
 	}
-	if j.Track.Author != "" {
-		lines = append(lines, "👤 "+j.Track.Author)
+	if strings.TrimSpace(j.Track.StreamURL) != "" {
+		out["audio_url"] = j.Track.StreamURL
+		out["mimetype"] = "audio/mpeg"
 	}
-	if j.Track.PermalinkURL != "" {
-		lines = append(lines, "🔗 "+j.Track.PermalinkURL)
-	}
-	if j.Track.StreamURL != "" {
-		lines = append(lines, "▶️ "+j.Track.StreamURL)
-	}
-	return strings.Join(lines, "\n"), nil
+	return out, nil
 }

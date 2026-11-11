@@ -152,7 +152,16 @@ func (s *PluginStore) SetEnabled(id string, enabled bool) error {
 	return errors.New("plugin tidak ditemukan")
 }
 
-func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Config, messages []ChatMessage) (string, bool, error) {
+type ExecResult struct {
+	Reply        string `json:"reply"`
+	Notice       string `json:"notice,omitempty"`
+	AudioURL     string `json:"audio_url,omitempty"`
+	Title        string `json:"title,omitempty"`
+	PermalinkURL string `json:"permalink_url,omitempty"`
+	Mimetype     string `json:"mimetype,omitempty"`
+}
+
+func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Config, messages []ChatMessage) (ExecResult, bool, error) {
 	cmd = normalizeCmd(cmd)
 	s.mu.RLock()
 	var p *Plugin
@@ -165,13 +174,13 @@ func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Co
 	}
 	s.mu.RUnlock()
 	if p == nil {
-		return "", false, nil
+		return ExecResult{}, false, nil
 	}
-	reply, err := execPlugin(ctx, *p, args, user, cfg, messages)
-	return reply, true, err
+	res, err := execPlugin(ctx, *p, args, user, cfg, messages)
+	return res, true, err
 }
 
-func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, messages []ChatMessage) (string, error) {
+func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, messages []ChatMessage) (ExecResult, error) {
 	body := map[string]any{
 		"command":      p.Command,
 		"args":         args,
@@ -191,7 +200,7 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 	b, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ExecURL, bytes.NewReader(b))
 	if err != nil {
-		return "", err
+		return ExecResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// .ai dengan riwayat bisa lebih lama
@@ -202,7 +211,7 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 	client := &http.Client{Timeout: timeout}
 	res, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return ExecResult{}, err
 	}
 	defer res.Body.Close()
 	rb, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
@@ -210,17 +219,37 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 	if strings.Contains(ct, "application/json") {
 		var j map[string]any
 		if err := json.Unmarshal(rb, &j); err == nil {
-			if v, ok := j["reply"].(string); ok && v != "" {
-				return v, nil
+			if errStr, ok := j["error"].(string); ok && errStr != "" && j["ok"] == false {
+				return ExecResult{}, fmt.Errorf("%s", errStr)
 			}
-			if v, ok := j["result"].(string); ok && v != "" {
-				return v, nil
+			out := ExecResult{}
+			if v, ok := j["reply"].(string); ok {
+				out.Reply = v
+			} else if v, ok := j["result"].(string); ok {
+				out.Reply = v
+			} else if v, ok := j["message"].(string); ok {
+				out.Reply = v
 			}
-			if v, ok := j["message"].(string); ok && v != "" {
-				return v, nil
+			if v, ok := j["notice"].(string); ok {
+				out.Notice = v
+			}
+			if v, ok := j["audio_url"].(string); ok {
+				out.AudioURL = v
+			}
+			if v, ok := j["title"].(string); ok {
+				out.Title = v
+			}
+			if v, ok := j["permalink_url"].(string); ok {
+				out.PermalinkURL = v
+			}
+			if v, ok := j["mimetype"].(string); ok {
+				out.Mimetype = v
+			}
+			if out.Reply != "" || out.AudioURL != "" || out.Notice != "" {
+				return out, nil
 			}
 			if errStr, ok := j["error"].(string); ok && errStr != "" {
-				return "", fmt.Errorf("%s", errStr)
+				return ExecResult{}, fmt.Errorf("%s", errStr)
 			}
 		}
 	}
@@ -229,9 +258,9 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 		if txt == "" {
 			txt = res.Status
 		}
-		return "", fmt.Errorf("%s", txt)
+		return ExecResult{}, fmt.Errorf("%s", txt)
 	}
-	return txt, nil
+	return ExecResult{Reply: txt}, nil
 }
 
 // FetchAvailable mengambil daftar plugin yang tersedia dari server na-api.

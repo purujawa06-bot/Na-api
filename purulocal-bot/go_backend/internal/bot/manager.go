@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -207,14 +209,32 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if userKey == "" {
 		userKey = evt.Info.Chat.String()
 	}
-	reply, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg)
+	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg)
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
 	}
-	if !ok || reply == "" {
+	if !ok {
 		return
 	}
-	_ = m.sendReply(ctx, evt, reply)
+	// kirim audio (mis. .play) dengan notice, lalu audio + caption singkat
+	if strings.TrimSpace(res.AudioURL) != "" {
+		if strings.TrimSpace(res.Notice) != "" {
+			_ = m.sendReply(ctx, evt, res.Notice)
+		}
+		if err := m.sendAudioFromURL(ctx, evt, res); err != nil {
+			// fallback ke teks jika gagal kirim audio
+			fb := strings.TrimSpace(res.Reply)
+			if fb == "" {
+				fb = "Gagal mengirim audio."
+			}
+			_ = m.sendReply(ctx, evt, fb)
+		}
+		return
+	}
+	if strings.TrimSpace(res.Reply) == "" {
+		return
+	}
+	_ = m.sendReply(ctx, evt, res.Reply)
 }
 
 func (m *Manager) sendTyping(ctx context.Context, chat types.JID, composing bool) {
@@ -329,6 +349,63 @@ func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error
 	return err
 }
 
+func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res ExecResult) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, res.AudioURL, nil)
+	if err != nil {
+		return err
+	}
+	hc := &http.Client{Timeout: 90 * time.Second}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("download audio: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 25<<20)) // batas ~25MB
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return errors.New("audio kosong")
+	}
+	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaAudio)
+	if err != nil {
+		return err
+	}
+	mime := strings.TrimSpace(res.Mimetype)
+	if mime == "" {
+		mime = "audio/mpeg"
+	}
+	audio := &waE2E.AudioMessage{
+		URL:           proto.String(uploaded.URL),
+		DirectPath:    proto.String(uploaded.DirectPath),
+		MediaKey:      uploaded.MediaKey,
+		Mimetype:      proto.String(mime),
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    proto.Uint64(uint64(len(data))),
+		PTT:           proto.Bool(false),
+		ContextInfo:   buildReplyContext(evt),
+	}
+	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{AudioMessage: audio})
+	if err != nil {
+		return err
+	}
+	// kirim teks singkat: judul + link soundcloud (tanpa link stream panjang)
+	if strings.TrimSpace(res.Reply) != "" {
+		_ = m.sendReply(ctx, evt, res.Reply)
+	}
+	return nil
+}
+
 func extractText(evt *events.Message) string {
 	msg := evt.Message
 	if msg == nil {
@@ -370,14 +447,14 @@ func parseCommand(text string) (cmd, args string) {
 	return cmd, args
 }
 
-func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config) (string, bool) {
+func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config) (ExecResult, bool) {
 	switch cmd {
 	case "ping":
-		return "pong 🏓", true
+		return ExecResult{Reply: "pong 👍"}, true
 	case "menu":
-		return m.buildMenu(cfg), true
+		return ExecResult{Reply: m.buildMenu(cfg)}, true
 	case "owner":
-		return fmt.Sprintf("Owner: %s\nNomor: %s", cfg.OwnerName, cfg.OwnerNumber), true
+		return ExecResult{Reply: fmt.Sprintf("Owner: %s\nNomor: %s", cfg.OwnerName, cfg.OwnerNumber)}, true
 	}
 	if m.plugins != nil {
 		// .ai: ingat percakapan masing-masing user + auto-compact di ambang 6k token
@@ -385,31 +462,31 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		if normalizeCmd(cmd) == "ai" && m.aiHist != nil && m.plugins.HasCommand("ai") {
 			prompt := strings.TrimSpace(args)
 			if prompt == "" {
-				return "Gunakan: .ai <pertanyaan>", true
+				return ExecResult{Reply: "Gunakan: .ai <pertanyaan>"}, true
 			}
 			hist := m.aiHist.Get(userKey)
 			hist = append(hist, ChatMessage{Role: "user", Content: prompt})
 			hist = CompactIfNeeded(hist, 6000)
-			reply, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, hist)
+			res, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, hist)
 			if err != nil {
-				return "Plugin error: " + err.Error(), true
+				return ExecResult{Reply: "Plugin error: " + err.Error()}, true
 			}
 			if ok {
-				if strings.TrimSpace(reply) != "" {
-					hist = append(hist, ChatMessage{Role: "assistant", Content: reply})
+				if strings.TrimSpace(res.Reply) != "" {
+					hist = append(hist, ChatMessage{Role: "assistant", Content: res.Reply})
 					hist = CompactIfNeeded(hist, 6000)
 					_ = m.aiHist.Set(userKey, hist)
 				}
-				return reply, true
+				return res, true
 			}
 		}
-		if reply, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, nil); err == nil && ok {
-			return reply, true
+		if res, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, nil); err == nil && ok {
+			return res, true
 		} else if err != nil {
-			return "Plugin error: " + err.Error(), true
+			return ExecResult{Reply: "Plugin error: " + err.Error()}, true
 		}
 	}
-	return "", false
+	return ExecResult{}, false
 }
 
 func (m *Manager) buildMenu(cfg Config) string {
