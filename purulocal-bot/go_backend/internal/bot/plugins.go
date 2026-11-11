@@ -160,6 +160,8 @@ type ExecResult struct {
 	PermalinkURL string `json:"permalink_url,omitempty"`
 	Mimetype     string `json:"mimetype,omitempty"`
 	DurationSec  uint32 `json:"duration_sec,omitempty"`
+	ContactName  string `json:"contact_name,omitempty"`
+	ContactVCard string `json:"contact_vcard,omitempty"`
 }
 
 func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Config, messages []ChatMessage) (ExecResult, bool, error) {

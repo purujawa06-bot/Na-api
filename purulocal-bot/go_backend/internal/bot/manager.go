@@ -235,6 +235,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 		return
 	}
+	if strings.TrimSpace(res.ContactVCard) != "" {
+		_ = m.sendContact(ctx, evt, res)
+		return
+	}
 	if strings.TrimSpace(res.Reply) == "" {
 		return
 	}
@@ -340,6 +344,41 @@ func extractIncomingContextInfo(msg *waE2E.Message) *waE2E.ContextInfo {
 		return msg.GetInteractiveResponseMessage().GetContextInfo()
 	}
 	return nil
+}
+
+func (m *Manager) sendContact(ctx context.Context, evt *events.Message, res ExecResult) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+	msg := &waE2E.Message{
+		ContactMessage: &waE2E.ContactMessage{
+			DisplayName: proto.String(strings.TrimSpace(res.ContactName)),
+			Vcard:       proto.String(res.ContactVCard),
+			ContextInfo: buildReplyContext(evt),
+		},
+	}
+	_, err := c.SendMessage(ctx, evt.Info.Chat, msg)
+	return err
+}
+
+func buildOwnerVCard(name, number string) string {
+	name = strings.TrimSpace(name)
+	num := normalizeNumber(number)
+	waid := num
+	full := num
+	if num != "" && !strings.HasPrefix(num, "+") {
+		full = "+" + num
+	}
+	return strings.Join([]string{
+		"BEGIN:VCARD",
+		"VERSION:3.0",
+		"FN:" + name,
+		fmt.Sprintf("TEL;type=CELL;type=VOICE;waid=%s:%s", waid, full),
+		"END:VCARD",
+	}, "\n")
 }
 
 func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error {
@@ -457,7 +496,10 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 	case "menu":
 		return ExecResult{Reply: m.buildMenu(cfg)}, true
 	case "owner":
-		return ExecResult{Reply: fmt.Sprintf("Owner: %s\nNomor: %s", cfg.OwnerName, cfg.OwnerNumber)}, true
+		return ExecResult{
+			ContactName:  cfg.OwnerName,
+			ContactVCard: buildOwnerVCard(cfg.OwnerName, cfg.OwnerNumber),
+		}, true
 	}
 	if m.plugins != nil {
 		// .ai: ingat percakapan masing-masing user + auto-compact di ambang 6k token
