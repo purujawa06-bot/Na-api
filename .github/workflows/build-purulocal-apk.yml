@@ -117,6 +117,40 @@ jobs:
           python3 "$GITHUB_WORKSPACE/scripts/patch-android-release-signing.py"
           echo "Production signing configured."
 
+      - name: Disable lint vital for release APK (avoid lint tooling crash)
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          for p in [pathlib.Path('android/app/build.gradle'), pathlib.Path('android/app/build.gradle.kts')]:
+              if not p.exists():
+                  continue
+              s = p.read_text(encoding='utf-8')
+              if 'checkReleaseBuilds' in s or 'abortOnError' in s:
+                  print(f'lint already configured in {p}')
+                  continue
+              if p.suffix == '.kts':
+                  block = "\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n"
+              else:
+                  block = "\n    lintOptions {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n"
+              m = re.search(r'\nandroid\s*\{', s)
+              if not m:
+                  print(f'android block not found in {p}')
+                  continue
+              i = m.end()
+              depth = 1
+              j = i
+              while j < len(s) and depth > 0:
+                  if s[j] == '{': depth += 1
+                  elif s[j] == '}': depth -= 1
+                  j += 1
+              if depth != 0:
+                  print(f'could not match android block in {p}')
+                  continue
+              s = s[:j-1] + block + s[j-1:]
+              p.write_text(s, encoding='utf-8')
+              print(f'patched lint in {p}')
+          PY
+
       - name: Flutter pub get
         run: flutter pub get
 
