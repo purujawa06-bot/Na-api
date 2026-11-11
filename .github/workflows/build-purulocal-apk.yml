@@ -69,6 +69,37 @@ jobs:
             cp -R android_overlay/. .
           fi
 
+      - name: Enable legacy JNI lib packaging (extract native libs)
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          for p in [pathlib.Path('android/app/build.gradle'), pathlib.Path('android/app/build.gradle.kts')]:
+            if not p.exists():
+              continue
+            s = p.read_text()
+            if 'useLegacyPackaging' in s:
+              continue
+            block_groovy = "\n    packagingOptions {\n        jniLibs {\n            useLegacyPackaging = true\n        }\n    }\n"
+            block_kts = "\n    packaging {\n        jniLibs {\n            useLegacyPackaging = true\n        }\n    }\n"
+            m = re.search(r'\nandroid\s*\{', s)
+            if not m:
+              raise SystemExit(f'android block not found in {p}')
+            i = m.end()
+            # insert before closing brace of android block (approx: last closing brace in file is often build end, so find matching)
+            depth = 1
+            j = i
+            while j < len(s) and depth > 0:
+              if s[j] == '{': depth += 1
+              elif s[j] == '}': depth -= 1
+              j += 1
+            if depth != 0:
+              raise SystemExit(f'could not match android block in {p}')
+            insert = block_kts if p.suffix == '.kts' else block_groovy
+            s = s[:j-1] + insert + s[j-1:]
+            p.write_text(s)
+            print(f'patched {p}')
+          PY
+
       - name: Flutter pub get
         run: flutter pub get
 
