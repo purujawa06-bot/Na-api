@@ -111,7 +111,9 @@ class MainActivity : FlutterActivity() {
                 val storeDir = File(dataDir, "data")
                 storeDir.mkdirs()
 
-                val pb = ProcessBuilder(bin.absolutePath)
+                val cmd = buildStartCommand(bin)
+                Log.i("puruLocal", "Starting backend cmd=${cmd.joinToString(" ")}")
+                val pb = ProcessBuilder(cmd)
                 pb.redirectErrorStream(true)
                 val env = pb.environment()
                 env["PURULOCAL_ADDR"] = "127.0.0.1:8787"
@@ -120,7 +122,7 @@ class MainActivity : FlutterActivity() {
                 pb.directory(dataDir)
                 val proc = pb.start()
                 backendProcess = proc
-                Log.i("puruLocal", "Local backend process started pid=? bin=${bin.absolutePath}")
+                Log.i("puruLocal", "Local backend process started bin=${bin.absolutePath}")
 
                 Thread {
                     try {
@@ -144,6 +146,20 @@ class MainActivity : FlutterActivity() {
                 Log.e("puruLocal", "Failed to start backend", e)
             }
         }.start()
+    }
+
+    private fun buildStartCommand(bin: File): List<String> {
+        val path = bin.absolutePath
+        // native libs extracted to nativeLibraryDir are usually executable directly
+        if (path.contains("/lib/") && bin.canExecute()) return listOf(path)
+        // fallback: run via dynamic linker (helps on Android where exec from app data is restricted)
+        val linker64 = File("/system/bin/linker64")
+        val linker = File("/system/bin/linker")
+        return when {
+            linker64.exists() -> listOf(linker64.absolutePath, path)
+            linker.exists() -> listOf(linker.absolutePath, path)
+            else -> listOf(path)
+        }
     }
 
     private fun isPortInUse(port: Int): Boolean {
