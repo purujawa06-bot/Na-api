@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	rateWindow = time.Minute
-	rateLimit  = 100
-	cacheMonth = 7 * 24 * 60 * 60
+	rateWindow    = time.Minute
+	rateLimit     = 100
+	cacheDuration = 10 * 60
 )
 
 // noStorePrefixes lists dynamic/polling endpoints that must never be cached.
@@ -132,7 +132,7 @@ func withMiddleware(next http.Handler) http.Handler {
 		if isNoStore(r.URL.Path) {
 			httpx.SetNoStore(recorder)
 		} else {
-			httpx.SetCacheable(recorder, cacheMonth)
+			httpx.SetCacheable(recorder, cacheDuration)
 		}
 
 		defer func() {
