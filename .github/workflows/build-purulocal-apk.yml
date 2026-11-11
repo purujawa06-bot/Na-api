@@ -120,13 +120,28 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o ../flutter_app/android/app/src/main/jniLibs/arm64-v8a/libpurulocal.so ./cmd/purulocal
 
       - name: Build APK (release)
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.1.${{ github.run_number }}
 
-      - name: Compute checksum
+      - name: Compute checksum and manifest
         working-directory: purulocal-bot/flutter_app/build/app/outputs/flutter-apk
         run: |
           sha256sum app-release.apk > app-release.apk.sha256
           cat app-release.apk.sha256
+          HASH=$(awk '{print $1}' app-release.apk.sha256)
+          cat > update-manifest.json <<EOF
+          {
+            "app": "puruLocalBot",
+            "versionName": "0.1.${{ github.run_number }}",
+            "buildNumber": ${{ github.run_number }},
+            "minBuild": 1,
+            "apkUrl": "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/app-release.apk",
+            "sha256": "${HASH}",
+            "force": false,
+            "changelog": "Auto-update build #${{ github.run_number }} (commit ${{ github.sha }})"
+          }
+          EOF
+          echo "---manifest---"
+          cat update-manifest.json
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -135,8 +150,9 @@ jobs:
           path: |
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/update-manifest.json
 
-      - name: Publish rolling experiment release (APK download)
+      - name: Publish rolling experiment release (APK + manifest)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: purulocal-experiment
@@ -149,5 +165,6 @@ jobs:
           files: |
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/update-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

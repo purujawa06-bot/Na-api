@@ -83,6 +83,9 @@ class _ShellScreenState extends State<ShellScreen> {
     _bootTimer = Timer(const Duration(seconds: 2), _tryLoad);
   }
 
+  // Default manifest (built-in): backend na-api / release rolling menyediakan manifest terbaru
+  static const String defaultManifestUrl = 'https://na-api-nue-api-e7bfd3f4.koyeb.app/api/purulocal/update-manifest';
+
   Future<String> _getManifestUrl() async {
     try {
       final r = await http.get(Uri.parse('${localUrl}api/config')).timeout(const Duration(seconds: 4));
@@ -93,7 +96,8 @@ class _ShellScreenState extends State<ShellScreen> {
         if (u.isNotEmpty) return u;
       }
     } catch (_) {}
-    return '';
+    // fallback: URL manifest bawaan agar auto-update jalan tanpa konfigurasi manual
+    return defaultManifestUrl;
   }
 
   Future<bool> _isLoggedIn() async {
@@ -115,7 +119,7 @@ class _ShellScreenState extends State<ShellScreen> {
     final loginTransition = loggedIn && !_wasLoggedIn;
     _wasLoggedIn = loggedIn || _wasLoggedIn;
     final manifestUrl = await _getManifestUrl();
-    if (manifestUrl.isEmpty) return; // butuh URL manifest update di config
+    if (manifestUrl.isEmpty) return;
     _checkingUpdate = true;
     try {
       final svc = UpdateService(manifestUrl);
