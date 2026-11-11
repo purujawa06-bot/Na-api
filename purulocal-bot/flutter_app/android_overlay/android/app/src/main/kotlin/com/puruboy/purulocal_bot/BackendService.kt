@@ -21,6 +21,7 @@ class BackendService : Service() {
         const val NOTIF_ID = 1001
         @Volatile var backendProcess: Process? = null
         @Volatile var starting = false
+        @Volatile var instance: BackendService? = null
 
         fun ensureStarted(ctx: Context) {
             val i = Intent(ctx, BackendService::class.java)
@@ -35,15 +36,40 @@ class BackendService : Service() {
                 try { ctx.startService(i) } catch (_: Exception) {}
             }
         }
+
+        fun restartBackend() {
+            try {
+                val svc = instance ?: return
+                try { backendProcess?.destroy() } catch (_: Exception) {}
+                backendProcess = null
+                Thread {
+                    try {
+                        for (i in 0 until 10) {
+                            try { Thread.sleep(300) } catch (_: Exception) {}
+                            if (!svc.isPortInUse(8787)) break
+                        }
+                    } catch (_: Exception) {}
+                    svc.startLocalBackend(force = true)
+                }.start()
+            } catch (e: Exception) {
+                Log.e("puruLocal", "restartBackend failed", e)
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createChannel()
         startForeground(NOTIF_ID, buildNotification("puruLocal Bot berjalan"))
         startLocalBackend()
+    }
+
+    override fun onDestroy() {
+        instance = null
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -151,7 +177,7 @@ class BackendService : Service() {
         }
     }
 
-    private fun startLocalBackend() {
+    private fun startLocalBackend(force: Boolean = false) {
         if (starting) return
         synchronized(this) {
             if (starting) return
@@ -159,7 +185,7 @@ class BackendService : Service() {
         }
         Thread {
             try {
-                if (isPortInUse(8787)) {
+                if (!force && isPortInUse(8787)) {
                     Log.i("puruLocal", "Backend port 8787 already in use, skipping start")
                     return@Thread
                 }
@@ -170,12 +196,12 @@ class BackendService : Service() {
                 Log.i("puruLocal", "Using backend binary: ${bin.absolutePath} exists=${bin.exists()} canExec=${bin.canExecute()} len=${bin.length()}")
 
                 val dataDir = getPersistentDataDir(this)
-                dataDir.mkdirs()
+                if (!dataDir.exists()) dataDir.mkdirs()
                 migrateLegacyDataIfNeeded(dataDir)
                 val cfg = File(dataDir, "config.json").absolutePath
                 val storeDir = File(dataDir, "data")
-                storeDir.mkdirs()
-                Log.i("puruLocal", "Using persistent data dir: ${dataDir.absolutePath}")
+                if (!storeDir.exists()) storeDir.mkdirs()
+                Log.i("puruLocal", "Using data dir: ${dataDir.absolutePath} (writable=${ensureWritableDir(dataDir)})")
 
                 val cmd = buildStartCommand(bin)
                 Log.i("puruLocal", "Starting backend cmd=${cmd.joinToString(" ")}")
@@ -214,13 +240,34 @@ class BackendService : Service() {
 
     private fun getPersistentDataDir(ctx: Context): File {
         // Simpan di penyimpanan bersama agar sesi tetap aman saat APK dihapus (Android 10/legacy)
+        val fallback = File(ctx.filesDir, "purulocal")
         return try {
             val ext = Environment.getExternalStorageDirectory()
             val dir = File(ext, "puruLocalBot")
-            if (dir.exists() || dir.mkdirs()) dir else File(ctx.filesDir, "purulocal")
+            if (ensureWritableDir(dir)) {
+                Log.i("puruLocal", "Persistent external dir available: ${dir.absolutePath}")
+                dir
+            } else {
+                Log.w("puruLocal", "External dir not writable, using app-private dir: ${fallback.absolutePath}")
+                fallback
+            }
         } catch (e: Exception) {
             Log.w("puruLocal", "Falling back to app-private data dir", e)
-            File(ctx.filesDir, "purulocal")
+            fallback
+        }
+    }
+
+    private fun ensureWritableDir(dir: File): Boolean {
+        return try {
+            if (!dir.exists() && !dir.mkdirs()) return false
+            if (!dir.canWrite()) return false
+            val probe = File(dir, ".probe")
+            probe.writeText("ok")
+            val ok = probe.exists()
+            try { probe.delete() } catch (_: Exception) {}
+            ok
+        } catch (_: Exception) {
+            false
         }
     }
 

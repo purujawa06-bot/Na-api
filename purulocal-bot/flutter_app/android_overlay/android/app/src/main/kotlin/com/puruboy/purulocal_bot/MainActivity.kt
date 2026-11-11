@@ -37,5 +37,18 @@ class MainActivity : FlutterActivity() {
             }
         } catch (_: Exception) {}
     }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001) {
+            val storageGranted = permissions.indices.any { i ->
+                (permissions[i] == Manifest.permission.WRITE_EXTERNAL_STORAGE || permissions[i] == Manifest.permission.READ_EXTERNAL_STORAGE) &&
+                    i < grantResults.size && grantResults[i] == PackageManager.PERMISSION_GRANTED
+            }
+            if (storageGranted) {
+                try { BackendService.restartBackend() } catch (_: Exception) {}
+            }
+        }
+    }
     // Do not kill backend on destroy: service keeps it alive in background
 }
