@@ -171,6 +171,14 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if cfg.BlockSelfChat && evt.Info.IsFromMe {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// read chat (tandai pesan dibaca) jika diaktifkan
+	if cfg.ReadChat {
+		m.markRead(ctx, evt)
+	}
+
 	text := extractText(evt)
 	if text == "" {
 		return
@@ -179,13 +187,126 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if cmd == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+
+	// typing status sebelum membalas command
+	if cfg.TypingBeforeReply {
+		m.sendTyping(ctx, evt.Info.Chat, true)
+		delay := cfg.TypingDelaySec
+		if delay <= 0 {
+			delay = 1.5
+		}
+		time.Sleep(time.Duration(delay * float64(time.Second)))
+	}
+
 	reply, ok := m.resolveCommand(ctx, cmd, args, cfg)
+	if cfg.TypingBeforeReply {
+		m.sendTyping(ctx, evt.Info.Chat, false)
+	}
 	if !ok || reply == "" {
 		return
 	}
-	_ = m.sendText(ctx, evt.Info.Chat, reply)
+	_ = m.sendReply(ctx, evt, reply)
+}
+
+func (m *Manager) sendTyping(ctx context.Context, chat types.JID, composing bool) {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return
+	}
+	state := types.ChatPresencePaused
+	if composing {
+		state = types.ChatPresenceComposing
+	}
+	_ = c.SendChatPresence(ctx, chat, state, types.ChatPresenceMediaText)
+}
+
+func (m *Manager) markRead(ctx context.Context, evt *events.Message) {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return
+	}
+	ids := []types.MessageID{evt.Info.ID}
+	sender := evt.Info.Sender
+	if evt.Info.IsGroup {
+		_ = c.MarkRead(ctx, ids, evt.Info.Timestamp, evt.Info.Chat, sender)
+	} else {
+		_ = c.MarkRead(ctx, ids, evt.Info.Timestamp, evt.Info.Chat, types.EmptyJID)
+	}
+}
+
+func (m *Manager) sendReply(ctx context.Context, evt *events.Message, text string) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+
+	// Reply ke pesan yang dituju ketika membalas: jika command adalah reply ke suatu pesan,
+	// balas (quote) pesan target tersebut; jika tidak, quote pesan command.
+	ctxInfo := buildReplyContext(evt)
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text:        proto.String(text),
+			ContextInfo: ctxInfo,
+		},
+	}
+	_, err := c.SendMessage(ctx, evt.Info.Chat, msg)
+	return err
+}
+
+func buildReplyContext(evt *events.Message) *waE2E.ContextInfo {
+	// Cek apakah pesan masuk ini membalas/menquote pesan lain
+	if ci := extractIncomingContextInfo(evt.Message); ci != nil {
+		if ci.GetStanzaID() != "" || ci.QuotedMessage != nil {
+			return &waE2E.ContextInfo{
+				StanzaID:      proto.String(ci.GetStanzaID()),
+				Participant:   proto.String(ci.GetParticipant()),
+				QuotedMessage: ci.GetQuotedMessage(),
+				RemoteJID:     proto.String(ci.GetRemoteJID()),
+			}
+		}
+	}
+	// default: quote pesan command itu sendiri
+	participant := evt.Info.Sender.String()
+	return &waE2E.ContextInfo{
+		StanzaID:      proto.String(evt.Info.ID),
+		Participant:   proto.String(participant),
+		QuotedMessage: evt.Message,
+	}
+}
+
+func extractIncomingContextInfo(msg *waE2E.Message) *waE2E.ContextInfo {
+	if msg == nil {
+		return nil
+	}
+	switch {
+	case msg.GetExtendedTextMessage() != nil:
+		return msg.GetExtendedTextMessage().GetContextInfo()
+	case msg.GetImageMessage() != nil:
+		return msg.GetImageMessage().GetContextInfo()
+	case msg.GetVideoMessage() != nil:
+		return msg.GetVideoMessage().GetContextInfo()
+	case msg.GetDocumentMessage() != nil:
+		return msg.GetDocumentMessage().GetContextInfo()
+	case msg.GetAudioMessage() != nil:
+		return msg.GetAudioMessage().GetContextInfo()
+	case msg.GetStickerMessage() != nil:
+		return msg.GetStickerMessage().GetContextInfo()
+	case msg.GetButtonsResponseMessage() != nil:
+		return msg.GetButtonsResponseMessage().GetContextInfo()
+	case msg.GetListResponseMessage() != nil:
+		return msg.GetListResponseMessage().GetContextInfo()
+	case msg.GetTemplateButtonReplyMessage() != nil:
+		return msg.GetTemplateButtonReplyMessage().GetContextInfo()
+	case msg.GetInteractiveResponseMessage() != nil:
+		return msg.GetInteractiveResponseMessage().GetContextInfo()
+	}
+	return nil
 }
 
 func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error {
@@ -262,18 +383,39 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args string, cfg Conf
 func (m *Manager) buildMenu(cfg Config) string {
 	lines := []string{
 		"╭─〔 " + cfg.BotName + " 〕",
-		"│ .ping",
-		"│ .menu",
-		"│ .owner",
+		"│",
+		"├─ ᴜᴍᴜᴍ",
+		"│  • .ping",
+		"│  • .menu",
+		"│  • .owner",
 	}
+
+	// Kumpulkan plugin terpasang per kategori
 	if m.plugins != nil {
+		catMap := map[string][]string{}
+		catOrder := []string{}
 		for _, p := range m.plugins.ListInstalled() {
-			if p.Enabled && p.Command != "" {
-				lines = append(lines, "│ ."+p.Command)
+			if !p.Enabled || p.Command == "" {
+				continue
 			}
+			cat := strings.TrimSpace(p.Category)
+			if cat == "" {
+				cat = "Plugin"
+			}
+			key := strings.ToUpper(cat)
+			if _, ok := catMap[key]; !ok {
+				catOrder = append(catOrder, key)
+				catMap[key] = []string{}
+			}
+			catMap[key] = append(catMap[key], "│  • ."+p.Command)
+		}
+		for _, cat := range catOrder {
+			lines = append(lines, "│", "├─ "+cat)
+			lines = append(lines, catMap[cat]...)
 		}
 	}
-	lines = append(lines, "╰────────")
+
+	lines = append(lines, "│", "╰────────")
 	return strings.Join(lines, "\n")
 }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../models/bot_config.dart';
@@ -18,6 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final botNumber = TextEditingController();
   final pluginServer = TextEditingController(text: 'https://na-api-nue-api-e7bfd3f4.koyeb.app');
   bool blockSelf = true;
+  bool readChat = false;
+  bool typingBeforeReply = true;
+  double typingDelaySec = 1.5;
 
   bool backendOk = false;
   bool connected = false;
@@ -31,25 +35,34 @@ class _HomeScreenState extends State<HomeScreen> {
   String? pairCode;
   String? msg;
   bool loading = false;
+  bool _configLoaded = false;
 
   List<dynamic> installedPlugins = [];
   List<dynamic> availablePlugins = [];
+  Timer? _autoRefresh;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(full: true);
+    _autoRefresh = Timer.periodic(const Duration(seconds: 5), (_) => _load(full: false));
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _autoRefresh?.cancel();
+    botName.dispose();
+    ownerName.dispose();
+    ownerNumber.dispose();
+    botNumber.dispose();
+    pluginServer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool full = false}) async {
     try {
       final s = await api.status();
       final c = BotConfig.fromJson((s['config'] ?? {}) as Map<String, dynamic>);
-      botName.text = c.botName;
-      ownerName.text = c.ownerName;
-      ownerNumber.text = c.ownerNumber;
-      botNumber.text = c.botNumber;
-      blockSelf = c.blockSelfChat;
       final st = (s['status'] ?? {}) as Map<String, dynamic>;
       final con = st['connected'] == true;
       final lin = st['logged_in'] == true;
@@ -57,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final pau = st['paused'] == true;
       List<dynamic> plugs = [];
       try { plugs = await api.plugins(); } catch (_) {}
+      if (!mounted) return;
       setState(() {
         backendOk = true;
         connected = con;
@@ -66,8 +80,21 @@ class _HomeScreenState extends State<HomeScreen> {
         jid = (st['jid'] ?? '').toString();
         installedPlugins = plugs;
         statusText = 'Connected: $con · Logged in: $lin${pau ? ' · Paused' : ''}${jid.isNotEmpty ? '\n$jid' : ''}';
+        // update form/config values pada load awal atau refresh manual penuh
+        if (full || !_configLoaded) {
+          botName.text = c.botName;
+          ownerName.text = c.ownerName;
+          ownerNumber.text = c.ownerNumber;
+          botNumber.text = c.botNumber;
+          blockSelf = c.blockSelfChat;
+        }
+        readChat = c.readChat;
+        typingBeforeReply = c.typingBeforeReply;
+        typingDelaySec = c.typingDelaySec;
+        _configLoaded = true;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         backendOk = false;
         connected = false;
@@ -85,6 +112,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ownerNumber: ownerNumber.text.trim(),
         botNumber: botNumber.text.trim().isEmpty ? ownerNumber.text.trim() : botNumber.text.trim(),
         blockSelfChat: blockSelf,
+        readChat: readChat,
+        typingBeforeReply: typingBeforeReply,
+        typingDelaySec: typingDelaySec,
       );
 
   Future<void> _save() async {
@@ -94,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => msg = 'Konfigurasi tersimpan.');
     } catch (e) {
       setState(() => msg = 'Gagal: $e');
-    } finally { setState(() => loading = false); _load(); }
+    } finally { setState(() => loading = false); _load(full: true); }
   }
 
   Future<void> _connectQR() async {
@@ -123,14 +153,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _pause() async {
     setState(() { loading = true; msg = null; });
     try { await api.pause(); msg = 'Bot dipause.'; } catch (e) { msg = 'Gagal: $e'; }
-    await _load();
+    await _load(full: false);
     setState(() => loading = false);
   }
 
   Future<void> _start() async {
     setState(() { loading = true; msg = null; });
     try { await api.start(); msg = 'Bot dijalankan.'; } catch (e) { msg = 'Gagal: $e'; }
-    await _load();
+    await _load(full: false);
     setState(() => loading = false);
   }
 
@@ -144,16 +174,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ));
     if (ok != true) return;
-    setState(() { loading = true; msg = null; });
+    setState(() { loading = true; msg = null; qrData = null; pairCode = null; });
     try { await api.logout(); msg = 'Logout berhasil.'; } catch (e) { msg = 'Gagal: $e'; }
-    await _load();
+    await _load(full: true);
     setState(() => loading = false);
   }
 
   Future<void> _loadAvailable() async {
     setState(() { loading = true; msg = null; });
     try {
-      final list = await api.availablePlugins(server: pluginServer.text.trim().isEmpty ? 'https://na-api-five.vercel.app' : pluginServer.text.trim());
+      final server = pluginServer.text.trim().isEmpty ? 'https://na-api-nue-api-e7bfd3f4.koyeb.app' : pluginServer.text.trim();
+      final list = await api.availablePlugins(server: server);
       setState(() { availablePlugins = list; msg = 'Plugin server dimuat.'; });
     } catch (e) {
       setState(() => msg = 'Gagal memuat plugin: $e');
@@ -166,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await api.installPlugin(p);
       msg = 'Plugin .${p['command']} terpasang.';
       availablePlugins = [];
-      await _load();
+      await _load(full: false);
     } catch (e) { msg = 'Gagal install: $e'; }
     setState(() => loading = false);
   }
@@ -176,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await api.removePlugin(id);
       msg = 'Plugin dihapus.';
-      await _load();
+      await _load(full: false);
     } catch (e) { msg = 'Gagal hapus: $e'; }
     setState(() => loading = false);
   }
@@ -229,11 +260,13 @@ class _HomeScreenState extends State<HomeScreen> {
         final id = (m['id'] ?? m['command'] ?? '').toString();
         final cmd = (m['command'] ?? '').toString();
         final name = (m['name'] ?? cmd).toString();
+        final cat = (m['category'] ?? '').toString();
+        final desc = (m['description'] ?? '').toString();
         return ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: Text('$name (.${cmd.isEmpty ? id : cmd})', style: const TextStyle(fontSize: 13)),
-          subtitle: Text((m['description'] ?? m['exec_url'] ?? '').toString(), style: const TextStyle(fontSize: 11)),
+          subtitle: Text('${cat.isNotEmpty ? '[$cat] ' : ''}$desc', style: const TextStyle(fontSize: 11)),
           trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), onPressed: loading?null:()=>_removePlugin(id)),
         );
       }),
@@ -245,14 +278,35 @@ class _HomeScreenState extends State<HomeScreen> {
         final m = (p as Map).cast<String, dynamic>();
         final cmd = (m['command'] ?? '').toString();
         final name = (m['name'] ?? cmd).toString();
+        final cat = (m['category'] ?? '').toString();
         return ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: Text('$name (.${cmd})', style: const TextStyle(fontSize: 13)),
-          subtitle: Text((m['description'] ?? '').toString(), style: const TextStyle(fontSize: 11)),
+          subtitle: Text('${cat.isNotEmpty ? '[$cat] ' : ''}${m['description'] ?? ''}', style: const TextStyle(fontSize: 11)),
           trailing: FilledButton(onPressed: loading?null:()=>_installPlugin(m), child: const Text('Install')),
         );
       }),
+    ])));
+  }
+
+  Widget _settingsCard() {
+    return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Bot read chat'),
+        subtitle: const Text('Tandai pesan masuk sebagai dibaca'),
+        value: readChat,
+        onChanged: loading ? null : (v) async { setState(() => readChat = v); await _save(); },
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Bot status mengetik'),
+        subtitle: const Text('Kirim status mengetik 1.5 detik sebelum membalas command'),
+        value: typingBeforeReply,
+        onChanged: loading ? null : (v) async { setState(() => typingBeforeReply = v); await _save(); },
+      ),
     ])));
   }
 
@@ -260,17 +314,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(padding: const EdgeInsets.all(16), children: [
       _statusCard(),
       Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Text('Kontrol Bot', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
-        FilledButton(onPressed: loading?null:_pause, child: const Text('Pause')),
+        FilledButton(onPressed: loading?null:_pause, child: Text(paused ? 'Pause (aktif)' : 'Pause')),
         const SizedBox(height: 8),
-        FilledButton(onPressed: loading?null:_start, child: const Text('Start')),
+        FilledButton(onPressed: loading?null:_start, child: Text(!paused ? 'Start (aktif)' : 'Start')),
         const SizedBox(height: 8),
         OutlinedButton(onPressed: loading?null:_logout, child: const Text('Logout')),
       ]))),
+      _settingsCard(),
       _pluginsCard(),
       const SizedBox(height: 8),
-      const Text('Bot berjalan lokal di HP • bisa jalan di latar belakang', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+      const Text('Bot berjalan lokal di HP • auto-refresh 5 detik', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
     ]);
   }
 
@@ -317,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final connectedMode = backendOk && (hasSession || loggedIn);
     return Scaffold(
       appBar: AppBar(title: const Text('puruLocal Bot'), actions: [
-        IconButton(onPressed: loading?null:_load, icon: const Icon(Icons.refresh)),
+        IconButton(onPressed: loading?null:()=>_load(full: true), icon: const Icon(Icons.refresh)),
         IconButton(onPressed: loading?null:_checkUpdate, icon: const Icon(Icons.system_update)),
       ]),
       body: connectedMode ? _controlView() : _setupView(),

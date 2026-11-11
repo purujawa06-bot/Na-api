@@ -11,16 +11,20 @@ import (
 
 // Config menyimpan konfigurasi dasar bot puruLocal.
 type Config struct {
-	BotName      string `json:"bot_name"`
-	OwnerName    string `json:"owner_name"`
-	OwnerNumber  string `json:"owner_number"` // internasional tanpa +
-	BotNumber    string `json:"bot_number"`   // boleh sama dengan owner
-	BlockSelfChat bool  `json:"block_self_chat"`
+	BotName           string `json:"bot_name"`
+	OwnerName         string `json:"owner_name"`
+	OwnerNumber       string `json:"owner_number"` // internasional tanpa +
+	BotNumber         string `json:"bot_number"`   // boleh sama dengan owner
+	BlockSelfChat     bool   `json:"block_self_chat"`
 	UpdateManifestURL string `json:"update_manifest_url,omitempty"`
+	// Pengaturan setelah login
+	ReadChat      bool    `json:"read_chat"`       // bot read chat (mark read)
+	TypingBeforeReply bool `json:"typing_before_reply"` // bot status mengetik sebelum membalas command
+	TypingDelaySec float64 `json:"typing_delay_sec"`    // detik (default 1.5)
 }
 
 func DefaultConfig() Config {
-	return Config{BotName: "puruLocal Bot", BlockSelfChat: true}
+	return Config{BotName: "puruLocal Bot", BlockSelfChat: true, ReadChat: false, TypingBeforeReply: true, TypingDelaySec: 1.5}
 }
 
 func (c *Config) Normalize() {
@@ -33,6 +37,9 @@ func (c *Config) Normalize() {
 	c.BotNumber = normalizeNumber(c.BotNumber)
 	if c.BotNumber == "" {
 		c.BotNumber = c.OwnerNumber
+	}
+	if c.TypingDelaySec <= 0 {
+		c.TypingDelaySec = 1.5
 	}
 }
 

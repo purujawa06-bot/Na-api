@@ -18,9 +18,10 @@ import (
 type Plugin struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	Command     string `json:"command"`      // tanpa prefix, mis: "ai"
+	Command     string `json:"command"` // tanpa prefix, mis: "ai"
+	Category    string `json:"category,omitempty"`
 	Description string `json:"description,omitempty"`
-	ExecURL     string `json:"exec_url"`     // endpoint eksekusi di server na-api
+	ExecURL     string `json:"exec_url"`         // endpoint eksekusi di server na-api
 	Server      string `json:"server,omitempty"` // base server sumber plugin
 	Version     string `json:"version,omitempty"`
 	Enabled     bool   `json:"enabled"`
