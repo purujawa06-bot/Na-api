@@ -78,6 +78,18 @@ func (s *PluginStore) ListInstalled() []Plugin {
 	return out
 }
 
+func (s *PluginStore) HasCommand(cmd string) bool {
+	cmd = normalizeCmd(cmd)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i := range s.list {
+		if s.list[i].Enabled && s.list[i].Command == cmd {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *PluginStore) Install(p Plugin) error {
 	p.Command = normalizeCmd(p.Command)
 	p.ID = strings.TrimSpace(p.ID)

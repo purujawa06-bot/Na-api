@@ -4,9 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>puruLocal Bot</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #07090d;
@@ -25,18 +22,17 @@
       --radius: 16px;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin:0; padding:0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
-    body { min-height: 100vh; background: radial-gradient(1200px 600px at 10% -10%, rgba(16,185,129,0.12), transparent 40%),
-                         radial-gradient(800px 400px at 100% 0%, rgba(96,165,250,0.08), transparent 40%), var(--bg); }
-    .app { max-width: 560px; margin: 0 auto; padding: 14px 14px 40px; }
-    .topbar { display:flex; align-items:center; justify-content:space-between; padding: 8px 4px 14px; position: sticky; top:0; backdrop-filter: blur(12px); background: linear-gradient(to bottom, rgba(7,9,13,0.9), rgba(7,9,13,0)); z-index: 20; }
+    html, body { margin:0; padding:0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    body { min-height: 100vh; background: var(--bg); }
+    .app { max-width: 560px; margin: 0 auto; padding: 12px 12px 32px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding: 8px 4px 12px; position: sticky; top:0; background: rgba(7,9,13,0.97); z-index: 20; border-bottom: 1px solid var(--border); }
     .brand { display:flex; align-items:center; gap:10px; }
-    .logo { width:36px; height:36px; border-radius:10px; background: linear-gradient(135deg, var(--accent), #059669); display:flex; align-items:center; justify-content:center; color:#042016; font-weight:800; box-shadow: 0 6px 20px var(--accent-glow); }
+    .logo { width:36px; height:36px; border-radius:10px; background: var(--accent); display:flex; align-items:center; justify-content:center; color:#042016; font-weight:800; }
     .title { font-size:18px; font-weight:800; letter-spacing:-0.3px; }
     .subtitle { font-size:11px; color: var(--muted); }
-    .icon-btn { width:38px; height:38px; border-radius:12px; border:1px solid var(--border); background: var(--card); color: var(--text); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; }
-    .icon-btn:active { transform: scale(.96); }
-    .card { background: var(--card); border:1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .icon-btn { width:38px; height:38px; border-radius:12px; border:1px solid var(--border); background: var(--card-solid); color: var(--text); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+    .icon-btn:active { opacity:.85; }
+    .card { background: var(--card-solid); border:1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
     .card-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
     .card-title { font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; }
     .pill { font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid var(--border); color: var(--muted); }
@@ -45,10 +41,10 @@
     .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
     label { display:block; font-size:12px; color: var(--muted); margin: 8px 0 4px; font-weight:500; }
     input[type=text], input[type=number] { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--border); background: #0b0f14; color: var(--text); font-size:14px; outline:none; transition:.15s; }
-    input:focus { border-color: rgba(16,185,129,0.5); box-shadow: 0 0 0 3px rgba(16,185,129,0.12); }
-    .btn { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background: #1a2029; color: var(--text); font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:.15s; }
-    .btn:active { transform: scale(.98); }
-    .btn.primary { background: linear-gradient(135deg, var(--accent), #059669); color:#042016; border:none; box-shadow: 0 8px 20px var(--accent-glow); }
+    input:focus { border-color: rgba(16,185,129,0.5); outline: none; }
+    .btn { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background: #1a2029; color: var(--text); font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+    .btn:active { opacity:.9; }
+    .btn.primary { background: var(--accent); color:#042016; border:none; }
     .btn.danger { background: rgba(248,113,113,0.12); color:#fecaca; border-color: rgba(248,113,113,0.25); }
     .btn.ghost { background: transparent; }
     .row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
@@ -80,8 +76,6 @@
     .small-btn.danger { color:#fecaca; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.1); }
     #qrBox { display:flex; justify-content:center; align-items:center; min-height:220px; background:#fff; border-radius:14px; margin-top:10px; padding:10px; }
     .pair-code { font-size:30px; letter-spacing:4px; font-weight:800; text-align:center; color:var(--accent2); margin:10px 0; }
-    .fade { animation: fade .25s ease; }
-    @keyframes fade { from { opacity:.6; transform: translateY(2px);} to { opacity:1; transform:none;} }
     .footer { text-align:center; color: var(--muted); font-size:11px; margin-top:10px; }
   </style>
 </head>
@@ -133,10 +127,9 @@
           <div class="l"><div class="t">Bot status mengetik</div><div class="d">Ketik 1.5 detik sebelum membalas command</div></div>
           <label class="switch"><input id="set_typing" type="checkbox" onchange="saveSettings()"><span class="slider"></span></label>
         </div>
-        <label>URL Manifest Auto-Update (opsional)</label>
-        <input id="update_manifest_url" type="text" placeholder="https://.../update-manifest.json" oninput="touchedManifest()" />
         <button class="btn" style="margin-top:8px" onclick="saveSettings()">Simpan Settings</button>
-        <div class="muted" style="margin-top:8px">Pengaturan disimpan ke konfigurasi bot lokal. Jika URL manifest diisi, app akan cek update saat start/login.</div>
+        <button class="btn" style="margin-top:8px" onclick="checkUpdate()">Cek Update Aplikasi</button>
+        <div class="muted" style="margin-top:8px">Pengaturan disimpan ke konfigurasi bot lokal. Update dicek otomatis (saat start/login) atau manual lewat tombol di atas.</div>
       </div>
     </div>
 
@@ -192,13 +185,12 @@
     <div class="footer">Sesi & data tersimpan lokal di HP • auto-refresh 5 detik • UI HTML SPA</div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
     const $ = (id)=>document.getElementById(id);
     let cfgTouched = false;
-    let manifestTouched = false;
     let lastCfg = null;
     let qrTimer = null;
+    let qrLibLoading = null;
 
     async function api(path, opts={}){
       const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
@@ -206,7 +198,32 @@
       try { return JSON.parse(t); } catch(e){ return {ok:false,error:t||String(e)}; }
     }
     function touched(){ cfgTouched = true; }
-    function touchedManifest(){ manifestTouched = true; }
+
+    function ensureQrLib(){
+      if (window.QRCode) return Promise.resolve();
+      if (qrLibLoading) return qrLibLoading;
+      qrLibLoading = new Promise((resolve, reject)=>{
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+        s.onload = ()=>resolve();
+        s.onerror = ()=>reject(new Error('QR lib gagal dimuat'));
+        document.head.appendChild(s);
+      });
+      return qrLibLoading;
+    }
+
+    function checkUpdate(){
+      try {
+        if (window.PuruNative && window.PuruNative.postMessage) {
+          window.PuruNative.postMessage('checkUpdate');
+          $('globalMsg').textContent = 'Mengecek update...';
+        } else {
+          $('globalMsg').innerHTML = '<span class="err">Tombol update aktif di aplikasi (WebView).</span>';
+        }
+      } catch(e) {
+        $('globalMsg').innerHTML = '<span class="err">Gagal memicu cek update.</span>';
+      }
+    }
     function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
     function catTag(cat){
       const c=(cat||'').toLowerCase();
@@ -233,7 +250,6 @@
         // settings (dashboard) selalu sinkron dari config
         $('set_read').checked = !!c.read_chat;
         $('set_typing').checked = c.typing_before_reply !== false;
-        if(!manifestTouched || manual){ $('update_manifest_url').value = c.update_manifest_url || ''; if(manual) manifestTouched = false; }
 
         // form setup hanya diisi jika belum disentuh atau manual refresh
         if (!connectedMode && (!cfgTouched || manual)) {
@@ -286,11 +302,11 @@
         read_chat: $('set_read').checked,
         typing_before_reply: $('set_typing').checked,
         typing_delay_sec: c.typing_delay_sec || 1.5,
-        update_manifest_url: ($('update_manifest_url') ? $('update_manifest_url').value : (c.update_manifest_url || ''))
+        update_manifest_url: c.update_manifest_url || ''
       };
       const d = await api('/api/config',{method:'POST',body:JSON.stringify(body)});
       if(!d.ok){ $('globalMsg').innerHTML = `<span class="err">${esc(d.error||'Gagal simpan settings')}</span>`; }
-      else { manifestTouched = false; $('globalMsg').textContent = 'Settings disimpan.'; setTimeout(()=>{ if($('globalMsg').textContent==='Settings disimpan.') $('globalMsg').textContent=''; },1500); }
+      else { $('globalMsg').textContent = 'Settings disimpan.'; setTimeout(()=>{ if($('globalMsg').textContent==='Settings disimpan.') $('globalMsg').textContent=''; },1500); }
       refresh(false);
     }
 
@@ -304,7 +320,11 @@
       const d = await api('/api/connect/qr',{method:'POST'});
       if(d.ok && d.qr){
         $('connMsg').textContent='QR siap, silakan scan.';
-        try{ new QRCode($('qrBox'), {text:d.qr,width:220,height:220}); }catch(e){ $('qrBox').textContent=d.qr; }
+        try{
+          await ensureQrLib();
+          $('qrBox').innerHTML='';
+          new QRCode($('qrBox'), {text:d.qr,width:220,height:220});
+        }catch(e){ $('qrBox').textContent=d.qr; }
         clearTimeout(qrTimer);
         qrTimer = setTimeout(()=>{ if(!$('qrWrap').classList.contains('hidden')) connectQR(); }, 20000);
       } else {

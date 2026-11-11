@@ -51,6 +51,9 @@ class _ShellScreenState extends State<ShellScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF07090D))
+      ..addJavaScriptChannel('PuruNative', onMessageReceived: (msg) {
+        if (msg.message == 'checkUpdate') _manualCheckUpdate();
+      })
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) { if (mounted) setState(() { _loaded = true; _statusLine = ''; }); },
         onWebResourceError: (_) { _retryLoadLater(); },
@@ -131,6 +134,35 @@ class _ShellScreenState extends State<ShellScreen> {
       await _showUpdateDialog(svc, info);
     } catch (_) {
       // abaikan kegagalan cek otomatis
+    } finally {
+      _checkingUpdate = false;
+    }
+  }
+
+  Future<void> _manualCheckUpdate() async {
+    if (_checkingUpdate || !mounted) return;
+    final manifestUrl = await _getManifestUrl();
+    if (manifestUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URL manifest tidak tersedia')));
+      }
+      return;
+    }
+    _checkingUpdate = true;
+    try {
+      final svc = UpdateService(manifestUrl);
+      final info = await svc.check();
+      if (!mounted) return;
+      if (info == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada update tersedia (atau gagal mengecek).')));
+        return;
+      }
+      _updatePrompted = true;
+      await _showUpdateDialog(svc, info);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cek update: $e')));
+      }
     } finally {
       _checkingUpdate = false;
     }

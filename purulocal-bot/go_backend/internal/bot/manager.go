@@ -381,7 +381,8 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 	}
 	if m.plugins != nil {
 		// .ai: ingat percakapan masing-masing user + auto-compact di ambang 6k token
-		if normalizeCmd(cmd) == "ai" && m.aiHist != nil {
+		// hanya jika plugin .ai terpasang & aktif; jika dihapus tidak boleh membalas
+		if normalizeCmd(cmd) == "ai" && m.aiHist != nil && m.plugins.HasCommand("ai") {
 			prompt := strings.TrimSpace(args)
 			if prompt == "" {
 				return "Gunakan: .ai <pertanyaan>", true
