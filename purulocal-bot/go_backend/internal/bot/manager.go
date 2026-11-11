@@ -58,6 +58,7 @@ type Manager struct {
 	status   Status
 	paused   bool
 	plugins  *PluginStore
+	aiHist   *AIHistoryStore
 }
 
 func NewManager(configPath, dataDir string) (*Manager, error) {
@@ -72,7 +73,11 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{cfgStore: cfgStore, dataDir: dataDir, plugins: pstore}, nil
+	ahist, err := NewAIHistoryStore(filepath.Join(dataDir, "ai_history.json"))
+	if err != nil {
+		return nil, err
+	}
+	return &Manager{cfgStore: cfgStore, dataDir: dataDir, plugins: pstore, aiHist: ahist}, nil
 }
 
 func (m *Manager) Config() Config { return m.cfgStore.Get() }
@@ -198,7 +203,11 @@ func (m *Manager) onMessage(evt *events.Message) {
 		time.Sleep(time.Duration(delay * float64(time.Second)))
 	}
 
-	reply, ok := m.resolveCommand(ctx, cmd, args, cfg)
+	userKey := evt.Info.Sender.String()
+	if userKey == "" {
+		userKey = evt.Info.Chat.String()
+	}
+	reply, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg)
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
 	}
@@ -361,7 +370,7 @@ func parseCommand(text string) (cmd, args string) {
 	return cmd, args
 }
 
-func (m *Manager) resolveCommand(ctx context.Context, cmd, args string, cfg Config) (string, bool) {
+func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config) (string, bool) {
 	switch cmd {
 	case "ping":
 		return "pong 🏓", true
@@ -371,7 +380,29 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args string, cfg Conf
 		return fmt.Sprintf("Owner: %s\nNomor: %s", cfg.OwnerName, cfg.OwnerNumber), true
 	}
 	if m.plugins != nil {
-		if reply, ok, err := m.plugins.Handle(ctx, cmd, args, cfg); err == nil && ok {
+		// .ai: ingat percakapan masing-masing user + auto-compact di ambang 6k token
+		if normalizeCmd(cmd) == "ai" && m.aiHist != nil {
+			prompt := strings.TrimSpace(args)
+			if prompt == "" {
+				return "Gunakan: .ai <pertanyaan>", true
+			}
+			hist := m.aiHist.Get(userKey)
+			hist = append(hist, ChatMessage{Role: "user", Content: prompt})
+			hist = CompactIfNeeded(hist, 6000)
+			reply, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, hist)
+			if err != nil {
+				return "Plugin error: " + err.Error(), true
+			}
+			if ok {
+				if strings.TrimSpace(reply) != "" {
+					hist = append(hist, ChatMessage{Role: "assistant", Content: reply})
+					hist = CompactIfNeeded(hist, 6000)
+					_ = m.aiHist.Set(userKey, hist)
+				}
+				return reply, true
+			}
+		}
+		if reply, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, nil); err == nil && ok {
 			return reply, true
 		} else if err != nil {
 			return "Plugin error: " + err.Error(), true

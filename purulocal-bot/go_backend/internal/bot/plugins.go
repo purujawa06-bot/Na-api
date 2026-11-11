@@ -140,7 +140,7 @@ func (s *PluginStore) SetEnabled(id string, enabled bool) error {
 	return errors.New("plugin tidak ditemukan")
 }
 
-func (s *PluginStore) Handle(ctx context.Context, cmd, args string, cfg Config) (string, bool, error) {
+func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Config, messages []ChatMessage) (string, bool, error) {
 	cmd = normalizeCmd(cmd)
 	s.mu.RLock()
 	var p *Plugin
@@ -155,18 +155,26 @@ func (s *PluginStore) Handle(ctx context.Context, cmd, args string, cfg Config) 
 	if p == nil {
 		return "", false, nil
 	}
-	reply, err := execPlugin(ctx, *p, args, cfg)
+	reply, err := execPlugin(ctx, *p, args, user, cfg, messages)
 	return reply, true, err
 }
 
-func execPlugin(ctx context.Context, p Plugin, args string, cfg Config) (string, error) {
+func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, messages []ChatMessage) (string, error) {
 	body := map[string]any{
-		"command":    p.Command,
-		"args":       args,
-		"bot_name":   cfg.BotName,
-		"owner_name": cfg.OwnerName,
+		"command":      p.Command,
+		"args":         args,
+		"bot_name":     cfg.BotName,
+		"owner_name":   cfg.OwnerName,
 		"owner_number": cfg.OwnerNumber,
-		"plugin_id":  p.ID,
+		"plugin_id":    p.ID,
+		"user":         user,
+	}
+	if len(messages) > 0 {
+		msgs := make([]map[string]any, 0, len(messages))
+		for _, m := range messages {
+			msgs = append(msgs, map[string]any{"role": m.Role, "content": m.Content})
+		}
+		body["messages"] = msgs
 	}
 	b, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ExecURL, bytes.NewReader(b))
@@ -174,7 +182,12 @@ func execPlugin(ctx context.Context, p Plugin, args string, cfg Config) (string,
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 15 * time.Second}
+	// .ai dengan riwayat bisa lebih lama
+	timeout := 20 * time.Second
+	if normalizeCmd(p.Command) == "ai" {
+		timeout = 60 * time.Second
+	}
+	client := &http.Client{Timeout: timeout}
 	res, err := client.Do(req)
 	if err != nil {
 		return "", err

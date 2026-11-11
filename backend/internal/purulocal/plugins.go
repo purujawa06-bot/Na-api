@@ -79,11 +79,13 @@ func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Command   string `json:"command"`
-		PluginID  string `json:"plugin_id"`
-		Args      string `json:"args"`
-		BotName   string `json:"bot_name"`
-		OwnerName string `json:"owner_name"`
+		Command   string           `json:"command"`
+		PluginID  string           `json:"plugin_id"`
+		Args      string           `json:"args"`
+		BotName   string           `json:"bot_name"`
+		OwnerName string           `json:"owner_name"`
+		User      string           `json:"user"`
+		Messages  []map[string]any `json:"messages"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	cmd := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(body.Command, ".")))
@@ -95,7 +97,7 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch cmd {
 	case "ai", "ai-chat":
-		reply, err := runAI(r, args)
+		reply, err := runAI(r, args, body.Messages)
 		if err != nil {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -113,9 +115,12 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func runAI(r *http.Request, prompt string) (string, error) {
-	if strings.TrimSpace(prompt) == "" {
-		return "Gunakan: .ai <pertanyaan>", nil
+func runAI(r *http.Request, prompt string, messages []map[string]any) (string, error) {
+	if len(messages) == 0 {
+		if strings.TrimSpace(prompt) == "" {
+			return "Gunakan: .ai <pertanyaan>", nil
+		}
+		messages = []map[string]any{{"role": "user", "content": prompt}}
 	}
 	base := strings.TrimRight(baseURL(r), "/")
 	// jika diakses lokal, fallback ke backend publik Koyeb
@@ -124,11 +129,9 @@ func runAI(r *http.Request, prompt string) (string, error) {
 	}
 	endpoint := base + "/api/chat/completions"
 	payload := map[string]any{
-		"model": "auto",
-		"messages": []map[string]any{
-			{"role": "user", "content": prompt},
-		},
-		"stream": true,
+		"model":    "auto",
+		"messages": messages,
+		"stream":   true,
 		"tools": []map[string]any{
 			{
 				"type": "function",
