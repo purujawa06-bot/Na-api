@@ -113,7 +113,12 @@ jobs:
           fi
           mkdir -p android/app
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.p12
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=release-keystore.p12\nstoreType=PKCS12\n' "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" > android/key.properties
+          DETECTED_ALIAS=$(keytool -list -storetype PKCS12 -keystore android/app/release-keystore.p12 -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>/dev/null | sed -n 's/^\([^,]*\), .*, PrivateKeyEntry.*$/\1/p' | head -n1)
+          if [ -z "$DETECTED_ALIAS" ]; then
+            DETECTED_ALIAS="$ANDROID_KEY_ALIAS"
+          fi
+          echo "Using keystore alias: $DETECTED_ALIAS"
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=release-keystore.p12\nstoreType=PKCS12\n' "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$DETECTED_ALIAS" > android/key.properties
           python3 "$GITHUB_WORKSPACE/scripts/patch-android-release-signing.py"
           echo "Production signing configured."
 
