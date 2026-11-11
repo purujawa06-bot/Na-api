@@ -19,6 +19,7 @@ dependencies:
   permission_handler: ^11.3.0
   open_filex: ^4.4.0
   webview_flutter: ^4.10.0
+  android_intent_plus: ^5.1.0
 
 dev_dependencies:
   flutter_test:

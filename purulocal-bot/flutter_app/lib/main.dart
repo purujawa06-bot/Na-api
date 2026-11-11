@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
@@ -195,19 +196,35 @@ class _ShellScreenState extends State<ShellScreen> {
           const SizedBox(height: 8),
           Text(progress <= 0 ? 'Menyiapkan...' : '${(progress*100).toStringAsFixed(0)}%'),
           const SizedBox(height: 8),
-          const Text('Setelah terpasang, buka kembali puruLocal Bot.', style: TextStyle(fontSize: 12)),
+          const Text('APK akan disimpan ke folder Download.', style: TextStyle(fontSize: 12)),
         ]),
       );
     }));
     try {
       final file = await svc.download(info, onProgress: (r,t){ if(t>0){ progress = r/t; setP?.call((){}); } });
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
-      await svc.install(file);
-      // installer sistem mengambil alih; app akan diganti. coba tutup agar bersih.
-      // (restart penuh otomatis setelah install APK dibatasi sistem Android)
+      if (!mounted) return;
+      final fileName = file.path.split(Platform.pathSeparator).last;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: !info.force,
+        builder: (c) => AlertDialog(
+          title: const Text('Update siap dipasang'),
+          content: Text(
+            'APK versi baru sudah diunduh ke folder Download:\n$fileName\n\n'
+            'Jika pemasangan update gagal (mis. signature berbeda), pilih "Uninstall Aplikasi" lalu setelah terhapus instal APK tersebut dari folder Download (pilih "Install APK").\n\n'
+            'Catatan: uninstall dapat menghapus data privat app, namun data/sesi di penyimpanan lokal persisten (mis. /sdcard/puruLocalBot) tetap aman bila ada.',
+          ),
+          actions: [
+            if (!info.force) TextButton(onPressed: ()=>Navigator.pop(c), child: const Text('Nanti')),
+            TextButton(onPressed: () async { await svc.openUninstallSelf(); }, child: const Text('Uninstall Aplikasi')),
+            FilledButton(onPressed: () async { await svc.install(file); }, child: const Text('Install APK')),
+          ],
+        ),
+      );
     } catch (e) {
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
+        try { Navigator.of(context, rootNavigator: true).pop(); } catch (_) {}
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update gagal: $e')));
       }
     }
