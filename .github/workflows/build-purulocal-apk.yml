@@ -63,6 +63,12 @@ jobs:
           if [ -f "../assets/favicon.ico" ]; then cp ../assets/favicon.ico assets/icon.ico; fi
           if [ -f "../assets/favicon.jpg" ]; then cp ../assets/favicon.jpg assets/icon.jpg; fi
 
+      - name: Apply Android overlay (permissions, backend autostart)
+        run: |
+          if [ -d "android_overlay" ]; then
+            cp -R android_overlay/. .
+          fi
+
       - name: Flutter pub get
         run: flutter pub get
 
@@ -72,8 +78,15 @@ jobs:
           go mod tidy
           go build ./...
 
-      # Catatan: integrasi penuh Go whatsmeow ke APK (gomobile bind/service) dapat ditambahkan di sini.
-      # Untuk saat ini workflow membangun APK Flutter (UI + auto-update + bridge ke backend lokal).
+      - name: Build Go backend for Android (arm64, bundled in APK)
+        working-directory: purulocal-bot/go_backend
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p ../flutter_app/android/app/src/main/jniLibs/arm64-v8a
+          go build -trimpath -ldflags="-s -w" -o ../flutter_app/android/app/src/main/jniLibs/arm64-v8a/libpurulocal.so ./cmd/purulocal
 
       - name: Build APK (release)
         run: flutter build apk --release

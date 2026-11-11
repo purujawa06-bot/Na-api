@@ -1,0 +1,10 @@
+# Build artifacts (jangan commit binary >5MB; dibangun di CI)
+flutter_app/android/
+flutter_app/android_overlay/android/app/src/main/jniLibs/
+flutter_app/build/
+dist/
+go_backend/data/
+go_backend/config.json
+*.apk
+*.aab
+*.so
