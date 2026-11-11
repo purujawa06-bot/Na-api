@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +21,22 @@ import (
 	_ "modernc.org/sqlite"
 	"google.golang.org/protobuf/proto"
 )
+
+func init() {
+	// Android (CGO off) sering tidak punya /etc/resolv.conf -> fallback DNS publik
+	if runtime.GOOS == "android" || os.Getenv("PURULOCAL_FORCE_DNS") != "" {
+		net.DefaultResolver = &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{Timeout: 5 * time.Second}
+				if c, err := d.DialContext(ctx, "udp", "8.8.8.8:53"); err == nil {
+					return c, nil
+				}
+				return d.DialContext(ctx, "udp", "1.1.1.1:53")
+			},
+		}
+	}
+}
 
 type Status struct {
 	Connected bool   `json:"connected"`
