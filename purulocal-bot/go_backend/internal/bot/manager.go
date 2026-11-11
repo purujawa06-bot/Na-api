@@ -216,16 +216,20 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if !ok {
 		return
 	}
-	// kirim audio (mis. .play) dengan notice, lalu audio + caption singkat
+	// kirim audio (mis. .play): 1) info judul, jeda 1 detik, 2) audio
 	if strings.TrimSpace(res.AudioURL) != "" {
-		if strings.TrimSpace(res.Notice) != "" {
-			_ = m.sendReply(ctx, evt, res.Notice)
+		info := strings.TrimSpace(res.Reply)
+		if info != "" {
+			_ = m.sendReply(ctx, evt, info)
 		}
+		time.Sleep(1 * time.Second)
 		if err := m.sendAudioFromURL(ctx, evt, res); err != nil {
-			// fallback ke teks jika gagal kirim audio
-			fb := strings.TrimSpace(res.Reply)
+			// fallback teks jika gagal kirim audio
+			fb := info
 			if fb == "" {
 				fb = "Gagal mengirim audio."
+			} else {
+				fb = fb + "\n\n(Gagal mengirim audio)"
 			}
 			_ = m.sendReply(ctx, evt, fb)
 		}
@@ -395,13 +399,12 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 		PTT:           proto.Bool(false),
 		ContextInfo:   buildReplyContext(evt),
 	}
+	if res.DurationSec > 0 {
+		audio.Seconds = proto.Uint32(res.DurationSec)
+	}
 	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{AudioMessage: audio})
 	if err != nil {
 		return err
-	}
-	// kirim teks singkat: judul + link soundcloud (tanpa link stream panjang)
-	if strings.TrimSpace(res.Reply) != "" {
-		_ = m.sendReply(ctx, evt, res.Reply)
 	}
 	return nil
 }

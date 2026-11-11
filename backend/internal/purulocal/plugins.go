@@ -293,16 +293,27 @@ func runPlay(r *http.Request, query string) (map[string]any, error) {
 	}
 	title := strings.TrimSpace(j.Track.Title)
 	link := strings.TrimSpace(j.Track.PermalinkURL)
-	reply := title
-	if link != "" {
-		reply = title + "\n" + link
+	author := strings.TrimSpace(j.Track.Author)
+	durSec := uint32(0)
+	if j.Track.DurationMs > 0 {
+		durSec = uint32((j.Track.DurationMs + 500) / 1000)
 	}
+	lines := []string{"🎵 *" + title + "*"}
+	if author != "" {
+		lines = append(lines, "👤 "+author)
+	}
+	if link != "" {
+		lines = append(lines, "🔗 "+link)
+	}
+	reply := strings.Join(lines, "\n")
 	out := map[string]any{
 		"ok":            true,
 		"reply":         reply,
-		"notice":        "mengirim audio..",
 		"title":         title,
 		"permalink_url": link,
+	}
+	if durSec > 0 {
+		out["duration_sec"] = durSec
 	}
 	if strings.TrimSpace(j.Track.StreamURL) != "" {
 		out["audio_url"] = j.Track.StreamURL

@@ -159,6 +159,7 @@ type ExecResult struct {
 	Title        string `json:"title,omitempty"`
 	PermalinkURL string `json:"permalink_url,omitempty"`
 	Mimetype     string `json:"mimetype,omitempty"`
+	DurationSec  uint32 `json:"duration_sec,omitempty"`
 }
 
 func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Config, messages []ChatMessage) (ExecResult, bool, error) {
@@ -244,6 +245,20 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 			}
 			if v, ok := j["mimetype"].(string); ok {
 				out.Mimetype = v
+			}
+			switch v := j["duration_sec"].(type) {
+			case float64:
+				if v > 0 {
+					out.DurationSec = uint32(v)
+				}
+			case int:
+				if v > 0 {
+					out.DurationSec = uint32(v)
+				}
+			case int64:
+				if v > 0 {
+					out.DurationSec = uint32(v)
+				}
 			}
 			if out.Reply != "" || out.AudioURL != "" || out.Notice != "" {
 				return out, nil
