@@ -3,6 +3,7 @@ module github.com/purujawa06-bot/na-api/backend
 go 1.26.0
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/maarkN/cloudscraper-go v0.0.0-20260705143702-33f020765f82
