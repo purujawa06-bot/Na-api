@@ -21,11 +21,12 @@ type Config struct {
 	ReadChat          bool    `json:"read_chat"`            // bot read chat (mark read)
 	TypingBeforeReply bool    `json:"typing_before_reply"`  // bot status mengetik sebelum membalas command
 	TypingDelaySec    float64 `json:"typing_delay_sec"`     // detik (default 1.5)
+	AntiSpam          bool    `json:"anti_spam"`            // deteksi spam: pesan beruntun cepat -> ban sementara
 	AISystemPrompt    string  `json:"ai_system_prompt,omitempty"` // system prompt untuk command .ai
 }
 
 func DefaultConfig() Config {
-	return Config{BotName: "puruLocal Bot", BlockSelfChat: true, ReadChat: false, TypingBeforeReply: true, TypingDelaySec: 1.5}
+	return Config{BotName: "puruLocal Bot", BlockSelfChat: true, ReadChat: false, TypingBeforeReply: true, TypingDelaySec: 1.5, AntiSpam: true}
 }
 
 func (c *Config) Normalize() {

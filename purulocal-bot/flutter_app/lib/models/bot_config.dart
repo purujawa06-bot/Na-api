@@ -8,6 +8,7 @@ class BotConfig {
   bool readChat;
   bool typingBeforeReply;
   double typingDelaySec;
+  bool antiSpam;
 
   BotConfig({
     this.botName = 'puruLocal Bot',
@@ -19,6 +20,7 @@ class BotConfig {
     this.readChat = false,
     this.typingBeforeReply = true,
     this.typingDelaySec = 1.5,
+    this.antiSpam = true,
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> j) => BotConfig(
@@ -31,6 +33,7 @@ class BotConfig {
         readChat: j['read_chat'] ?? false,
         typingBeforeReply: j['typing_before_reply'] ?? true,
         typingDelaySec: (j['typing_delay_sec'] is num) ? (j['typing_delay_sec'] as num).toDouble() : 1.5,
+        antiSpam: j['anti_spam'] ?? true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -43,5 +46,6 @@ class BotConfig {
         'read_chat': readChat,
         'typing_before_reply': typingBeforeReply,
         'typing_delay_sec': typingDelaySec,
+        'anti_spam': antiSpam,
       };
 }

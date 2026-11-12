@@ -61,6 +61,10 @@ type Manager struct {
 	paused   bool
 	plugins  *PluginStore
 	aiHist   *AIHistoryStore
+
+	spamMu      sync.Mutex
+	lastMsgAt   map[string]time.Time
+	bannedUntil map[string]time.Time
 }
 
 func NewManager(configPath, dataDir string) (*Manager, error) {
@@ -79,7 +83,14 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{cfgStore: cfgStore, dataDir: dataDir, plugins: pstore, aiHist: ahist}, nil
+	return &Manager{
+		cfgStore:    cfgStore,
+		dataDir:     dataDir,
+		plugins:     pstore,
+		aiHist:      ahist,
+		lastMsgAt:   map[string]time.Time{},
+		bannedUntil: map[string]time.Time{},
+	}, nil
 }
 
 func (m *Manager) Config() Config { return m.cfgStore.Get() }
@@ -162,7 +173,8 @@ func (m *Manager) ensureClient(ctx context.Context) (*whatsmeow.Client, error) {
 func (m *Manager) eventHandler(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
-		m.onMessage(v)
+		// proses command secara bersamaan (tidak mengantri) agar user berbeda bisa paralel
+		go m.onMessage(v)
 	case *events.Disconnected:
 		m.mu.Lock()
 		m.status.LastError = "disconnected"
@@ -177,6 +189,25 @@ func (m *Manager) onMessage(evt *events.Message) {
 	cfg := m.Config()
 	if cfg.BlockSelfChat && evt.Info.IsFromMe {
 		return
+	}
+
+	// Anti-spam (opsional): pesan dari user yang sama dalam jeda sangat cepat -> ban 10 detik
+	if cfg.AntiSpam {
+		userKey := evt.Info.Sender.String()
+		if userKey == "" {
+			userKey = evt.Info.Chat.String()
+		}
+		action := m.checkAntiSpam(userKey, time.Now())
+		if action == spamBanned {
+			// masih dalam masa ban -> abaikan tanpa balasan
+			return
+		}
+		if action == spamTriggered {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = m.sendReply(ctx, evt, "⚠️ Spam terdeteksi. Kamu dibanned sementara 10 detik.")
+			return
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -654,6 +685,60 @@ func (m *Manager) buildMenu(cfg Config) string {
 
 	lines = append(lines, "│", "╰────────")
 	return strings.Join(lines, "\n")
+}
+
+type spamAction int
+
+const (
+	spamOK spamAction = iota
+	spamTriggered
+	spamBanned
+)
+
+// checkAntiSpam: deteksi pesan beruntun sangat cepat dari user yang sama.
+// Jika interval < 500ms -> trigger ban 10 detik (spamTriggered). Jika masih dibanned -> spamBanned.
+func (m *Manager) checkAntiSpam(user string, now time.Time) spamAction {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		return spamOK
+	}
+	const (
+		spamWindow = 500 * time.Millisecond
+		banDur     = 10 * time.Second
+	)
+	m.spamMu.Lock()
+	defer m.spamMu.Unlock()
+
+	if until, ok := m.bannedUntil[user]; ok {
+		if now.Before(until) {
+			return spamBanned
+		}
+		delete(m.bannedUntil, user)
+	}
+	if last, ok := m.lastMsgAt[user]; ok {
+		if now.Sub(last) < spamWindow {
+			m.bannedUntil[user] = now.Add(banDur)
+			m.lastMsgAt[user] = now
+			return spamTriggered
+		}
+	}
+	m.lastMsgAt[user] = now
+
+	// best-effort cleanup agar map tidak tumbuh tanpa batas
+	if len(m.lastMsgAt) > 2000 {
+		cutoff := now.Add(-2 * time.Minute)
+		for k, t := range m.lastMsgAt {
+			if t.Before(cutoff) {
+				delete(m.lastMsgAt, k)
+			}
+		}
+		for k, t := range m.bannedUntil {
+			if now.After(t) {
+				delete(m.bannedUntil, k)
+			}
+		}
+	}
+	return spamOK
 }
 
 // ConnectQR memulai login via QR. Mengembalikan channel kode QR (string).

@@ -205,6 +205,10 @@
             <div class="l"><div class="t">Bot status mengetik</div><div class="d">Ketik 1.5 detik sebelum membalas command</div></div>
             <label class="switch"><input id="set_typing" type="checkbox"><span class="slider"></span></label>
           </div>
+          <div class="row">
+            <div class="l"><div class="t">Anti-spam</div><div class="d">Ban 10 detik jika user mengirim pesan beruntun cepat (&lt;500 ms)</div></div>
+            <label class="switch"><input id="set_antispam" type="checkbox"><span class="slider"></span></label>
+          </div>
         </div>
         <div class="card">
           <div class="card-h"><div class="card-title">Aplikasi</div></div>
@@ -305,6 +309,7 @@
         $('set_block_self').checked = c.block_self_chat !== false;
         $('set_read').checked = !!c.read_chat;
         $('set_typing').checked = c.typing_before_reply !== false;
+        $('set_antispam').checked = c.anti_spam !== false;
         $('set_ai_prompt').value = c.ai_system_prompt || '';
         if(force) formTouched = false;
       }
@@ -323,6 +328,7 @@
         read_chat: $('set_read') ? $('set_read').checked : !!c.read_chat,
         typing_before_reply: $('set_typing') ? $('set_typing').checked : (c.typing_before_reply !== false),
         typing_delay_sec: c.typing_delay_sec || 1.5,
+        anti_spam: $('set_antispam') ? $('set_antispam').checked : (c.anti_spam !== false),
         update_manifest_url: c.update_manifest_url || '',
         ai_system_prompt: ($('set_ai_prompt') ? $('set_ai_prompt').value : (c.ai_system_prompt || ''))
       };
@@ -400,6 +406,7 @@
         read_chat: !!c.read_chat,
         typing_before_reply: c.typing_before_reply !== false,
         typing_delay_sec: c.typing_delay_sec || 1.5,
+        anti_spam: c.anti_spam !== false,
         update_manifest_url: c.update_manifest_url || '',
         ai_system_prompt: c.ai_system_prompt || ''
       };

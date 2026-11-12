@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool readChat = false;
   bool typingBeforeReply = true;
   double typingDelaySec = 1.5;
+  bool antiSpam = true;
 
   bool backendOk = false;
   bool connected = false;
@@ -91,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
         readChat = c.readChat;
         typingBeforeReply = c.typingBeforeReply;
         typingDelaySec = c.typingDelaySec;
+        antiSpam = c.antiSpam;
         _configLoaded = true;
       });
       if (full) {
@@ -118,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
         readChat: readChat,
         typingBeforeReply: typingBeforeReply,
         typingDelaySec: typingDelaySec,
+        antiSpam: antiSpam,
       );
 
   Future<void> _save() async {
@@ -334,6 +337,13 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitle: const Text('Kirim status mengetik 1.5 detik sebelum membalas command'),
         value: typingBeforeReply,
         onChanged: loading ? null : (v) async { setState(() => typingBeforeReply = v); await _save(); },
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Anti-spam'),
+        subtitle: const Text('Ban 10 detik jika user mengirim pesan beruntun cepat (<500 ms)'),
+        value: antiSpam,
+        onChanged: loading ? null : (v) async { setState(() => antiSpam = v); await _save(); },
       ),
     ])));
   }
