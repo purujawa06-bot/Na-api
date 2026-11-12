@@ -65,8 +65,19 @@ func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
 			ID:          "music-play",
 			Name:        "Play Music",
 			Command:     "play",
-			Category:    "Music",
+			Category:    "Downloader",
 			Description: "Cari & putar musik dari SoundCloud (.play <judul>)",
+			ExecURL:     exec,
+			Server:      base,
+			Version:     "1.1.0",
+			Enabled:     true,
+		},
+		{
+			ID:          "tiktok-downloader",
+			Name:        "TikTok Downloader",
+			Command:     "tt",
+			Category:    "Downloader",
+			Description: "Download video TikTok tanpa watermark (.tt/.tiktok <url>)",
 			ExecURL:     exec,
 			Server:      base,
 			Version:     "1.0.0",
@@ -106,6 +117,13 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "reply": reply})
 	case "play", "music-play":
 		res, err := runPlay(r, args)
+		if err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(res)
+	case "tt", "tiktok", "tiktok-downloader":
+		res, err := runTikTok(r, args)
 		if err != nil {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -305,6 +323,76 @@ func (h *handlers) updateManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(b)
+}
+
+func runTikTok(r *http.Request, rawURL string) (map[string]any, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return map[string]any{"ok": true, "reply": "Gunakan: .tt <url tiktok> (alias: .tiktok)"}, nil
+	}
+	base := strings.TrimRight(baseURL(r), "/")
+	if strings.Contains(base, "127.0.0.1") || strings.Contains(base, "localhost") {
+		base = "https://na-api-nue-api-e7bfd3f4.koyeb.app"
+	}
+	endpoint := base + "/api/downloader/tiktok?url=" + url.QueryEscape(rawURL)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: 120 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return map[string]any{"ok": true, "reply": "Gagal mengunduh TikTok: " + err.Error()}, nil
+	}
+	defer res.Body.Close()
+	rb, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+
+	var j map[string]any
+	if err := json.Unmarshal(rb, &j); err != nil {
+		return map[string]any{"ok": true, "reply": "Respons TikTok tidak valid."}, nil
+	}
+	success, _ := j["success"].(bool)
+	if !success {
+		errMsg, _ := j["error"].(string)
+		if strings.TrimSpace(errMsg) == "" {
+			errMsg = strings.TrimSpace(string(rb))
+		}
+		if errMsg == "" {
+			errMsg = "gagal memproses permintaan"
+		}
+		return map[string]any{"ok": true, "reply": "Gagal unduh TikTok: " + errMsg}, nil
+	}
+
+	getStr := func(k string) string {
+		v, _ := j[k].(string)
+		return strings.TrimSpace(v)
+	}
+	author := getStr("author")
+	caption := getStr("caption")
+	videoURL := getStr("video_url")
+	mp3URL := getStr("mp3_url")
+
+	var lines []string
+	lines = append(lines, "TikTok Downloader")
+	if author != "" {
+		lines = append(lines, "Author: "+author)
+	}
+	if caption != "" {
+		if len([]rune(caption)) > 500 {
+			caption = string([]rune(caption)[:500]) + "…"
+		}
+		lines = append(lines, "Caption: "+caption)
+	}
+	if videoURL != "" {
+		lines = append(lines, "Video: "+videoURL)
+	}
+	if mp3URL != "" {
+		lines = append(lines, "Audio: "+mp3URL)
+	}
+	if videoURL == "" && mp3URL == "" {
+		lines = append(lines, "(tautan media tidak tersedia)")
+	}
+	return map[string]any{"ok": true, "reply": strings.Join(lines, "\n")}, nil
 }
 
 func runPlay(r *http.Request, query string) (map[string]any, error) {

@@ -552,16 +552,25 @@ func (m *Manager) buildMenu(cfg Config) string {
 			if !p.Enabled || p.Command == "" {
 				continue
 			}
+			cmdName := strings.ToLower(strings.TrimSpace(p.Command))
 			cat := strings.TrimSpace(p.Category)
 			if cat == "" {
 				cat = "Plugin"
+			}
+			// normalisasi tampilan: .play masuk kategori Downloader
+			if cmdName == "play" {
+				cat = "Downloader"
+			}
+			label := "." + cmdName
+			if cmdName == "tt" {
+				label = ".tt / .tiktok"
 			}
 			key := strings.ToUpper(cat)
 			if _, ok := catMap[key]; !ok {
 				catOrder = append(catOrder, key)
 				catMap[key] = []string{}
 			}
-			catMap[key] = append(catMap[key], "│  • ."+p.Command)
+			catMap[key] = append(catMap[key], "│  • "+label)
 		}
 		for _, cat := range catOrder {
 			lines = append(lines, "│", "├─ "+cat)

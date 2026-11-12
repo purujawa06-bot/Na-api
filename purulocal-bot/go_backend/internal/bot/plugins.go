@@ -78,12 +78,25 @@ func (s *PluginStore) ListInstalled() []Plugin {
 	return out
 }
 
+func pluginCmdMatches(p Plugin, cmd string) bool {
+	pc := normalizeCmd(p.Command)
+	cmd = normalizeCmd(cmd)
+	if pc == cmd {
+		return true
+	}
+	// alias: .tiktok -> plugin command .tt
+	if pc == "tt" && cmd == "tiktok" {
+		return true
+	}
+	return false
+}
+
 func (s *PluginStore) HasCommand(cmd string) bool {
 	cmd = normalizeCmd(cmd)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for i := range s.list {
-		if s.list[i].Enabled && s.list[i].Command == cmd {
+		if s.list[i].Enabled && pluginCmdMatches(s.list[i], cmd) {
 			return true
 		}
 	}
@@ -169,7 +182,7 @@ func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Co
 	s.mu.RLock()
 	var p *Plugin
 	for i := range s.list {
-		if s.list[i].Enabled && s.list[i].Command == cmd {
+		if s.list[i].Enabled && pluginCmdMatches(s.list[i], cmd) {
 			cp := s.list[i]
 			p = &cp
 			break
@@ -179,13 +192,19 @@ func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Co
 	if p == nil {
 		return ExecResult{}, false, nil
 	}
-	res, err := execPlugin(ctx, *p, args, user, cfg, messages)
+	// kirim command efektif agar server mengeksekusi handler yang tepat (alias)
+	execCmd := cmd
+	res, err := execPlugin(ctx, *p, args, user, cfg, messages, execCmd)
 	return res, true, err
 }
 
-func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, messages []ChatMessage) (ExecResult, error) {
+func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, messages []ChatMessage, cmdOverride ...string) (ExecResult, error) {
+	command := p.Command
+	if len(cmdOverride) > 0 && strings.TrimSpace(cmdOverride[0]) != "" {
+		command = cmdOverride[0]
+	}
 	body := map[string]any{
-		"command":          p.Command,
+		"command":          command,
 		"args":             args,
 		"bot_name":         cfg.BotName,
 		"owner_name":       cfg.OwnerName,
