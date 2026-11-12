@@ -21,7 +21,7 @@
     html, body { margin:0; padding:0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
     body { min-height: 100vh; }
     .app { max-width: 560px; margin: 0 auto; padding: 14px 12px 28px; }
-    .topbar { display:flex; align-items:center; justify-content:space-between; padding: 2px 2px 12px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding: 10px 2px 12px; position: sticky; top: 0; z-index: 30; background: var(--bg); }
     .brand { display:flex; align-items:center; gap:10px; }
     .logo { width:34px; height:34px; border-radius:10px; background: var(--accent); display:flex; align-items:center; justify-content:center; color:#042016; font-weight:800; }
     .title { font-size:17px; font-weight:800; letter-spacing:-0.3px; }
@@ -250,7 +250,7 @@
         <div class="page-head">VIP Code</div>
         <div class="card">
           <div class="card-h"><div class="card-title">Generate VIP Code</div></div>
-          <div class="muted" style="margin-bottom:8px">Kode 4 karakter (huruf/angka). 1 kode untuk 1 user. Redeem: <b>.vip KODE</b></div>
+          <div class="muted" style="margin-bottom:8px">Kode 4 karakter (huruf/angka). Redeem: <b>.vip KODE</b></div>
           <label>Durasi</label>
           <div class="grid2">
             <input id="vip_dur_val" type="number" min="1" value="1" />
@@ -259,6 +259,8 @@
               <option value="d" selected>Hari</option>
             </select>
           </div>
+          <label>Maks penggunaan (jumlah user)</label>
+          <input id="vip_max_uses" type="number" min="1" value="1" />
           <button class="btn primary" style="margin-top:10px" onclick="generateVipCode()">Generate</button>
           <div id="vipCodeMsg" class="msg"></div>
         </div>
@@ -635,10 +637,13 @@
       $('vipCodeList').innerHTML = sorted.map(c=>{
         const code = esc(c.code||'');
         const raw = String(c.code||'');
-        const used = !!(c.used_by && String(c.used_by).trim());
-        const status = used ? '<span class="muted">Dipakai</span>' : '<span class="pill ok">Aktif</span>';
+        const maxUses = Math.max(1, parseInt(c.max_uses || 1, 10) || 1);
+        const usedList = Array.isArray(c.used_by_users) ? c.used_by_users : ((c.used_by && String(c.used_by).trim()) ? [String(c.used_by).trim()] : []);
+        const usedCount = usedList.length;
+        const exhausted = usedCount >= maxUses;
+        const status = exhausted ? '<span class="muted">Habis</span>' : `<span class="pill ok">${usedCount}/${maxUses}</span>`;
         const dur = formatDur(c.duration_seconds||0);
-        return `<div class="plugin-item"><div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px;letter-spacing:2px">${code} ${status}</div><div class="muted">Durasi: ${dur}${used ? ' · 1 user' : ' · untuk 1 user'}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="small-btn primary" onclick="copyVipCode('${raw}')">Salin</button><button class="small-btn danger" onclick="removeVipCode('${raw}')">Hapus</button></div></div>`;
+        return `<div class="plugin-item"><div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px;letter-spacing:2px">${code} ${status}</div><div class="muted">Durasi: ${dur} · Terpakai ${usedCount}/${maxUses} user</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="small-btn primary" onclick="copyVipCode('${raw}')">Salin</button><button class="small-btn danger" onclick="removeVipCode('${raw}')">Hapus</button></div></div>`;
       }).join('');
     }
 
@@ -651,12 +656,13 @@
     }
 
     async function generateVipCode(){
-      const valEl = $('vip_dur_val'); const unitEl = $('vip_dur_unit');
+      const valEl = $('vip_dur_val'); const unitEl = $('vip_dur_unit'); const maxEl = $('vip_max_uses');
       const val = parseInt(valEl ? valEl.value : '1', 10) || 1;
       const unit = unitEl ? unitEl.value : 'd';
+      const maxUses = Math.max(1, parseInt(maxEl ? maxEl.value : '1', 10) || 1);
       const seconds = unit === 'h' ? val*3600 : val*86400;
       setMsg('vipCodeMsg','Membuat kode...', false);
-      const d = await api('/api/vipcodes/generate', {method:'POST', body: JSON.stringify({duration_seconds: seconds})});
+      const d = await api('/api/vipcodes/generate', {method:'POST', body: JSON.stringify({duration_seconds: seconds, max_uses: maxUses})});
       if(!d.ok){ setMsg('vipCodeMsg', d.error||'Gagal generate', true); return; }
       const code = d.code && d.code.code ? d.code.code : '';
       setMsg('vipCodeMsg', code ? ('Kode dibuat: '+code) : 'Kode dibuat.', false);

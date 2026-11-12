@@ -335,13 +335,14 @@ func (s *Server) handleVIPCodes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVIPCodeGenerate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DurationSeconds int64 `json:"duration_seconds"`
+		MaxUses         int   `json:"max_uses"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if s.mgr.VIP() == nil {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": "vip store tidak tersedia"})
 		return
 	}
-	code, err := s.mgr.VIP().GenerateCode(body.DurationSeconds)
+	code, err := s.mgr.VIP().GenerateCode(body.DurationSeconds, body.MaxUses)
 	if err != nil {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
 		return

@@ -14,11 +14,14 @@ import (
 )
 
 type VIPCode struct {
-	Code            string `json:"code"`
-	DurationSeconds int64  `json:"duration_seconds"`
-	CreatedAt       int64  `json:"created_at"`
-	UsedBy          string `json:"used_by,omitempty"`
-	UsedAt          int64  `json:"used_at,omitempty"`
+	Code            string   `json:"code"`
+	DurationSeconds int64    `json:"duration_seconds"`
+	CreatedAt       int64    `json:"created_at"`
+	MaxUses         int      `json:"max_uses"` // maks jumlah user yang bisa redeem (0/1 = 1)
+	UsedByUsers     []string `json:"used_by_users,omitempty"`
+	// legacy (format lama: 1 user)
+	UsedBy string `json:"used_by,omitempty"`
+	UsedAt int64  `json:"used_at,omitempty"`
 }
 
 type FeatureItem struct {
@@ -72,8 +75,34 @@ func (s *VIPStore) Load() error {
 	if d.Users == nil {
 		d.Users = map[string]int64{}
 	}
+	for i := range d.Codes {
+		d.Codes[i].normalize()
+	}
 	s.data = d
 	return nil
+}
+
+func (c *VIPCode) normalize() {
+	if c.MaxUses <= 0 {
+		c.MaxUses = 1
+	}
+	if len(c.UsedByUsers) == 0 && strings.TrimSpace(c.UsedBy) != "" {
+		c.UsedByUsers = []string{strings.TrimSpace(c.UsedBy)}
+	}
+}
+
+func (c VIPCode) UsedCount() int {
+	return len(c.UsedByUsers)
+}
+
+func (c VIPCode) HasUsed(user string) bool {
+	user = strings.TrimSpace(user)
+	for _, u := range c.UsedByUsers {
+		if u == user {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *VIPStore) saveLocked() error {
@@ -145,9 +174,12 @@ func genVIPCode() (string, error) {
 	return string(out), nil
 }
 
-func (s *VIPStore) GenerateCode(durationSeconds int64) (VIPCode, error) {
+func (s *VIPStore) GenerateCode(durationSeconds int64, maxUses int) (VIPCode, error) {
 	if durationSeconds <= 0 {
 		return VIPCode{}, errors.New("durasi VIP harus lebih dari 0")
+	}
+	if maxUses <= 0 {
+		maxUses = 1
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -173,7 +205,7 @@ func (s *VIPStore) GenerateCode(durationSeconds int64) (VIPCode, error) {
 	if code == "" {
 		return VIPCode{}, errors.New("gagal membuat kode unik, coba lagi")
 	}
-	vc := VIPCode{Code: code, DurationSeconds: durationSeconds, CreatedAt: time.Now().Unix()}
+	vc := VIPCode{Code: code, DurationSeconds: durationSeconds, CreatedAt: time.Now().Unix(), MaxUses: maxUses, UsedByUsers: []string{}}
 	s.data.Codes = append(s.data.Codes, vc)
 	if err := s.saveLocked(); err != nil {
 		return VIPCode{}, err
@@ -233,20 +265,25 @@ func (s *VIPStore) Redeem(user, code string, now time.Time) (expiry int64, err e
 	if idx < 0 {
 		return 0, errors.New("kode VIP tidak ditemukan")
 	}
-	if strings.TrimSpace(s.data.Codes[idx].UsedBy) != "" {
-		return 0, errors.New("kode VIP sudah digunakan")
+	s.data.Codes[idx].normalize()
+	c := &s.data.Codes[idx]
+	if c.HasUsed(user) {
+		return 0, errors.New("kode VIP sudah pernah kamu gunakan")
+	}
+	if c.UsedCount() >= c.MaxUses {
+		return 0, errors.New("kode VIP sudah mencapai batas penggunaan")
 	}
 	start := now.Unix()
 	if cur, ok := s.data.Users[user]; ok && cur > start {
 		start = cur // extend dari sisa aktif
 	}
-	exp := start + s.data.Codes[idx].DurationSeconds
+	exp := start + c.DurationSeconds
 	if s.data.Users == nil {
 		s.data.Users = map[string]int64{}
 	}
 	s.data.Users[user] = exp
-	s.data.Codes[idx].UsedBy = user
-	s.data.Codes[idx].UsedAt = now.Unix()
+	c.UsedByUsers = append(c.UsedByUsers, user)
+	c.UsedAt = now.Unix()
 	if err := s.saveLocked(); err != nil {
 		return 0, err
 	}
