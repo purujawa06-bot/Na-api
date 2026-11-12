@@ -34,7 +34,7 @@
     .pill.ok { color: #052e1f; background: rgba(16,185,129,0.9); border-color: transparent; font-weight:600; }
     .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
     label { display:block; font-size:12px; color: var(--muted); margin: 8px 0 4px; font-weight:500; }
-    input[type=text], input[type=number], textarea { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--border); background: #0b0f14; color: var(--text); font-size:14px; outline:none; font-family: inherit; }
+    input[type=text], input[type=number], textarea, select { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--border); background: #0b0f14; color: var(--text); font-size:14px; outline:none; font-family: inherit; }
     textarea { min-height: 160px; resize: vertical; line-height: 1.5; }
     input:focus, textarea:focus { border-color: rgba(16,185,129,0.5); }
     .btn { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background: #1a2029; color: var(--text); font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
@@ -132,6 +132,8 @@
         <button class="nav-item" data-page="dashboard" onclick="nav('dashboard')">Dashboard</button>
         <button class="nav-item" data-page="plugin" onclick="nav('plugin')">Plugin</button>
         <button class="nav-item" data-page="ai" onclick="nav('ai')">AI</button>
+        <button class="nav-item" data-page="stickerwm" onclick="nav('stickerwm')">Sticker WM</button>
+        <button class="nav-item" data-page="customcmd" onclick="nav('customcmd')">Custom Command</button>
         <button class="nav-item" data-page="settings" onclick="nav('settings')">Settings</button>
       </div>
 
@@ -177,6 +179,60 @@
         </div>
       </div>
 
+      <!-- PAGE: Sticker WM -->
+      <div id="page-stickerwm" class="page hidden">
+        <div class="page-head">Sticker WM</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Sticker Watermark</div></div>
+          <div class="muted" style="margin-bottom:8px">Atur copyright sticker (packname & author) untuk perintah <b>.s</b> / <b>.sticker</b>.</div>
+          <label>Pack Name</label>
+          <input id="set_sticker_pack" type="text" placeholder="Nama pack sticker" />
+          <label>Author</label>
+          <input id="set_sticker_author" type="text" placeholder="Nama author" />
+          <button class="btn primary" style="margin-top:10px" onclick="saveStickerWm()">Simpan Sticker WM</button>
+          <div id="stickerWmMsg" class="msg"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: Custom Command -->
+      <div id="page-customcmd" class="page hidden">
+        <div class="page-head">Custom Command</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Buat Custom Command</div></div>
+          <label>Nama Command</label>
+          <input id="cc_name" type="text" placeholder="Nama tampilan" />
+          <label>Command (tanpa titik)</label>
+          <input id="cc_cmd" type="text" placeholder="contoh: halo" />
+          <label>Category</label>
+          <input id="cc_cat" type="text" placeholder="contoh: CUSTOM" />
+          <label>Respon</label>
+          <select id="cc_type" onchange="onCcTypeChange()">
+            <option value="text">Text</option>
+            <option value="photo">Foto</option>
+            <option value="video">Video</option>
+            <option value="music">Music</option>
+          </select>
+          <div id="cc_text_wrap">
+            <label>Respon Text</label>
+            <textarea id="cc_text" placeholder="Isi respon teks..." style="min-height:100px"></textarea>
+          </div>
+          <div id="cc_media_wrap" class="hidden">
+            <label>URL Media</label>
+            <input id="cc_media_url" type="text" placeholder="https://..." />
+          </div>
+          <div id="cc_caption_wrap" class="hidden">
+            <label>Caption (opsional)</label>
+            <input id="cc_caption" type="text" placeholder="Caption foto/video" />
+          </div>
+          <button class="btn primary" style="margin-top:10px" onclick="addCustomCmd()">Add</button>
+          <div id="ccMsg" class="msg"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Daftar Custom Command</div></div>
+          <div id="customCmdList" class="muted">Memuat...</div>
+        </div>
+      </div>
+
       <!-- PAGE: Settings -->
       <div id="page-settings" class="page hidden">
         <div class="page-head">Settings</div>
@@ -209,14 +265,6 @@
             <div class="l"><div class="t">Anti-spam</div><div class="d">Ban 10 detik jika user mengirim pesan beruntun cepat (&lt;500 ms)</div></div>
             <label class="switch"><input id="set_antispam" type="checkbox"><span class="slider"></span></label>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-h"><div class="card-title">Sticker WM</div></div>
-          <div class="muted" style="margin-bottom:8px">Atur copyright sticker (packname & author) untuk perintah <b>.s</b> / <b>.sticker</b>.</div>
-          <label>Pack Name</label>
-          <input id="set_sticker_pack" type="text" placeholder="Nama pack sticker" />
-          <label>Author</label>
-          <input id="set_sticker_author" type="text" placeholder="Nama author" />
         </div>
         <div class="card">
           <div class="card-h"><div class="card-title">Aplikasi</div></div>
@@ -297,14 +345,18 @@
 
     function nav(page){
       currentPage = page;
-      ['dashboard','plugin','ai','settings'].forEach(p=>{
-        $('page-'+p).classList.toggle('hidden', p!==page);
+      const pages = ['dashboard','plugin','ai','stickerwm','customcmd','settings'];
+      pages.forEach(p=>{
+        const el = $('page-'+p);
+        if(el) el.classList.toggle('hidden', p!==page);
         const btn = document.querySelector('.nav-item[data-page="'+p+'"]');
         if(btn) btn.classList.toggle('active', p===page);
       });
-      $('pageSubtitle').textContent = page==='dashboard'?'Dashboard':(page==='plugin'?'Plugin':(page==='ai'?'AI':'Settings'));
+      const titles = {dashboard:'Dashboard', plugin:'Plugin', ai:'AI', stickerwm:'Sticker WM', customcmd:'Custom Command', settings:'Settings'};
+      $('pageSubtitle').textContent = titles[page] || page;
       closeDrawer();
       if(page==='plugin'){ loadPlugins(true); loadAvailable(true); }
+      if(page==='customcmd'){ loadCustomCmds(); }
     }
 
     function fillFormsFromCfg(c, force){
@@ -402,6 +454,100 @@
         body.bot_number = body.bot_number || body.owner_number;
       }
       await saveConfig(body, 'aiMsg');
+    }
+
+    async function saveStickerWm(){
+      const body = buildConfigBody({
+        sticker_pack: ($('set_sticker_pack') ? $('set_sticker_pack').value : ''),
+        sticker_author: ($('set_sticker_author') ? $('set_sticker_author').value : '')
+      });
+      if(!String(body.owner_number||'').trim() && lastCfg && lastCfg.owner_number){
+        body.owner_number = lastCfg.owner_number;
+        body.bot_number = body.bot_number || body.owner_number;
+      }
+      await saveConfig(body, 'stickerWmMsg');
+    }
+
+    function onCcTypeChange(){
+      const t = $('cc_type') ? $('cc_type').value : 'text';
+      const showText = (t === 'text');
+      const showMedia = (t === 'photo' || t === 'video' || t === 'music');
+      const showCaption = (t === 'photo' || t === 'video');
+      if($('cc_text_wrap')) $('cc_text_wrap').classList.toggle('hidden', !showText);
+      if($('cc_media_wrap')) $('cc_media_wrap').classList.toggle('hidden', !showMedia);
+      if($('cc_caption_wrap')) $('cc_caption_wrap').classList.toggle('hidden', !showCaption);
+    }
+
+    function renderCustomCmds(list){
+      const arr = Array.isArray(list) ? list : [];
+      if(!arr.length){ $('customCmdList').innerHTML = '<span class="muted">Belum ada custom command.</span>'; return; }
+      $('customCmdList').innerHTML = arr.map(c=>{
+        const id = esc(c.id||'');
+        const cmd = esc(c.command||'');
+        const name = esc(c.name||c.command||'');
+        const cat = c.category||'';
+        const type = esc(c.response_type||'text');
+        const enabled = c.enabled !== false;
+        const toggleLabel = enabled ? 'Matikan' : 'Aktifkan';
+        const state = enabled ? '<span class="pill ok">Aktif</span>' : '<span class="pill">Mati</span>';
+        return `<div class="plugin-item">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px">${catTag(cat)}${name} <span class="muted">(.${cmd})</span> ${state}</div>
+            <div class="muted">Tipe: ${type}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="small-btn" onclick="toggleCustomCmd('${id}', ${enabled ? 'false' : 'true'})">${toggleLabel}</button>
+            <button class="small-btn danger" onclick="removeCustomCmd('${id}')">Hapus</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadCustomCmds(){
+      try{
+        const d = await api('/api/customcmds');
+        if(!d.ok){ $('customCmdList').innerHTML = `<span class="err">${esc(d.error||'Gagal memuat')}</span>`; return; }
+        renderCustomCmds(d.commands||[]);
+      }catch(e){ $('customCmdList').innerHTML = '<span class="err">Gagal memuat custom command</span>'; }
+    }
+
+    async function addCustomCmd(){
+      const payload = {
+        name: $('cc_name') ? $('cc_name').value : '',
+        command: $('cc_cmd') ? $('cc_cmd').value : '',
+        category: $('cc_cat') ? $('cc_cat').value : '',
+        response_type: $('cc_type') ? $('cc_type').value : 'text',
+        response_text: $('cc_text') ? $('cc_text').value : '',
+        media_url: $('cc_media_url') ? $('cc_media_url').value : '',
+        caption: $('cc_caption') ? $('cc_caption').value : ''
+      };
+      setMsg('ccMsg','Menyimpan...', false);
+      const d = await api('/api/customcmds/add', {method:'POST', body: JSON.stringify(payload)});
+      if(!d.ok){ setMsg('ccMsg', d.error||'Gagal menambah', true); return; }
+      setMsg('ccMsg','Custom command ditambahkan.', false);
+      if($('cc_name')) $('cc_name').value='';
+      if($('cc_cmd')) $('cc_cmd').value='';
+      if($('cc_cat')) $('cc_cat').value='';
+      if($('cc_text')) $('cc_text').value='';
+      if($('cc_media_url')) $('cc_media_url').value='';
+      if($('cc_caption')) $('cc_caption').value='';
+      if($('cc_type')) $('cc_type').value='text';
+      onCcTypeChange();
+      renderCustomCmds(d.commands||[]);
+      setTimeout(()=>{ if($('ccMsg') && $('ccMsg').textContent==='Custom command ditambahkan.') setMsg('ccMsg','',false); }, 1500);
+    }
+
+    async function toggleCustomCmd(id, enabled){
+      const d = await api('/api/customcmds/toggle', {method:'POST', body: JSON.stringify({id, enabled})});
+      if(!d.ok){ alert(d.error||'Gagal mengubah status'); return; }
+      renderCustomCmds(d.commands||[]);
+    }
+
+    async function removeCustomCmd(id){
+      if(!confirm('Hapus custom command ini?')) return;
+      const d = await api('/api/customcmds/remove', {method:'POST', body: JSON.stringify({id})});
+      if(!d.ok){ alert(d.error||'Gagal menghapus'); return; }
+      renderCustomCmds(d.commands||[]);
     }
 
     async function saveLoginConfig(){
@@ -567,6 +713,7 @@
 
     // init
     document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.page==='dashboard'));
+    onCcTypeChange();
     refresh(true);
     setInterval(()=>refresh(false), 5000);
   </script>

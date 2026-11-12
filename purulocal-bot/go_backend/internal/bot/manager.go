@@ -54,13 +54,14 @@ type Manager struct {
 	cfgStore *ConfigStore
 	dataDir  string
 
-	mu       sync.RWMutex
-	client   *whatsmeow.Client
-	qrChan   <-chan whatsmeow.QRChannelItem
-	status   Status
-	paused   bool
-	plugins  *PluginStore
-	aiHist   *AIHistoryStore
+	mu         sync.RWMutex
+	client     *whatsmeow.Client
+	qrChan     <-chan whatsmeow.QRChannelItem
+	status     Status
+	paused     bool
+	plugins    *PluginStore
+	aiHist     *AIHistoryStore
+	customCmds *CustomCommandStore
 
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
@@ -83,11 +84,16 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	ccstore, err := NewCustomCommandStore(filepath.Join(dataDir, "custom_commands.json"))
+	if err != nil {
+		return nil, err
+	}
 	return &Manager{
 		cfgStore:    cfgStore,
 		dataDir:     dataDir,
 		plugins:     pstore,
 		aiHist:      ahist,
+		customCmds:  ccstore,
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
 	}, nil
@@ -145,6 +151,8 @@ func (m *Manager) IsPaused() bool {
 }
 
 func (m *Manager) Plugins() *PluginStore { return m.plugins }
+
+func (m *Manager) CustomCmds() *CustomCommandStore { return m.customCmds }
 
 func (m *Manager) ensureClient(ctx context.Context) (*whatsmeow.Client, error) {
 	m.mu.Lock()
@@ -248,6 +256,17 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 		_ = m.handleStickerCommand(ctx, evt, cfg)
 		return
+	}
+
+	// custom commands (lokal)
+	if m.customCmds != nil {
+		if cc, okc := m.customCmds.Find(cmd); okc {
+			if cfg.TypingBeforeReply {
+				m.sendTyping(ctx, evt.Info.Chat, false)
+			}
+			m.handleCustomCommand(ctx, evt, cc)
+			return
+		}
 	}
 
 	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg)
@@ -662,6 +681,33 @@ func (m *Manager) buildMenu(cfg Config) string {
 		"│  • .sticker",
 	}
 
+	// Kumpulkan custom commands (aktif) per kategori
+	if m.customCmds != nil {
+		catMap := map[string][]string{}
+		catOrder := []string{}
+		for _, c := range m.customCmds.List() {
+			if !c.Enabled || strings.TrimSpace(c.Command) == "" {
+				continue
+			}
+			cmdName := strings.ToLower(strings.TrimSpace(c.Command))
+			cat := strings.TrimSpace(c.Category)
+			if cat == "" {
+				cat = "CUSTOM"
+			}
+			key := strings.ToUpper(cat)
+			if _, ok := catMap[key]; !ok {
+				catOrder = append(catOrder, key)
+				catMap[key] = []string{}
+			}
+			// menu: 1 command utama per entri, tanpa alias & tanpa penjelasan
+			catMap[key] = append(catMap[key], "│  • ."+cmdName)
+		}
+		for _, cat := range catOrder {
+			lines = append(lines, "│", "├─ "+cat)
+			lines = append(lines, catMap[cat]...)
+		}
+	}
+
 	// Kumpulkan plugin terpasang per kategori
 	if m.plugins != nil {
 		catMap := map[string][]string{}
@@ -680,9 +726,6 @@ func (m *Manager) buildMenu(cfg Config) string {
 				cat = "Downloader"
 			}
 			label := "." + cmdName
-			if cmdName == "tt" {
-				label = ".tt / .tiktok"
-			}
 			key := strings.ToUpper(cat)
 			if _, ok := catMap[key]; !ok {
 				catOrder = append(catOrder, key)

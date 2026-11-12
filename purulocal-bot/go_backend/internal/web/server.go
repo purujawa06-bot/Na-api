@@ -39,6 +39,10 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("POST /api/plugins/install", s.handlePluginInstall)
 	mux.HandleFunc("POST /api/plugins/remove", s.handlePluginRemove)
 	mux.HandleFunc("POST /api/plugins/toggle", s.handlePluginToggle)
+	mux.HandleFunc("GET /api/customcmds", s.handleCustomCmds)
+	mux.HandleFunc("POST /api/customcmds/add", s.handleCustomCmdAdd)
+	mux.HandleFunc("POST /api/customcmds/remove", s.handleCustomCmdRemove)
+	mux.HandleFunc("POST /api/customcmds/toggle", s.handleCustomCmdToggle)
 	return s
 }
 
@@ -228,4 +232,63 @@ func (s *Server) handlePluginToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "plugins": s.mgr.Plugins().ListInstalled()})
+}
+
+func (s *Server) handleCustomCmds(w http.ResponseWriter, r *http.Request) {
+	if s.mgr.CustomCmds() == nil {
+		writeJSON(w, 200, map[string]any{"ok": true, "commands": []any{}})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "commands": s.mgr.CustomCmds().List()})
+}
+
+func (s *Server) handleCustomCmdAdd(w http.ResponseWriter, r *http.Request) {
+	var c bot.CustomCommand
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	if s.mgr.CustomCmds() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "custom command store tidak tersedia"})
+		return
+	}
+	added, err := s.mgr.CustomCmds().Add(c)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "command": added, "commands": s.mgr.CustomCmds().List()})
+}
+
+func (s *Server) handleCustomCmdRemove(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.CustomCmds() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "custom command store tidak tersedia"})
+		return
+	}
+	if err := s.mgr.CustomCmds().Remove(body.ID); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "commands": s.mgr.CustomCmds().List()})
+}
+
+func (s *Server) handleCustomCmdToggle(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID      string `json:"id"`
+		Enabled bool   `json:"enabled"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.CustomCmds() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "custom command store tidak tersedia"})
+		return
+	}
+	if err := s.mgr.CustomCmds().SetEnabled(body.ID, body.Enabled); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "commands": s.mgr.CustomCmds().List()})
 }
