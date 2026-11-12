@@ -165,6 +165,18 @@ func (s *PluginStore) SetEnabled(id string, enabled bool) error {
 	return errors.New("plugin tidak ditemukan")
 }
 
+func (s *PluginStore) Find(cmd string) (Plugin, bool) {
+	cmd = normalizeCmd(cmd)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i := range s.list {
+		if s.list[i].Enabled && pluginCmdMatches(s.list[i], cmd) {
+			return s.list[i], true
+		}
+	}
+	return Plugin{}, false
+}
+
 type ExecResult struct {
 	Reply        string `json:"reply"`
 	Caption      string `json:"caption,omitempty"`

@@ -43,6 +43,10 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("POST /api/customcmds/add", s.handleCustomCmdAdd)
 	mux.HandleFunc("POST /api/customcmds/remove", s.handleCustomCmdRemove)
 	mux.HandleFunc("POST /api/customcmds/toggle", s.handleCustomCmdToggle)
+	mux.HandleFunc("GET /api/features", s.handleFeatures)
+	mux.HandleFunc("POST /api/features/toggle", s.handleFeatureToggle)
+	mux.HandleFunc("GET /api/vipcodes", s.handleVIPCodes)
+	mux.HandleFunc("POST /api/vipcodes/generate", s.handleVIPCodeGenerate)
 	return s
 }
 
@@ -291,4 +295,55 @@ func (s *Server) handleCustomCmdToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "commands": s.mgr.CustomCmds().List()})
+}
+
+func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"ok": true, "features": s.mgr.ListAllFeatures()})
+}
+
+func (s *Server) handleFeatureToggle(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID  string `json:"id"`
+		VIP bool   `json:"vip"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.VIP() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "vip store tidak tersedia"})
+		return
+	}
+	id := strings.TrimSpace(body.ID)
+	if id == "" {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "id fitur wajib"})
+		return
+	}
+	if err := s.mgr.VIP().SetFeatureVIP(id, body.VIP); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "features": s.mgr.ListAllFeatures()})
+}
+
+func (s *Server) handleVIPCodes(w http.ResponseWriter, r *http.Request) {
+	if s.mgr.VIP() == nil {
+		writeJSON(w, 200, map[string]any{"ok": true, "codes": []any{}})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "codes": s.mgr.VIP().ListCodes()})
+}
+
+func (s *Server) handleVIPCodeGenerate(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		DurationSeconds int64 `json:"duration_seconds"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.VIP() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "vip store tidak tersedia"})
+		return
+	}
+	code, err := s.mgr.VIP().GenerateCode(body.DurationSeconds)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "code": code, "codes": s.mgr.VIP().ListCodes()})
 }

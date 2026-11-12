@@ -134,6 +134,8 @@
         <button class="nav-item" data-page="ai" onclick="nav('ai')">AI</button>
         <button class="nav-item" data-page="stickerwm" onclick="nav('stickerwm')">Sticker WM</button>
         <button class="nav-item" data-page="customcmd" onclick="nav('customcmd')">Custom Command</button>
+        <button class="nav-item" data-page="features" onclick="nav('features')">Fitur</button>
+        <button class="nav-item" data-page="vipcode" onclick="nav('vipcode')">VIP Code</button>
         <button class="nav-item" data-page="settings" onclick="nav('settings')">Settings</button>
       </div>
 
@@ -230,6 +232,39 @@
         <div class="card">
           <div class="card-h"><div class="card-title">Daftar Custom Command</div></div>
           <div id="customCmdList" class="muted">Memuat...</div>
+        </div>
+      </div>
+
+      <!-- PAGE: Fitur -->
+      <div id="page-features" class="page hidden">
+        <div class="page-head">Fitur</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Daftar Semua Fitur</div></div>
+          <div class="muted" style="margin-bottom:8px">Aktifkan toggle untuk menjadikan fitur sebagai VIP.</div>
+          <div id="featureList" class="muted">Memuat...</div>
+        </div>
+      </div>
+
+      <!-- PAGE: VIP Code -->
+      <div id="page-vipcode" class="page hidden">
+        <div class="page-head">VIP Code</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Generate VIP Code</div></div>
+          <div class="muted" style="margin-bottom:8px">Kode 4 karakter (huruf/angka). 1 kode untuk 1 user. Redeem: <b>.vip KODE</b></div>
+          <label>Durasi</label>
+          <div class="grid2">
+            <input id="vip_dur_val" type="number" min="1" value="1" />
+            <select id="vip_dur_unit">
+              <option value="h">Jam</option>
+              <option value="d" selected>Hari</option>
+            </select>
+          </div>
+          <button class="btn primary" style="margin-top:10px" onclick="generateVipCode()">Generate</button>
+          <div id="vipCodeMsg" class="msg"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Daftar Kode</div></div>
+          <div id="vipCodeList" class="muted">Memuat...</div>
         </div>
       </div>
 
@@ -345,18 +380,20 @@
 
     function nav(page){
       currentPage = page;
-      const pages = ['dashboard','plugin','ai','stickerwm','customcmd','settings'];
+      const pages = ['dashboard','plugin','ai','stickerwm','customcmd','features','vipcode','settings'];
       pages.forEach(p=>{
         const el = $('page-'+p);
         if(el) el.classList.toggle('hidden', p!==page);
         const btn = document.querySelector('.nav-item[data-page="'+p+'"]');
         if(btn) btn.classList.toggle('active', p===page);
       });
-      const titles = {dashboard:'Dashboard', plugin:'Plugin', ai:'AI', stickerwm:'Sticker WM', customcmd:'Custom Command', settings:'Settings'};
+      const titles = {dashboard:'Dashboard', plugin:'Plugin', ai:'AI', stickerwm:'Sticker WM', customcmd:'Custom Command', features:'Fitur', vipcode:'VIP Code', settings:'Settings'};
       $('pageSubtitle').textContent = titles[page] || page;
       closeDrawer();
       if(page==='plugin'){ loadPlugins(true); loadAvailable(true); }
       if(page==='customcmd'){ loadCustomCmds(); }
+      if(page==='features'){ loadFeatures(); }
+      if(page==='vipcode'){ loadVipCodes(); }
     }
 
     function fillFormsFromCfg(c, force){
@@ -550,6 +587,92 @@
       renderCustomCmds(d.commands||[]);
     }
 
+
+    function renderFeatures(list){
+      const arr = Array.isArray(list) ? list : [];
+      if(!arr.length){ $('featureList').innerHTML = '<span class="muted">Tidak ada fitur.</span>'; return; }
+      $('featureList').innerHTML = arr.map(f=>{
+        const id = String(f.id||'');
+        const name = esc(f.name||f.command||id);
+        const cmd = esc(f.command||'');
+        const type = esc(f.type||'');
+        const vip = !!f.vip;
+        const enc = encodeURIComponent(id);
+        return `<div class="row"><div class="l"><div class="t">${name}${cmd ? ` <span class="muted">(.${cmd})</span>` : ''}</div><div class="d">${type}${vip ? ' · <span style="color:var(--warn)">VIP</span>' : ''}</div></div><label class="switch"><input type="checkbox" ${vip?'checked':''} onchange="toggleFeatureVip('${enc}', this.checked)"><span class="slider"></span></label></div>`;
+      }).join('');
+    }
+
+    async function loadFeatures(){
+      try{
+        const d = await api('/api/features');
+        if(!d.ok){ $('featureList').innerHTML = `<span class="err">${esc(d.error||'Gagal memuat')}</span>`; return; }
+        renderFeatures(d.features||[]);
+      }catch(e){ $('featureList').innerHTML = '<span class="err">Gagal memuat fitur</span>'; }
+    }
+
+    async function toggleFeatureVip(encodedId, vip){
+      const id = decodeURIComponent(encodedId);
+      const d = await api('/api/features/toggle', {method:'POST', body: JSON.stringify({id, vip})});
+      if(!d.ok){ alert(d.error||'Gagal mengubah'); await loadFeatures(); return; }
+      renderFeatures(d.features||[]);
+    }
+
+    function formatDur(sec){
+      sec = Number(sec||0);
+      if(sec <= 0) return '0';
+      const d = Math.floor(sec/86400);
+      const h = Math.floor((sec%86400)/3600);
+      const m = Math.floor((sec%3600)/60);
+      if(d>0) return d+'h '+h+'j';
+      if(h>0) return h+'j '+m+'m';
+      return m+'m';
+    }
+
+    function renderVipCodes(list){
+      const arr = Array.isArray(list) ? list : [];
+      if(!arr.length){ $('vipCodeList').innerHTML = '<span class="muted">Belum ada kode.</span>'; return; }
+      const sorted = arr.slice().sort((a,b)=> (b.created_at||0)-(a.created_at||0));
+      $('vipCodeList').innerHTML = sorted.map(c=>{
+        const code = esc(c.code||'');
+        const used = !!(c.used_by && String(c.used_by).trim());
+        const status = used ? '<span class="muted">Dipakai</span>' : '<span class="pill ok">Aktif</span>';
+        const dur = formatDur(c.duration_seconds||0);
+        return `<div class="plugin-item"><div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px;letter-spacing:2px">${code} ${status}</div><div class="muted">Durasi: ${dur}${used ? ' · 1 user' : ' · untuk 1 user'}</div></div><button class="small-btn primary" onclick="copyVipCode('${code}')">Salin</button></div>`;
+      }).join('');
+    }
+
+    async function loadVipCodes(){
+      try{
+        const d = await api('/api/vipcodes');
+        if(!d.ok){ $('vipCodeList').innerHTML = `<span class="err">${esc(d.error||'Gagal memuat')}</span>`; return; }
+        renderVipCodes(d.codes||[]);
+      }catch(e){ $('vipCodeList').innerHTML = '<span class="err">Gagal memuat kode VIP</span>'; }
+    }
+
+    async function generateVipCode(){
+      const valEl = $('vip_dur_val'); const unitEl = $('vip_dur_unit');
+      const val = parseInt(valEl ? valEl.value : '1', 10) || 1;
+      const unit = unitEl ? unitEl.value : 'd';
+      const seconds = unit === 'h' ? val*3600 : val*86400;
+      setMsg('vipCodeMsg','Membuat kode...', false);
+      const d = await api('/api/vipcodes/generate', {method:'POST', body: JSON.stringify({duration_seconds: seconds})});
+      if(!d.ok){ setMsg('vipCodeMsg', d.error||'Gagal generate', true); return; }
+      const code = d.code && d.code.code ? d.code.code : '';
+      setMsg('vipCodeMsg', code ? ('Kode dibuat: '+code) : 'Kode dibuat.', false);
+      renderVipCodes(d.codes||[]);
+    }
+
+    async function copyVipCode(code){
+      try{
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(code);
+        } else {
+          const t = document.createElement('textarea'); t.value = code; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
+        }
+        setMsg('vipCodeMsg','Kode '+code+' disalin.', false);
+        setTimeout(()=>{ const el=$('vipCodeMsg'); if(el && el.textContent===('Kode '+code+' disalin.')) setMsg('vipCodeMsg','',false); }, 1500);
+      }catch(e){ alert('Gagal menyalin'); }
+    }
     async function saveLoginConfig(){
       const owner = String($('login_owner_number').value||'').trim();
       const bot = String($('login_bot_number').value||owner).trim();

@@ -62,6 +62,7 @@ type Manager struct {
 	plugins    *PluginStore
 	aiHist     *AIHistoryStore
 	customCmds *CustomCommandStore
+	vip        *VIPStore
 
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
@@ -88,12 +89,17 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	vstore, err := NewVIPStore(filepath.Join(dataDir, "vip.json"))
+	if err != nil {
+		return nil, err
+	}
 	return &Manager{
 		cfgStore:    cfgStore,
 		dataDir:     dataDir,
 		plugins:     pstore,
 		aiHist:      ahist,
 		customCmds:  ccstore,
+		vip:         vstore,
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
 	}, nil
@@ -153,6 +159,66 @@ func (m *Manager) IsPaused() bool {
 func (m *Manager) Plugins() *PluginStore { return m.plugins }
 
 func (m *Manager) CustomCmds() *CustomCommandStore { return m.customCmds }
+
+func (m *Manager) VIP() *VIPStore { return m.vip }
+
+func (m *Manager) isFeatureAllowed(featureID, user string) bool {
+	if m.vip == nil || strings.TrimSpace(featureID) == "" {
+		return true
+	}
+	if !m.vip.IsFeatureVIP(featureID) {
+		return true
+	}
+	ok, _ := m.vip.IsUserVIP(user, time.Now())
+	return ok
+}
+
+func (m *Manager) vipDeniedReply() ExecResult {
+	return ExecResult{Reply: "Fitur ini khusus VIP. Gunakan .vip <kode> untuk aktivasi."}
+}
+
+func (m *Manager) ListAllFeatures() []FeatureItem {
+	items := []FeatureItem{}
+	isVIP := func(id string) bool {
+		if m.vip == nil {
+			return false
+		}
+		return m.vip.IsFeatureVIP(id)
+	}
+	// built-ins
+	builtins := []struct{ id, name, cmd string }{
+		{"builtin:ping", "Ping", "ping"},
+		{"builtin:menu", "Menu", "menu"},
+		{"builtin:owner", "Owner", "owner"},
+		{"builtin:sticker", "Sticker", "sticker"},
+		{"builtin:vip", "VIP Redeem", "vip"},
+		{"builtin:stats", "Stats", "stats"},
+	}
+	for _, b := range builtins {
+		items = append(items, FeatureItem{ID: b.id, Name: b.name, Command: b.cmd, Type: "builtin", VIP: isVIP(b.id)})
+	}
+	if m.customCmds != nil {
+		for _, c := range m.customCmds.List() {
+			id := "custom:" + c.ID
+			name := strings.TrimSpace(c.Name)
+			if name == "" {
+				name = c.Command
+			}
+			items = append(items, FeatureItem{ID: id, Name: name, Command: c.Command, Type: "custom", VIP: isVIP(id)})
+		}
+	}
+	if m.plugins != nil {
+		for _, p := range m.plugins.ListInstalled() {
+			id := "plugin:" + p.ID
+			name := strings.TrimSpace(p.Name)
+			if name == "" {
+				name = p.Command
+			}
+			items = append(items, FeatureItem{ID: id, Name: name, Command: p.Command, Type: "plugin", VIP: isVIP(id)})
+		}
+	}
+	return items
+}
 
 func (m *Manager) ensureClient(ctx context.Context) (*whatsmeow.Client, error) {
 	m.mu.Lock()
@@ -254,6 +320,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 		if cfg.TypingBeforeReply {
 			m.sendTyping(ctx, evt.Info.Chat, false)
 		}
+		if !m.isFeatureAllowed("builtin:sticker", userKey) {
+			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+			return
+		}
 		_ = m.handleStickerCommand(ctx, evt, cfg)
 		return
 	}
@@ -263,6 +333,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 		if cc, okc := m.customCmds.Find(cmd); okc {
 			if cfg.TypingBeforeReply {
 				m.sendTyping(ctx, evt.Info.Chat, false)
+			}
+			if !m.isFeatureAllowed("custom:"+cc.ID, userKey) {
+				_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+				return
 			}
 			m.handleCustomCommand(ctx, evt, cc)
 			return
@@ -626,16 +700,60 @@ func parseCommand(text string) (cmd, args string) {
 func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config) (ExecResult, bool) {
 	switch cmd {
 	case "ping":
-		return ExecResult{Reply: "pong 👍"}, true
+		if !m.isFeatureAllowed("builtin:ping", userKey) {
+			return m.vipDeniedReply(), true
+		}
+		return ExecResult{Reply: "pong"}, true
 	case "menu":
+		if !m.isFeatureAllowed("builtin:menu", userKey) {
+			return m.vipDeniedReply(), true
+		}
 		return ExecResult{Reply: m.buildMenu(cfg)}, true
 	case "owner":
+		if !m.isFeatureAllowed("builtin:owner", userKey) {
+			return m.vipDeniedReply(), true
+		}
 		return ExecResult{
 			ContactName:  cfg.OwnerName,
 			ContactVCard: buildOwnerVCard(cfg.OwnerName, cfg.OwnerNumber),
 		}, true
+	case "vip":
+		if !m.isFeatureAllowed("builtin:vip", userKey) {
+			return m.vipDeniedReply(), true
+		}
+		code := normalizeVIPCode(args)
+		if len(code) != 4 {
+			return ExecResult{Reply: "Gunakan: .vip <kode 4 karakter>"}, true
+		}
+		if m.vip == nil {
+			return ExecResult{Reply: "Fitur VIP tidak tersedia."}, true
+		}
+		exp, err := m.vip.Redeem(userKey, code, time.Now())
+		if err != nil {
+			return ExecResult{Reply: "Gagal redeem VIP: " + err.Error()}, true
+		}
+		remain := exp - time.Now().Unix()
+		return ExecResult{Reply: "VIP aktif. Sisa: " + formatRemaining(remain)}, true
+	case "stats":
+		if !m.isFeatureAllowed("builtin:stats", userKey) {
+			return m.vipDeniedReply(), true
+		}
+		if m.vip == nil {
+			return ExecResult{Reply: "Status: Bukan VIP"}, true
+		}
+		ok, exp := m.vip.IsUserVIP(userKey, time.Now())
+		if !ok {
+			return ExecResult{Reply: "Status: Bukan VIP"}, true
+		}
+		remain := exp - time.Now().Unix()
+		return ExecResult{Reply: "Status: VIP\nSisa: " + formatRemaining(remain)}, true
 	}
 	if m.plugins != nil {
+		if p, okp := m.plugins.Find(cmd); okp {
+			if !m.isFeatureAllowed("plugin:"+p.ID, userKey) {
+				return m.vipDeniedReply(), true
+			}
+		}
 		// .ai: ingat percakapan masing-masing user + auto-compact di ambang 6k token
 		// hanya jika plugin .ai terpasang & aktif; jika dihapus tidak boleh membalas
 		if normalizeCmd(cmd) == "ai" && m.aiHist != nil && m.plugins.HasCommand("ai") {
@@ -676,6 +794,8 @@ func (m *Manager) buildMenu(cfg Config) string {
 		"│  • .ping",
 		"│  • .menu",
 		"│  • .owner",
+		"│  • .vip",
+		"│  • .stats",
 		"│",
 		"├─ ꜱᴛɪᴄᴋᴇʀ",
 		"│  • .sticker",
