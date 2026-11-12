@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
@@ -42,16 +43,15 @@ type tikwmAuthor struct {
 }
 
 type tikwmData struct {
-	Title    string     `json:"title"`
-	Cover    string     `json:"cover"`
-	Play     string     `json:"play"`
-	Music    string     `json:"music"`
-	Author   tikwmAuthor `json:"author"`
+	Title  string      `json:"title"`
+	Play   string      `json:"play"`
+	Music  string      `json:"music"`
+	Author tikwmAuthor `json:"author"`
 }
 
 type tikwmResponse struct {
-	Code int      `json:"code"`
-	Msg  string   `json:"msg"`
+	Code int       `json:"code"`
+	Msg  string    `json:"msg"`
 	Data tikwmData `json:"data"`
 }
 
@@ -65,87 +65,181 @@ func (h *handler) tiktokGET(w http.ResponseWriter, r *http.Request) {
 func (h *handler) tiktokPOST(w http.ResponseWriter, r *http.Request) {
 	body, err := decodeBody(r)
 	if err != nil {
-		httpx.JSON(w, http.StatusBadRequest, map[string]any{"error": `Body harus JSON: {"url": "..."}`})
+		httpx.JSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"error":   `Body harus JSON: {"url": "..."}`,
+		})
 		return
 	}
+
 	status, payload := h.produceTiktok(r.Context(), stringField(body, "url"))
 	httpx.JSON(w, status, payload)
 }
 
-func tiktokHostAllowed(host string) bool { return hostIsDomainOrSubdomain(host, "tiktok.com") }
-
+// produceTiktok validates the URL and returns the JSON envelope for either
+// transport. Upstream failures are returned as 424 (not 5xx) so edge proxies
+// like Koyeb do not replace the JSON body with a generic error page.
 func (h *handler) produceTiktok(ctx context.Context, rawURL string) (int, any) {
 	if invalid := validateDownloadURL(rawURL, tiktokHostAllowed, "URL harus dari domain tiktok.com"); invalid != nil {
-		return http.StatusBadRequest, map[string]any{"error": invalid.message}
+		return http.StatusBadRequest, map[string]any{
+			"success": false,
+			"error":   invalid.message,
+		}
 	}
 
-	result, err := downloadTiktok(ctx, rawURL)
+	result, err := h.downloadTiktok(ctx, rawURL)
 	if err != nil {
-		return http.StatusBadGateway, map[string]any{"success": false, "error": err.Error()}
+		return http.StatusFailedDependency, map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		}
 	}
 
-	response := tiktokResponse{
-		Success: true,
-		Source:  "tikwm.com",
+	return http.StatusOK, tiktokResponse{
+		Success:      true,
+		Source:       tikwmBase,
+		Author:       result.Author,
+		Avatar:       result.Avatar,
+		Caption:      result.Caption,
+		VideoURL:     result.VideoURL,
+		VideoExpires: result.VideoExpires,
+		MP3URL:       result.MP3URL,
 	}
-	response.Author = result.Author
-	response.Avatar = result.Avatar
-	response.Caption = result.Caption
-	response.VideoURL = result.VideoURL
-	response.VideoExpires = result.VideoExpires
-	response.MP3URL = result.MP3URL
-	return http.StatusOK, response
 }
 
-// downloadTiktok uses the TikWM GET API, which returns direct media links
-// without the CSRF/worker polling flow required by other providers.
-func downloadTiktok(ctx context.Context, tiktokURL string) (*tiktokResult, error) {
-	reqURL := tikwmBase + "/api/?url=" + url.QueryEscape(tiktokURL)
-	body, err := webclient.GetText(ctx, reqURL, map[string]string{
-		"User-Agent": webclient.UserAgentChrome,
-		"Accept":     "application/json, text/plain, */*",
-	})
-	if err != nil {
-		return nil, err
+// tiktokHostAllowed accepts tiktok.com and its subdomains.
+func tiktokHostAllowed(host string) bool {
+	return hostIsDomainOrSubdomain(host, "tiktok.com")
+}
+
+// downloadTiktok tries tikwm.com via several request variants and normalises
+// the fields into tiktokResult. Multiple attempts improve resilience when a
+// particular method is blocked from datacenter egress.
+func (h *handler) downloadTiktok(ctx context.Context, rawURL string) (tiktokResult, error) {
+	headers := map[string]string{
+		"User-Agent":      webclient.UserAgentChrome,
+		"Accept":          "application/json, text/plain, */*",
+		"Accept-Language": "en-US,en;q=0.9",
+		"Referer":         tikwmBase + "/",
+		"Origin":          tikwmBase,
+	}
+	form := url.Values{"url": {rawURL}, "hd": {"1"}}
+
+	type attempt struct {
+		label string
+		fn    func(context.Context) (*http.Response, error)
+	}
+	attempts := []attempt{
+		{
+			label: "tikwm GET",
+			fn: func(ctx context.Context) (*http.Response, error) {
+				return webclient.Get(ctx, tikwmBase+"/api/?url="+url.QueryEscape(rawURL)+"&hd=1", headers)
+			},
+		},
+		{
+			label: "tikwm GET www",
+			fn: func(ctx context.Context) (*http.Response, error) {
+				return webclient.Get(ctx, "https://www.tikwm.com/api/?url="+url.QueryEscape(rawURL)+"&hd=1", headers)
+			},
+		},
+		{
+			label: "tikwm POST",
+			fn: func(ctx context.Context) (*http.Response, error) {
+				return webclient.PostForm(ctx, tikwmBase+"/api/", form, headers)
+			},
+		},
+		{
+			label: "tikwm POST www",
+			fn: func(ctx context.Context) (*http.Response, error) {
+				return webclient.PostForm(ctx, "https://www.tikwm.com/api/", form, headers)
+			},
+		},
 	}
 
-	var parsed tikwmResponse
-	if err := jsonUnmarshal([]byte(body), &parsed); err != nil {
-		return nil, fmt.Errorf("tikwm.com respons tidak valid: %w", err)
-	}
-	if parsed.Code != 0 {
-		if parsed.Msg != "" {
-			return nil, fmt.Errorf("tikwm.com gagal memproses: %s", parsed.Msg)
+	var errs []string
+	for _, a := range attempts {
+		resp, err := a.fn(ctx)
+		if err != nil {
+			errs = append(errs, a.label+": "+err.Error())
+			continue
 		}
-		return nil, errors.New("tikwm.com gagal memproses video")
-	}
-	if parsed.Data.Play == "" {
-		return nil, errors.New("Video tidak ditemukan atau tidak bisa diunduh")
+		body, err := webclient.ReadBody(resp)
+		if err != nil {
+			errs = append(errs, a.label+": "+err.Error())
+			continue
+		}
+
+		result, err := parseTikwmBody(resp.StatusCode, body)
+		if err == nil {
+			return result, nil
+		}
+		errs = append(errs, a.label+": "+err.Error())
 	}
 
-	result := &tiktokResult{}
-	if parsed.Data.Author.Nickname != "" {
-		author := parsed.Data.Author.Nickname
-		result.Author = &author
+	if len(errs) == 0 {
+		return tiktokResult{}, errors.New("tikwm.com gagal memproses permintaan")
 	}
-	if parsed.Data.Author.Avatar != "" {
-		avatar := parsed.Data.Author.Avatar
+	return tiktokResult{}, errors.New(strings.Join(errs, "; "))
+}
+
+// parseTikwmBody validates an upstream response and converts it to tiktokResult.
+func parseTikwmBody(status int, body string) (tiktokResult, error) {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		return tiktokResult{}, fmt.Errorf("respons kosong (HTTP %d)", status)
+	}
+	if webclient.IsBlocked(trimmed) {
+		return tiktokResult{}, fmt.Errorf("diblokir/challenge upstream (HTTP %d)", status)
+	}
+
+	if !strings.HasPrefix(trimmed, "{") {
+		snippet := trimmed
+		if len(snippet) > 160 {
+			snippet = snippet[:160]
+		}
+		if status < 200 || status >= 300 {
+			return tiktokResult{}, fmt.Errorf("HTTP %d respons non-JSON: %s", status, snippet)
+		}
+		return tiktokResult{}, fmt.Errorf("respons non-JSON: %s", snippet)
+	}
+
+	var resp tikwmResponse
+	if err := json.Unmarshal([]byte(trimmed), &resp); err != nil {
+		if status < 200 || status >= 300 {
+			return tiktokResult{}, fmt.Errorf("HTTP %d respons tidak valid: %w", status, err)
+		}
+		return tiktokResult{}, fmt.Errorf("respons tidak valid: %w", err)
+	}
+
+	if resp.Code != 0 || resp.Data.Play == "" {
+		message := strings.TrimSpace(resp.Msg)
+		if message == "" {
+			message = "video tidak ditemukan atau sedang diproses"
+		}
+		if status < 200 || status >= 300 {
+			message = fmt.Sprintf("HTTP %d: %s", status, message)
+		}
+		return tiktokResult{}, errors.New(message)
+	}
+
+	result := tiktokResult{
+		Caption: pointerString(resp.Data.Title),
+	}
+	if resp.Data.Author.Nickname != "" {
+		nickname := resp.Data.Author.Nickname
+		result.Author = &nickname
+	}
+	if resp.Data.Author.Avatar != "" {
+		avatar := resp.Data.Author.Avatar
 		result.Avatar = &avatar
 	}
-	if parsed.Data.Title != "" {
-		caption := parsed.Data.Title
-		result.Caption = &caption
+	if resp.Data.Play != "" {
+		video := resp.Data.Play
+		result.VideoURL = &video
 	}
-	play := parsed.Data.Play
-	result.VideoURL = &play
-	if parsed.Data.Music != "" {
-		music := parsed.Data.Music
+	if resp.Data.Music != "" {
+		music := resp.Data.Music
 		result.MP3URL = &music
 	}
 	return result, nil
-}
-
-// jsonUnmarshal small wrapper kept for consistency.
-func jsonUnmarshal(data []byte, v any) error {
-	return json.Unmarshal(data, v)
 }
