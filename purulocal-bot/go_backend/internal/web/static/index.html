@@ -161,8 +161,7 @@
         </div>
         <div class="card">
           <div class="card-h"><div class="card-title">Plugin dari Server</div></div>
-          <button class="btn" onclick="loadAvailable()">Muat Plugin dari Server</button>
-          <div id="availablePlugins" style="margin-top:10px"></div>
+          <div id="availablePlugins" class="muted">Memuat plugin dari server...</div>
         </div>
       </div>
 
@@ -228,6 +227,8 @@
     let isLogged = false;
     let formTouched = false;
     let updateMsgTimer = null;
+    let installedPluginIds = new Set();
+    let installedPluginCmds = new Set();
 
     async function api(path, opts={}){
       const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
@@ -291,7 +292,7 @@
       });
       $('pageSubtitle').textContent = page==='dashboard'?'Dashboard':(page==='plugin'?'Plugin':(page==='ai'?'AI':'Settings'));
       closeDrawer();
-      if(page==='plugin') loadPlugins(true);
+      if(page==='plugin'){ loadPlugins(true); loadAvailable(true); }
     }
 
     function fillFormsFromCfg(c, force){
@@ -474,8 +475,11 @@
     }
 
     function renderInstalled(list){
-      if(!list || !list.length){ $('installedPlugins').innerHTML = '<span class="muted">Belum ada plugin terpasang.</span>'; return; }
-      $('installedPlugins').innerHTML = list.map(p=>{
+      const arr = Array.isArray(list) ? list : [];
+      installedPluginIds = new Set(arr.map(p=>String((p && (p.id||p.command)) || '').trim()).filter(Boolean));
+      installedPluginCmds = new Set(arr.map(p=>String((p && p.command) || '').trim().toLowerCase()).filter(Boolean));
+      if(!arr.length){ $('installedPlugins').innerHTML = '<span class="muted">Belum ada plugin terpasang.</span>'; return; }
+      $('installedPlugins').innerHTML = arr.map(p=>{
         const cmd = p.command||p.id||''; const cat = p.category||''; const desc = p.description||'';
         return `<div class="plugin-item">
           <div><div style="font-weight:700;font-size:14px">${catTag(cat)}${esc(p.name||cmd)} <span class="muted">(.${esc(cmd)})</span></div>
@@ -492,13 +496,23 @@
       }catch(e){ if(showMsg) $('installedPlugins').innerHTML = '<span class="err">Gagal memuat plugin</span>'; }
     }
 
-    async function loadAvailable(){
-      $('availablePlugins').innerHTML = '<span class="muted">Memuat...</span>';
+    async function loadAvailable(silent=false){
+      if(!silent) $('availablePlugins').innerHTML = '<span class="muted">Memuat...</span>';
       const server = PLUGIN_SERVER;
-      const d = await api('/api/plugins/available?server='+encodeURIComponent(server));
-      if(!d.ok){ $('availablePlugins').innerHTML = `<span class="err">${esc(d.error||'Gagal')}</span>`; return; }
-      const list = d.plugins||[];
-      if(!list.length){ $('availablePlugins').innerHTML = '<span class="muted">Tidak ada plugin.</span>'; return; }
+      let d;
+      try{
+        d = await api('/api/plugins/available?server='+encodeURIComponent(server));
+      }catch(e){
+        $('availablePlugins').innerHTML = `<span class="err">Gagal memuat plugin server</span>`;
+        return;
+      }
+      if(!d.ok){ $('availablePlugins').innerHTML = `<span class="err">${esc(d.error||'Gagal memuat plugin server')}</span>`; return; }
+      const list = (d.plugins||[]).filter(p=>{
+        const id = String((p && (p.id||p.command)) || '').trim();
+        const cmd = String((p && p.command) || '').trim().toLowerCase();
+        return !(id && installedPluginIds.has(id)) && !(cmd && installedPluginCmds.has(cmd));
+      });
+      if(!list.length){ $('availablePlugins').innerHTML = '<span class="muted">Semua plugin dari server sudah terpasang.</span>'; return; }
       $('availablePlugins').innerHTML = list.map(p=>{
         const cmd = p.command||''; const cat = p.category||''; const payload = encodeURIComponent(JSON.stringify(p));
         return `<div class="plugin-item">
@@ -513,8 +527,9 @@
       try{
         const p = JSON.parse(decodeURIComponent(encoded));
         const d = await api('/api/plugins/install',{method:'POST',body:JSON.stringify(p)});
-        if(!d.ok) alert(d.error||'Gagal install'); else { $('availablePlugins').innerHTML=''; }
+        if(!d.ok){ alert(d.error||'Gagal install'); }
         await loadPlugins();
+        await loadAvailable(true);
       }catch(e){ alert('Gagal install'); }
     }
 
@@ -522,6 +537,7 @@
       const d = await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id})});
       if(!d.ok) alert(d.error||'Gagal hapus');
       await loadPlugins();
+      await loadAvailable(true);
     }
 
     document.addEventListener('input', (e)=>{

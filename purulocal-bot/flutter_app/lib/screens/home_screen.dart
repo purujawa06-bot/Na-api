@@ -93,6 +93,9 @@ class _HomeScreenState extends State<HomeScreen> {
         typingDelaySec = c.typingDelaySec;
         _configLoaded = true;
       });
+      if (full) {
+        _loadAvailable(silent: true);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -180,15 +183,36 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => loading = false);
   }
 
-  Future<void> _loadAvailable() async {
-    setState(() { loading = true; msg = null; });
+  bool _isPluginInstalled(Map<String, dynamic> p) {
+    final id = (p['id'] ?? p['command'] ?? '').toString().trim();
+    final cmd = (p['command'] ?? '').toString().trim().toLowerCase();
+    for (final ip in installedPlugins) {
+      final m = (ip as Map).cast<String, dynamic>();
+      final iid = (m['id'] ?? m['command'] ?? '').toString().trim();
+      final icmd = (m['command'] ?? '').toString().trim().toLowerCase();
+      if (id.isNotEmpty && iid == id) return true;
+      if (cmd.isNotEmpty && icmd == cmd) return true;
+    }
+    return false;
+  }
+
+  Future<void> _loadAvailable({bool silent = false}) async {
+    if (!silent) setState(() { loading = true; msg = null; });
     try {
       final server = pluginServer.text.trim().isEmpty ? 'https://na-api-nue-api-e7bfd3f4.koyeb.app' : pluginServer.text.trim();
       final list = await api.availablePlugins(server: server);
-      setState(() { availablePlugins = list; msg = 'Plugin server dimuat.'; });
+      final filtered = list.where((p) => !_isPluginInstalled((p as Map).cast<String, dynamic>())).toList();
+      if (!mounted) return;
+      setState(() {
+        availablePlugins = filtered;
+        if (!silent) msg = filtered.isEmpty ? 'Semua plugin server sudah terpasang.' : 'Plugin server dimuat.';
+      });
     } catch (e) {
+      if (!mounted) return;
       setState(() => msg = 'Gagal memuat plugin: $e');
-    } finally { setState(() => loading = false); }
+    } finally {
+      if (!silent && mounted) setState(() => loading = false);
+    }
   }
 
   Future<void> _installPlugin(Map<String, dynamic> p) async {
@@ -196,10 +220,10 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await api.installPlugin(p);
       msg = 'Plugin .${p['command']} terpasang.';
-      availablePlugins = [];
       await _load(full: false);
+      await _loadAvailable(silent: true);
     } catch (e) { msg = 'Gagal install: $e'; }
-    setState(() => loading = false);
+    if (mounted) setState(() => loading = false);
   }
 
   Future<void> _removePlugin(String id) async {
@@ -208,8 +232,9 @@ class _HomeScreenState extends State<HomeScreen> {
       await api.removePlugin(id);
       msg = 'Plugin dihapus.';
       await _load(full: false);
+      await _loadAvailable(silent: true);
     } catch (e) { msg = 'Gagal hapus: $e'; }
-    setState(() => loading = false);
+    if (mounted) setState(() => loading = false);
   }
 
   Future<void> _checkUpdate() async {
@@ -273,7 +298,10 @@ class _HomeScreenState extends State<HomeScreen> {
       const Divider(height: 16),
       TextField(controller: pluginServer, decoration: const InputDecoration(labelText: 'Server plugin (na-api)', isDense: true)),
       const SizedBox(height: 8),
-      SizedBox(width: double.infinity, child: OutlinedButton(onPressed: loading?null:_loadAvailable, child: const Text('Muat Plugin dari Server'))),
+      const Text('Plugin dari Server', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+      const SizedBox(height: 4),
+      if (availablePlugins.isEmpty)
+        const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Memuat plugin dari server... / semua plugin server sudah terpasang.', style: TextStyle(fontSize: 12, color: Colors.grey))),
       ...availablePlugins.map((p) {
         final m = (p as Map).cast<String, dynamic>();
         final cmd = (m['command'] ?? '').toString();

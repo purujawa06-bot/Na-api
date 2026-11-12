@@ -216,6 +216,22 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if !ok {
 		return
 	}
+	// kirim video (mis. .tt/.tiktok): video siap putar + caption info (tanpa link)
+	if strings.TrimSpace(res.VideoURL) != "" {
+		if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
+			fb := strings.TrimSpace(res.Caption)
+			if fb == "" {
+				fb = strings.TrimSpace(res.Reply)
+			}
+			if fb == "" {
+				fb = "Gagal mengirim video."
+			} else {
+				fb = fb + "\n\n(Gagal mengirim video)"
+			}
+			_ = m.sendReply(ctx, evt, fb)
+		}
+		return
+	}
 	// kirim audio (mis. .play): 1) info judul, jeda 1 detik, 2) audio
 	if strings.TrimSpace(res.AudioURL) != "" {
 		info := strings.TrimSpace(res.Reply)
@@ -239,10 +255,14 @@ func (m *Manager) onMessage(evt *events.Message) {
 		_ = m.sendContact(ctx, evt, res)
 		return
 	}
-	if strings.TrimSpace(res.Reply) == "" {
+	replyText := strings.TrimSpace(res.Reply)
+	if replyText == "" {
+		replyText = strings.TrimSpace(res.Caption)
+	}
+	if replyText == "" {
 		return
 	}
-	_ = m.sendReply(ctx, evt, res.Reply)
+	_ = m.sendReply(ctx, evt, replyText)
 }
 
 func (m *Manager) sendTyping(ctx context.Context, chat types.JID, composing bool) {
@@ -446,6 +466,60 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 		return err
 	}
 	return nil
+}
+
+func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res ExecResult) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, res.VideoURL, nil)
+	if err != nil {
+		return err
+	}
+	hc := &http.Client{Timeout: 120 * time.Second}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("download video: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20)) // batas ~50MB
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return errors.New("video kosong")
+	}
+	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
+	if err != nil {
+		return err
+	}
+	mime := strings.TrimSpace(res.Mimetype)
+	if mime == "" {
+		mime = "video/mp4"
+	}
+	caption := strings.TrimSpace(res.Caption)
+	if caption == "" {
+		caption = strings.TrimSpace(res.Reply)
+	}
+	video := &waE2E.VideoMessage{
+		URL:           proto.String(uploaded.URL),
+		DirectPath:    proto.String(uploaded.DirectPath),
+		MediaKey:      uploaded.MediaKey,
+		Mimetype:      proto.String(mime),
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    proto.Uint64(uint64(len(data))),
+		Caption:       proto.String(caption),
+		ContextInfo:   buildReplyContext(evt),
+	}
+	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{VideoMessage: video})
+	return err
 }
 
 func extractText(evt *events.Message) string {

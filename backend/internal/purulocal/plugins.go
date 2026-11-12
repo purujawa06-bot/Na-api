@@ -368,31 +368,43 @@ func runTikTok(r *http.Request, rawURL string) (map[string]any, error) {
 		return strings.TrimSpace(v)
 	}
 	author := getStr("author")
-	caption := getStr("caption")
+	title := getStr("caption")
 	videoURL := getStr("video_url")
-	mp3URL := getStr("mp3_url")
+
+	// caption simple & rapi: info saja, tanpa link
+	cleanOneLine := func(s string) string {
+		s = strings.ReplaceAll(s, "\r", " ")
+		s = strings.ReplaceAll(s, "\n", " ")
+		s = strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
+		return s
+	}
+	author = cleanOneLine(author)
+	title = cleanOneLine(title)
+	if len([]rune(title)) > 200 {
+		title = string([]rune(title)[:200]) + "…"
+	}
 
 	var lines []string
-	lines = append(lines, "TikTok Downloader")
+	if title != "" {
+		lines = append(lines, title)
+	} else {
+		lines = append(lines, "TikTok Video")
+	}
 	if author != "" {
 		lines = append(lines, "Author: "+author)
 	}
-	if caption != "" {
-		if len([]rune(caption)) > 500 {
-			caption = string([]rune(caption)[:500]) + "…"
-		}
-		lines = append(lines, "Caption: "+caption)
+	caption := strings.TrimSpace(strings.Join(lines, "\n"))
+
+	if videoURL == "" {
+		return map[string]any{"ok": true, "reply": caption + "\n(Video tidak tersedia)"}, nil
 	}
-	if videoURL != "" {
-		lines = append(lines, "Video: "+videoURL)
-	}
-	if mp3URL != "" {
-		lines = append(lines, "Audio: "+mp3URL)
-	}
-	if videoURL == "" && mp3URL == "" {
-		lines = append(lines, "(tautan media tidak tersedia)")
-	}
-	return map[string]any{"ok": true, "reply": strings.Join(lines, "\n")}, nil
+
+	return map[string]any{
+		"ok":        true,
+		"video_url": videoURL,
+		"caption":   caption,
+		"mimetype":  "video/mp4",
+	}, nil
 }
 
 func runPlay(r *http.Request, query string) (map[string]any, error) {

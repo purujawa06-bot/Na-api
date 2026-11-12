@@ -204,8 +204,6 @@ class _ShellScreenState extends State<ShellScreen> {
           LinearProgressIndicator(value: progress <= 0 ? null : progress),
           const SizedBox(height: 8),
           Text(progress <= 0 ? 'Menyiapkan...' : '${(progress*100).toStringAsFixed(0)}%'),
-          const SizedBox(height: 8),
-          const Text('APK akan disimpan ke folder Download.', style: TextStyle(fontSize: 12)),
         ]),
       );
     }));
@@ -213,21 +211,19 @@ class _ShellScreenState extends State<ShellScreen> {
       final file = await svc.download(info, onProgress: (r,t){ if(t>0){ progress = r/t; setP?.call((){}); } });
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
       if (!mounted) return;
-      final fileName = file.path.split(Platform.pathSeparator).last;
       await showDialog<void>(
         context: context,
         barrierDismissible: !info.force,
         builder: (c) => AlertDialog(
           title: const Text('Update siap dipasang'),
           content: Text(
-            'APK versi baru sudah diunduh ke folder Download:\n$fileName\n\n'
-            'Jika pemasangan update gagal (mis. signature berbeda), pilih "Uninstall Aplikasi" lalu setelah terhapus instal APK tersebut dari folder Download (pilih "Install APK").\n\n'
-            'Catatan: uninstall dapat menghapus data privat app, namun data/sesi di penyimpanan lokal persisten (mis. /sdcard/puruLocalBot) tetap aman bila ada.',
+            info.changelog.isNotEmpty
+                ? 'Versi ${info.versionName} (build ${info.buildNumber}) siap dipasang.\n\n${info.changelog}'
+                : 'Versi ${info.versionName} (build ${info.buildNumber}) siap dipasang.',
           ),
           actions: [
             if (!info.force) TextButton(onPressed: ()=>Navigator.pop(c), child: const Text('Nanti')),
-            TextButton(onPressed: () async { await svc.openUninstallSelf(); }, child: const Text('Uninstall Aplikasi')),
-            FilledButton(onPressed: () async { await svc.install(file); }, child: const Text('Install APK')),
+            FilledButton(onPressed: () async { await svc.install(file); }, child: const Text('Install')),
           ],
         ),
       );

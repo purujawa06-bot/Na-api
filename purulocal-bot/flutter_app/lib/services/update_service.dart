@@ -44,7 +44,8 @@ class UpdateService {
   }
 
   Future<File> download(UpdateInfo u, {void Function(int, int)? onProgress}) async {
-    final dir = await _getDownloadDir();
+    // simpan di direktori sementara/app (bukan folder Download publik)
+    final dir = await _getTempUpdateDir();
     final file = File('${dir.path}/puruLocalBot-${u.buildNumber}.apk');
     try {
       if (await file.exists()) {
@@ -63,19 +64,15 @@ class UpdateService {
     return file;
   }
 
-  Future<Directory> _getDownloadDir() async {
-    if (Platform.isAndroid) {
-      try {
-        final d = Directory('/storage/emulated/0/Download');
-        if (await d.exists()) return d;
-      } catch (_) {}
-      try {
-        final d = await getDownloadsDirectory();
-        if (d != null) return d;
-      } catch (_) {}
-    }
-    final ext = await getExternalStorageDirectory();
-    if (ext != null) return ext;
+  Future<Directory> _getTempUpdateDir() async {
+    try {
+      final cache = await getTemporaryDirectory();
+      final dir = Directory('${cache.path}/updates');
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return dir;
+    } catch (_) {}
     return getTemporaryDirectory();
   }
 

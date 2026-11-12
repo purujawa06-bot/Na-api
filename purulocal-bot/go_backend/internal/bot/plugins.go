@@ -167,8 +167,10 @@ func (s *PluginStore) SetEnabled(id string, enabled bool) error {
 
 type ExecResult struct {
 	Reply        string `json:"reply"`
+	Caption      string `json:"caption,omitempty"`
 	Notice       string `json:"notice,omitempty"`
 	AudioURL     string `json:"audio_url,omitempty"`
+	VideoURL     string `json:"video_url,omitempty"`
 	Title        string `json:"title,omitempty"`
 	PermalinkURL string `json:"permalink_url,omitempty"`
 	Mimetype     string `json:"mimetype,omitempty"`
@@ -253,11 +255,17 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 			} else if v, ok := j["message"].(string); ok {
 				out.Reply = v
 			}
+			if v, ok := j["caption"].(string); ok {
+				out.Caption = v
+			}
 			if v, ok := j["notice"].(string); ok {
 				out.Notice = v
 			}
 			if v, ok := j["audio_url"].(string); ok {
 				out.AudioURL = v
+			}
+			if v, ok := j["video_url"].(string); ok {
+				out.VideoURL = v
 			}
 			if v, ok := j["title"].(string); ok {
 				out.Title = v
@@ -282,7 +290,7 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 					out.DurationSec = uint32(v)
 				}
 			}
-			if out.Reply != "" || out.AudioURL != "" || out.Notice != "" {
+			if out.Reply != "" || out.Caption != "" || out.AudioURL != "" || out.VideoURL != "" || out.Notice != "" {
 				return out, nil
 			}
 			if errStr, ok := j["error"].(string); ok && errStr != "" {
