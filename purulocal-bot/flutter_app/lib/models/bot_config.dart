@@ -9,6 +9,8 @@ class BotConfig {
   bool typingBeforeReply;
   double typingDelaySec;
   bool antiSpam;
+  String stickerPack;
+  String stickerAuthor;
 
   BotConfig({
     this.botName = 'puruLocal Bot',
@@ -21,6 +23,8 @@ class BotConfig {
     this.typingBeforeReply = true,
     this.typingDelaySec = 1.5,
     this.antiSpam = true,
+    this.stickerPack = '',
+    this.stickerAuthor = '',
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> j) => BotConfig(
@@ -34,6 +38,8 @@ class BotConfig {
         typingBeforeReply: j['typing_before_reply'] ?? true,
         typingDelaySec: (j['typing_delay_sec'] is num) ? (j['typing_delay_sec'] as num).toDouble() : 1.5,
         antiSpam: j['anti_spam'] ?? true,
+        stickerPack: j['sticker_pack'] ?? '',
+        stickerAuthor: j['sticker_author'] ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -47,5 +53,7 @@ class BotConfig {
         'typing_before_reply': typingBeforeReply,
         'typing_delay_sec': typingDelaySec,
         'anti_spam': antiSpam,
+        'sticker_pack': stickerPack,
+        'sticker_author': stickerAuthor,
       };
 }

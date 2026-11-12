@@ -211,6 +211,14 @@
           </div>
         </div>
         <div class="card">
+          <div class="card-h"><div class="card-title">Sticker WM</div></div>
+          <div class="muted" style="margin-bottom:8px">Atur copyright sticker (packname & author) untuk perintah <b>.s</b> / <b>.sticker</b>.</div>
+          <label>Pack Name</label>
+          <input id="set_sticker_pack" type="text" placeholder="Nama pack sticker" />
+          <label>Author</label>
+          <input id="set_sticker_author" type="text" placeholder="Nama author" />
+        </div>
+        <div class="card">
           <div class="card-h"><div class="card-title">Aplikasi</div></div>
           <button class="btn" onclick="checkUpdate()">Cek Update Aplikasi</button>
           <button class="btn primary" style="margin-top:8px" onclick="saveSettings()">Simpan Settings</button>
@@ -311,6 +319,8 @@
         $('set_typing').checked = c.typing_before_reply !== false;
         $('set_antispam').checked = c.anti_spam !== false;
         $('set_ai_prompt').value = c.ai_system_prompt || '';
+        if($('set_sticker_pack')) $('set_sticker_pack').value = c.sticker_pack || '';
+        if($('set_sticker_author')) $('set_sticker_author').value = c.sticker_author || '';
         if(force) formTouched = false;
       }
       if(!$('login_owner_number').value) $('login_owner_number').value = c.owner_number || '';
@@ -330,7 +340,9 @@
         typing_delay_sec: c.typing_delay_sec || 1.5,
         anti_spam: $('set_antispam') ? $('set_antispam').checked : (c.anti_spam !== false),
         update_manifest_url: c.update_manifest_url || '',
-        ai_system_prompt: ($('set_ai_prompt') ? $('set_ai_prompt').value : (c.ai_system_prompt || ''))
+        ai_system_prompt: ($('set_ai_prompt') ? $('set_ai_prompt').value : (c.ai_system_prompt || '')),
+        sticker_pack: ($('set_sticker_pack') ? $('set_sticker_pack').value : (c.sticker_pack || '')),
+        sticker_author: ($('set_sticker_author') ? $('set_sticker_author').value : (c.sticker_author || ''))
       };
       body.bot_name = String(body.bot_name||'').trim() || 'puruLocal Bot';
       body.owner_name = String(body.owner_name||'').trim() || 'Owner';
@@ -408,7 +420,9 @@
         typing_delay_sec: c.typing_delay_sec || 1.5,
         anti_spam: c.anti_spam !== false,
         update_manifest_url: c.update_manifest_url || '',
-        ai_system_prompt: c.ai_system_prompt || ''
+        ai_system_prompt: c.ai_system_prompt || '',
+        sticker_pack: c.sticker_pack || '',
+        sticker_author: c.sticker_author || ''
       };
       const d = await api('/api/config',{method:'POST',body:JSON.stringify(body)});
       if(!d.ok){ $('connMsg').innerHTML=`<span class="err">${esc(d.error||'Gagal simpan konfigurasi')}</span>`; return null; }

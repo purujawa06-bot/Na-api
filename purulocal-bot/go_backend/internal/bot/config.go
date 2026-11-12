@@ -23,6 +23,9 @@ type Config struct {
 	TypingDelaySec    float64 `json:"typing_delay_sec"`     // detik (default 1.5)
 	AntiSpam          bool    `json:"anti_spam"`            // deteksi spam: pesan beruntun cepat -> ban sementara
 	AISystemPrompt    string  `json:"ai_system_prompt,omitempty"` // system prompt untuk command .ai
+	// Watermark/copyright sticker (.s/.sticker)
+	StickerPack   string `json:"sticker_pack,omitempty"`
+	StickerAuthor string `json:"sticker_author,omitempty"`
 }
 
 func DefaultConfig() Config {
@@ -44,6 +47,8 @@ func (c *Config) Normalize() {
 		c.TypingDelaySec = 1.5
 	}
 	c.AISystemPrompt = strings.TrimSpace(c.AISystemPrompt)
+	c.StickerPack = strings.TrimSpace(c.StickerPack)
+	c.StickerAuthor = strings.TrimSpace(c.StickerAuthor)
 }
 
 func (c Config) Validate() error {

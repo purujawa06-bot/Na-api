@@ -18,6 +18,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final ownerNumber = TextEditingController();
   final botNumber = TextEditingController();
   final pluginServer = TextEditingController(text: 'https://na-api-nue-api-e7bfd3f4.koyeb.app');
+  final stickerPack = TextEditingController();
+  final stickerAuthor = TextEditingController();
   bool blockSelf = true;
   bool readChat = false;
   bool typingBeforeReply = true;
@@ -57,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
     ownerNumber.dispose();
     botNumber.dispose();
     pluginServer.dispose();
+    stickerPack.dispose();
+    stickerAuthor.dispose();
     super.dispose();
   }
 
@@ -88,6 +92,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ownerNumber.text = c.ownerNumber;
           botNumber.text = c.botNumber;
           blockSelf = c.blockSelfChat;
+          stickerPack.text = c.stickerPack;
+          stickerAuthor.text = c.stickerAuthor;
         }
         readChat = c.readChat;
         typingBeforeReply = c.typingBeforeReply;
@@ -121,6 +127,8 @@ class _HomeScreenState extends State<HomeScreen> {
         typingBeforeReply: typingBeforeReply,
         typingDelaySec: typingDelaySec,
         antiSpam: antiSpam,
+        stickerPack: stickerPack.text.trim(),
+        stickerAuthor: stickerAuthor.text.trim(),
       );
 
   Future<void> _save() async {
@@ -240,6 +248,40 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => loading = false);
   }
 
+  Future<void> _openStickerWm() async {
+    final packC = TextEditingController(text: stickerPack.text);
+    final authorC = TextEditingController(text: stickerAuthor.text);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Sticker WM'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: packC, decoration: const InputDecoration(labelText: 'Pack Name')),
+            const SizedBox(height: 8),
+            TextField(controller: authorC, decoration: const InputDecoration(labelText: 'Author')),
+            const SizedBox(height: 8),
+            const Text('Digunakan sebagai copyright packname & author untuk .s/.sticker', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan')),
+        ],
+      ),
+    );
+    if (saved == true) {
+      setState(() {
+        stickerPack.text = packC.text;
+        stickerAuthor.text = authorC.text;
+      });
+      await _save();
+    }
+    packC.dispose();
+    authorC.dispose();
+  }
+
   Future<void> _checkUpdate() async {
     final manifestUrl = _cfg().updateManifestUrl ?? '';
     if (manifestUrl.isEmpty) {
@@ -344,6 +386,14 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitle: const Text('Ban 10 detik jika user mengirim pesan beruntun cepat (<500 ms)'),
         value: antiSpam,
         onChanged: loading ? null : (v) async { setState(() => antiSpam = v); await _save(); },
+      ),
+      const Divider(height: 16),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Sticker WM'),
+        subtitle: const Text('Atur packname & author sticker (.s/.sticker)'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: loading ? null : _openStickerWm,
       ),
     ])));
   }

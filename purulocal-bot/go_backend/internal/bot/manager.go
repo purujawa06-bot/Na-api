@@ -240,6 +240,16 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if userKey == "" {
 		userKey = evt.Info.Chat.String()
 	}
+
+	// built-in: sticker dari image (kirim/reply image dengan caption .s/.sticker)
+	if cmd == "s" || cmd == "sticker" {
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		_ = m.handleStickerCommand(ctx, evt, cfg)
+		return
+	}
+
 	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg)
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
@@ -647,6 +657,9 @@ func (m *Manager) buildMenu(cfg Config) string {
 		"│  • .ping",
 		"│  • .menu",
 		"│  • .owner",
+		"│",
+		"├─ ꜱᴛɪᴄᴋᴇʀ",
+		"│  • .sticker / .s (kirim/reply gambar)",
 	}
 
 	// Kumpulkan plugin terpasang per kategori
