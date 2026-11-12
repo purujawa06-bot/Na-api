@@ -18,9 +18,10 @@ type Config struct {
 	BlockSelfChat     bool   `json:"block_self_chat"`
 	UpdateManifestURL string `json:"update_manifest_url,omitempty"`
 	// Pengaturan setelah login
-	ReadChat      bool    `json:"read_chat"`       // bot read chat (mark read)
-	TypingBeforeReply bool `json:"typing_before_reply"` // bot status mengetik sebelum membalas command
-	TypingDelaySec float64 `json:"typing_delay_sec"`    // detik (default 1.5)
+	ReadChat          bool    `json:"read_chat"`            // bot read chat (mark read)
+	TypingBeforeReply bool    `json:"typing_before_reply"`  // bot status mengetik sebelum membalas command
+	TypingDelaySec    float64 `json:"typing_delay_sec"`     // detik (default 1.5)
+	AISystemPrompt    string  `json:"ai_system_prompt,omitempty"` // system prompt untuk command .ai
 }
 
 func DefaultConfig() Config {
@@ -41,6 +42,7 @@ func (c *Config) Normalize() {
 	if c.TypingDelaySec <= 0 {
 		c.TypingDelaySec = 1.5
 	}
+	c.AISystemPrompt = strings.TrimSpace(c.AISystemPrompt)
 }
 
 func (c Config) Validate() error {

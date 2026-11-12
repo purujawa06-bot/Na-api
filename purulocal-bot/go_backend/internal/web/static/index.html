@@ -21,10 +21,12 @@
     html, body { margin:0; padding:0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
     body { min-height: 100vh; }
     .app { max-width: 560px; margin: 0 auto; padding: 14px 12px 28px; }
-    .brand { display:flex; align-items:center; gap:10px; padding: 4px 2px 14px; }
-    .logo { width:36px; height:36px; border-radius:10px; background: var(--accent); display:flex; align-items:center; justify-content:center; color:#042016; font-weight:800; }
-    .title { font-size:18px; font-weight:800; letter-spacing:-0.3px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding: 2px 2px 12px; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .logo { width:34px; height:34px; border-radius:10px; background: var(--accent); display:flex; align-items:center; justify-content:center; color:#042016; font-weight:800; }
+    .title { font-size:17px; font-weight:800; letter-spacing:-0.3px; }
     .subtitle { font-size:11px; color: var(--muted); }
+    .icon-btn { width:38px; height:38px; border-radius:12px; border:1px solid var(--border); background:#1a2029; color:var(--text); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:20px; line-height:1; }
     .card { background: var(--card-solid); border:1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
     .card-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px; }
     .card-title { font-weight:700; font-size:14px; }
@@ -32,8 +34,9 @@
     .pill.ok { color: #052e1f; background: rgba(16,185,129,0.9); border-color: transparent; font-weight:600; }
     .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
     label { display:block; font-size:12px; color: var(--muted); margin: 8px 0 4px; font-weight:500; }
-    input[type=text], input[type=number] { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--border); background: #0b0f14; color: var(--text); font-size:14px; outline:none; }
-    input:focus { border-color: rgba(16,185,129,0.5); }
+    input[type=text], input[type=number], textarea { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--border); background: #0b0f14; color: var(--text); font-size:14px; outline:none; font-family: inherit; }
+    textarea { min-height: 160px; resize: vertical; line-height: 1.5; }
+    input:focus, textarea:focus { border-color: rgba(16,185,129,0.5); }
     .btn { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background: #1a2029; color: var(--text); font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
     .btn:active { opacity:.9; }
     .btn.primary { background: var(--accent); color:#042016; border:none; }
@@ -68,24 +71,28 @@
     .small-btn.danger { color:#fecaca; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.1); }
     #qrBox { display:flex; justify-content:center; align-items:center; min-height:220px; background:#fff; border-radius:14px; margin-top:10px; padding:10px; }
     .pair-code { font-size:30px; letter-spacing:4px; font-weight:800; text-align:center; color:var(--accent2); margin:10px 0; }
-    .page-title { display:flex; align-items:center; gap:8px; font-size:16px; font-weight:800; margin: 2px 0 12px; }
-    .back { width:36px; height:36px; border-radius:10px; border:1px solid var(--border); background:#1a2029; color:var(--text); cursor:pointer; font-size:18px; }
+    .page-head { font-size:16px; font-weight:800; margin: 2px 0 12px; }
+    /* drawer */
+    .overlay { position:fixed; inset:0; background: rgba(0,0,0,0.5); z-index:40; }
+    .drawer { position:fixed; top:0; left:0; bottom:0; width: 260px; max-width: 82vw; background:#0f141b; border-right:1px solid var(--border); z-index:50; padding:16px 12px; transform: translateX(-100%); transition: transform .2s ease; }
+    .drawer.open { transform: translateX(0); }
+    .drawer-title { font-weight:800; font-size:16px; margin: 4px 6px 12px; }
+    .nav-item { display:block; width:100%; text-align:left; padding:11px 12px; margin-bottom:6px; border-radius:12px; border:1px solid transparent; background: transparent; color: var(--text); font-size:14px; font-weight:600; cursor:pointer; }
+    .nav-item.active { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); color: var(--accent2); }
   </style>
 </head>
 <body>
   <div class="app">
-    <div class="brand">
-      <div class="logo">P</div>
-      <div>
-        <div class="title">puruLocal Bot</div>
-        <div class="subtitle" id="sub">bot lokal di perangkat</div>
-      </div>
-    </div>
-
     <!-- LOGIN (simple) -->
     <div id="viewLogin" class="hidden">
+      <div class="brand" style="padding-top:6px">
+        <div class="logo">P</div>
+        <div>
+          <div class="title">puruLocal Bot</div>
+          <div class="subtitle">Login WhatsApp</div>
+        </div>
+      </div>
       <div class="card">
-        <div class="card-h"><div class="card-title">Login WhatsApp</div><span class="pill">Login</span></div>
         <label>Nomor Owner (tanpa +)</label>
         <input id="login_owner_number" type="text" placeholder="628123456789" />
         <label>Nomor Bot</label>
@@ -106,66 +113,106 @@
       </div>
     </div>
 
-    <!-- DASHBOARD (setelah login / ada sesi) -->
-    <div id="viewDashboard" class="hidden">
-      <div class="card">
-        <div class="card-h"><div class="card-title">Status</div><span id="modePill" class="pill ok">Dashboard</span></div>
-        <div class="status-grid">
-          <div class="stat"><div class="k">Connected</div><div class="v" id="stConn">-</div></div>
-          <div class="stat"><div class="k">Logged in</div><div class="v" id="stLogin">-</div></div>
-          <div class="stat"><div class="k">Paused</div><div class="v" id="stPaused">-</div></div>
-          <div class="stat"><div class="k">Session</div><div class="v" id="stSession">-</div></div>
+    <!-- APP SHELL (after login) -->
+    <div id="viewShell" class="hidden">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo">P</div>
+          <div>
+            <div class="title">puruLocal Bot</div>
+            <div class="subtitle" id="pageSubtitle">Dashboard</div>
+          </div>
         </div>
-        <div class="muted" id="stJid" style="margin-top:8px"></div>
-        <button id="toggleRunBtn" class="btn primary" style="margin-top:10px" onclick="toggleRun()">⏸ Pause</button>
-        <button class="btn danger" style="margin-top:8px" onclick="logoutBot()">Logout</button>
-        <div id="globalMsg" class="msg"></div>
+        <button class="icon-btn" onclick="toggleDrawer()" aria-label="Menu">☰</button>
       </div>
 
-      <div class="card">
-        <div class="card-h"><div class="card-title">Settings</div></div>
-        <label>Nama Bot</label>
-        <input id="set_bot_name" type="text" placeholder="puruLocal Bot" />
-        <label>Nama Owner</label>
-        <input id="set_owner_name" type="text" placeholder="Owner" />
-        <label>Nomor Owner (tanpa +)</label>
-        <input id="set_owner_number" type="text" placeholder="628123456789" />
-        <label>Nomor Bot</label>
-        <input id="set_bot_number" type="text" placeholder="628123456789" />
-        <div class="row" style="margin-top:6px">
-          <div class="l"><div class="t">Bot tidak bisa chat diri sendiri</div><div class="d">Abaikan pesan dari diri sendiri</div></div>
-          <label class="switch"><input id="set_block_self" type="checkbox"><span class="slider"></span></label>
-        </div>
-        <div class="row">
-          <div class="l"><div class="t">Bot read chat</div><div class="d">Tandai pesan masuk sebagai dibaca</div></div>
-          <label class="switch"><input id="set_read" type="checkbox"><span class="slider"></span></label>
-        </div>
-        <div class="row">
-          <div class="l"><div class="t">Bot status mengetik</div><div class="d">Ketik 1.5 detik sebelum membalas command</div></div>
-          <label class="switch"><input id="set_typing" type="checkbox"><span class="slider"></span></label>
-        </div>
-        <button class="btn primary" style="margin-top:10px" onclick="saveSettings()">Simpan Settings</button>
-        <button class="btn" style="margin-top:8px" onclick="checkUpdate()">Cek Update Aplikasi</button>
+      <div id="overlay" class="overlay hidden" onclick="closeDrawer()"></div>
+      <div id="drawer" class="drawer">
+        <div class="drawer-title">Menu</div>
+        <button class="nav-item" data-page="dashboard" onclick="nav('dashboard')">Dashboard</button>
+        <button class="nav-item" data-page="plugin" onclick="nav('plugin')">Plugin</button>
+        <button class="nav-item" data-page="ai" onclick="nav('ai')">AI</button>
+        <button class="nav-item" data-page="settings" onclick="nav('settings')">Settings</button>
       </div>
 
-      <div class="card">
-        <div class="card-h"><div class="card-title">Plugin</div></div>
-        <div class="muted" style="margin-bottom:10px">Kelola dan pasang plugin bot.</div>
-        <button class="btn" onclick="openExplore()">Explore Plugin</button>
+      <!-- PAGE: Dashboard -->
+      <div id="page-dashboard" class="page">
+        <div class="card">
+          <div class="card-h"><div class="card-title">Status</div><span id="modePill" class="pill ok">Aktif</span></div>
+          <div class="status-grid">
+            <div class="stat"><div class="k">Connected</div><div class="v" id="stConn">-</div></div>
+            <div class="stat"><div class="k">Logged in</div><div class="v" id="stLogin">-</div></div>
+            <div class="stat"><div class="k">Paused</div><div class="v" id="stPaused">-</div></div>
+            <div class="stat"><div class="k">Session</div><div class="v" id="stSession">-</div></div>
+          </div>
+          <div class="muted" id="stJid" style="margin-top:8px"></div>
+          <button id="toggleRunBtn" class="btn primary" style="margin-top:10px" onclick="toggleRun()">⏸ Pause</button>
+          <button class="btn danger" style="margin-top:8px" onclick="logoutBot()">Logout</button>
+          <div id="globalMsg" class="msg"></div>
+        </div>
       </div>
-    </div>
 
-    <!-- EXPLORE PLUGIN -->
-    <div id="viewExplore" class="hidden">
-      <div class="page-title"><button class="back" onclick="closeExplore()">←</button><span>Explore Plugin</span></div>
-      <div class="card">
-        <div class="card-h"><div class="card-title">Plugin Terpasang</div></div>
-        <div id="installedPlugins" class="muted">Memuat plugin...</div>
+      <!-- PAGE: Plugin -->
+      <div id="page-plugin" class="page hidden">
+        <div class="page-head">Plugin</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Plugin Terpasang</div></div>
+          <div id="installedPlugins" class="muted">Memuat plugin...</div>
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Plugin dari Server</div></div>
+          <button class="btn" onclick="loadAvailable()">Muat Plugin dari Server</button>
+          <div id="availablePlugins" style="margin-top:10px"></div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-h"><div class="card-title">Plugin dari Server</div></div>
-        <button class="btn" onclick="loadAvailable()">Muat Plugin dari Server</button>
-        <div id="availablePlugins" style="margin-top:10px"></div>
+
+      <!-- PAGE: AI -->
+      <div id="page-ai" class="page hidden">
+        <div class="page-head">AI</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">System Prompt</div></div>
+          <div class="muted" style="margin-bottom:8px">Atur instruksi/system prompt untuk command <b>.ai</b>. Biarkan kosong untuk tanpa system prompt khusus.</div>
+          <textarea id="set_ai_prompt" placeholder="Contoh: Kamu adalah asisten yang ramah dan menjawab dengan singkat..."></textarea>
+          <button class="btn primary" style="margin-top:10px" onclick="saveAI()">Simpan System Prompt</button>
+          <div id="aiMsg" class="msg"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: Settings -->
+      <div id="page-settings" class="page hidden">
+        <div class="page-head">Settings</div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Profil Bot</div></div>
+          <label>Nama Bot</label>
+          <input id="set_bot_name" type="text" placeholder="puruLocal Bot" />
+          <label>Nama Owner</label>
+          <input id="set_owner_name" type="text" placeholder="Owner" />
+          <label>Nomor Owner (tanpa +)</label>
+          <input id="set_owner_number" type="text" placeholder="628123456789" />
+          <label>Nomor Bot</label>
+          <input id="set_bot_number" type="text" placeholder="628123456789" />
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Perilaku</div></div>
+          <div class="row">
+            <div class="l"><div class="t">Bot tidak bisa chat diri sendiri</div><div class="d">Abaikan pesan dari diri sendiri</div></div>
+            <label class="switch"><input id="set_block_self" type="checkbox"><span class="slider"></span></label>
+          </div>
+          <div class="row">
+            <div class="l"><div class="t">Bot read chat</div><div class="d">Tandai pesan masuk sebagai dibaca</div></div>
+            <label class="switch"><input id="set_read" type="checkbox"><span class="slider"></span></label>
+          </div>
+          <div class="row">
+            <div class="l"><div class="t">Bot status mengetik</div><div class="d">Ketik 1.5 detik sebelum membalas command</div></div>
+            <label class="switch"><input id="set_typing" type="checkbox"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="card-title">Aplikasi</div></div>
+          <button class="btn" onclick="checkUpdate()">Cek Update Aplikasi</button>
+          <button class="btn primary" style="margin-top:8px" onclick="saveSettings()">Simpan Settings</button>
+          <div id="settingsMsg" class="msg"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -177,8 +224,9 @@
     let lastStatus = null;
     let qrTimer = null;
     let qrLibLoading = null;
-    let settingsTouched = false;
-    let currentPage = 'login'; // login | dashboard | explore
+    let currentPage = 'dashboard';
+    let isLogged = false;
+    let formTouched = false;
     let updateMsgTimer = null;
 
     async function api(path, opts={}){
@@ -194,23 +242,24 @@
       return cat?`<span class="${cls}">${esc(cat)}</span>`:'';
     }
 
-    function setGlobalMsg(text, isErr){
-      const el = $('globalMsg'); if(!el) return;
+    function setMsg(id, text, isErr){
+      const el=$(id); if(!el) return;
       el.textContent = text || '';
       el.className = 'msg' + (isErr ? ' err' : '');
     }
+
     function clearUpdateChecking(){
-      const el = $('globalMsg');
-      if(el && (el.textContent||'').toLower().indexOf('mengecek update') !== -1){
-        el.textContent = '';
-        el.className = 'msg';
-      }
+      const g=$('globalMsg'), s=$('settingsMsg');
+      [g,s].forEach(el=>{ if(el && (el.textContent||'').toLowerCase().indexOf('mengecek update')!==-1){ el.textContent=''; el.className='msg'; } });
       if(updateMsgTimer){ clearTimeout(updateMsgTimer); updateMsgTimer = null; }
     }
-    // dipanggil native (Flutter) saat cek update manual selesai
     window.puruUpdateDone = function(msg, isErr){
       clearUpdateChecking();
-      if(msg){ setGlobalMsg(msg, !!isErr); if(!isErr){ setTimeout(()=>{ if($('globalMsg') && $('globalMsg').textContent===msg) setGlobalMsg('',false); }, 4000); } }
+      if(msg){
+        const id = (currentPage==='settings') ? 'settingsMsg' : 'globalMsg';
+        setMsg(id, msg, !!isErr);
+        if(!isErr){ setTimeout(()=>{ const el=$(id); if(el && el.textContent===msg) setMsg(id,'',false); }, 4000); }
+      }
     };
 
     function ensureQrLib(){
@@ -226,47 +275,60 @@
       return qrLibLoading;
     }
 
-    function checkUpdate(){
-      try {
-        if (window.PuruNative && window.PuruNative.postMessage) {
-          setGlobalMsg('Mengecek update...', false);
-          clearTimeout(updateMsgTimer);
-          // fallback: hilangkan status jika native tidak memberi callback
-          updateMsgTimer = setTimeout(()=>{ clearUpdateChecking(); }, 20000);
-          window.PuruNative.postMessage('checkUpdate');
-        } else {
-          setGlobalMsg('Tombol update aktif di aplikasi (WebView).', true);
-        }
-      } catch(e) {
-        setGlobalMsg('Gagal memicu cek update.', true);
-      }
+    function toggleDrawer(){
+      const open = $('drawer').classList.contains('open');
+      $('drawer').classList.toggle('open', !open);
+      $('overlay').classList.toggle('hidden', open);
     }
+    function closeDrawer(){ $('drawer').classList.remove('open'); $('overlay').classList.add('hidden'); }
 
-    function showPage(page){
+    function nav(page){
       currentPage = page;
-      $('viewLogin').classList.toggle('hidden', page !== 'login');
-      $('viewDashboard').classList.toggle('hidden', page !== 'dashboard');
-      $('viewExplore').classList.toggle('hidden', page !== 'explore');
-      if(page === 'explore'){ loadPlugins(true); }
-    }
-    function openExplore(){ showPage('explore'); }
-    function closeExplore(){ showPage('dashboard'); refresh(false); }
-
-    function fillSettingsFromCfg(c){
-      if(!c || settingsTouched) return;
-      $('set_bot_name').value = c.bot_name || 'puruLocal Bot';
-      $('set_owner_name').value = c.owner_name || '';
-      $('set_owner_number').value = c.owner_number || '';
-      $('set_bot_number').value = c.bot_number || c.owner_number || '';
-      $('set_block_self').checked = c.block_self_chat !== false;
-      $('set_read').checked = !!c.read_chat;
-      $('set_typing').checked = c.typing_before_reply !== false;
+      ['dashboard','plugin','ai','settings'].forEach(p=>{
+        $('page-'+p).classList.toggle('hidden', p!==page);
+        const btn = document.querySelector('.nav-item[data-page="'+p+'"]');
+        if(btn) btn.classList.toggle('active', p===page);
+      });
+      $('pageSubtitle').textContent = page==='dashboard'?'Dashboard':(page==='plugin'?'Plugin':(page==='ai'?'AI':'Settings'));
+      closeDrawer();
+      if(page==='plugin') loadPlugins(true);
     }
 
-    function fillLoginFromCfg(c){
+    function fillFormsFromCfg(c, force){
       if(!c) return;
+      if(force || !formTouched){
+        $('set_bot_name').value = c.bot_name || 'puruLocal Bot';
+        $('set_owner_name').value = c.owner_name || '';
+        $('set_owner_number').value = c.owner_number || '';
+        $('set_bot_number').value = c.bot_number || c.owner_number || '';
+        $('set_block_self').checked = c.block_self_chat !== false;
+        $('set_read').checked = !!c.read_chat;
+        $('set_typing').checked = c.typing_before_reply !== false;
+        $('set_ai_prompt').value = c.ai_system_prompt || '';
+        if(force) formTouched = false;
+      }
       if(!$('login_owner_number').value) $('login_owner_number').value = c.owner_number || '';
       if(!$('login_bot_number').value) $('login_bot_number').value = c.bot_number || c.owner_number || '';
+    }
+
+    function buildConfigBody(overrides){
+      const c = lastCfg || {};
+      const body = {
+        bot_name: ($('set_bot_name') ? $('set_bot_name').value : c.bot_name) || 'puruLocal Bot',
+        owner_name: ($('set_owner_name') ? $('set_owner_name').value : c.owner_name) || 'Owner',
+        owner_number: ($('set_owner_number') ? $('set_owner_number').value : c.owner_number) || '',
+        bot_number: ($('set_bot_number') ? $('set_bot_number').value : c.bot_number) || '',
+        block_self_chat: $('set_block_self') ? $('set_block_self').checked : (c.block_self_chat !== false),
+        read_chat: $('set_read') ? $('set_read').checked : !!c.read_chat,
+        typing_before_reply: $('set_typing') ? $('set_typing').checked : (c.typing_before_reply !== false),
+        typing_delay_sec: c.typing_delay_sec || 1.5,
+        update_manifest_url: c.update_manifest_url || '',
+        ai_system_prompt: ($('set_ai_prompt') ? $('set_ai_prompt').value : (c.ai_system_prompt || ''))
+      };
+      body.bot_name = String(body.bot_name||'').trim() || 'puruLocal Bot';
+      body.owner_name = String(body.owner_name||'').trim() || 'Owner';
+      body.bot_number = String(body.bot_number||'').trim() || String(body.owner_number||'').trim();
+      return Object.assign(body, overrides||{});
     }
 
     async function refresh(manual){
@@ -274,62 +336,53 @@
         const d = await api('/api/status');
         const s = d.status||{}; const c = d.config||{};
         lastCfg = c; lastStatus = s;
-        const connectedMode = !!(s.has_session || s.logged_in);
-        if(currentPage !== 'explore'){
-          showPage(connectedMode ? 'dashboard' : 'login');
-        } else if(!connectedMode){
-          showPage('login');
-        }
+        const logged = !!(s.has_session || s.logged_in);
+        isLogged = logged;
+        $('viewLogin').classList.toggle('hidden', logged);
+        $('viewShell').classList.toggle('hidden', !logged);
 
-        if(connectedMode){
+        if(logged){
           $('stConn').textContent = String(!!s.connected);
           $('stLogin').textContent = String(!!s.logged_in);
           $('stPaused').textContent = String(!!s.paused);
           $('stSession').textContent = String(!!s.has_session);
           $('stJid').textContent = s.jid ? ('JID: ' + s.jid) : '';
           const btn = $('toggleRunBtn');
-          if(s.paused){
-            btn.textContent = '▶ Start';
-            btn.className = 'btn primary';
-          } else {
-            btn.textContent = '⏸ Pause';
-            btn.className = 'btn warn';
-          }
-          if(!settingsTouched || manual) fillSettingsFromCfg(c);
-          if(manual) settingsTouched = false;
+          if(s.paused){ btn.textContent='▶ Start'; btn.className='btn primary'; }
+          else { btn.textContent='⏸ Pause'; btn.className='btn warn'; }
+          fillFormsFromCfg(c, !!manual);
         } else {
-          fillLoginFromCfg(c);
+          fillFormsFromCfg(c, false);
         }
       }catch(e){
-        if(currentPage === 'dashboard') setGlobalMsg('Gagal memuat status (backend lokal aktif?)', true);
+        if(isLogged && currentPage==='dashboard') setMsg('globalMsg','Gagal memuat status (backend lokal aktif?)', true);
       }
     }
 
-    function currentSettingsBody(){
-      const c = lastCfg || {};
-      return {
-        bot_name: ($('set_bot_name').value || 'puruLocal Bot').trim() || 'puruLocal Bot',
-        owner_name: ($('set_owner_name').value || 'Owner').trim() || 'Owner',
-        owner_number: $('set_owner_number').value || '',
-        bot_number: $('set_bot_number').value || $('set_owner_number').value || '',
-        block_self_chat: $('set_block_self').checked,
-        read_chat: $('set_read').checked,
-        typing_before_reply: $('set_typing').checked,
-        typing_delay_sec: c.typing_delay_sec || 1.5,
-        update_manifest_url: c.update_manifest_url || ''
-      };
+    async function saveConfig(body, msgId){
+      const d = await api('/api/config',{method:'POST',body:JSON.stringify(body)});
+      if(!d.ok){ setMsg(msgId, d.error||'Gagal menyimpan', true); return false; }
+      lastCfg = d.config || body;
+      formTouched = false;
+      setMsg(msgId, 'Tersimpan.', false);
+      setTimeout(()=>{ const el=$(msgId); if(el && el.textContent==='Tersimpan.') setMsg(msgId,'',false); }, 1500);
+      refresh(false);
+      return true;
     }
 
     async function saveSettings(){
-      const body = currentSettingsBody();
-      if(!String(body.owner_number||'').trim()){
-        setGlobalMsg('Nomor owner wajib diisi.', true); return;
+      const body = buildConfigBody();
+      if(!String(body.owner_number||'').trim()){ setMsg('settingsMsg','Nomor owner wajib diisi.', true); return; }
+      await saveConfig(body, 'settingsMsg');
+    }
+
+    async function saveAI(){
+      const body = buildConfigBody({ ai_system_prompt: ($('set_ai_prompt').value || '') });
+      if(!String(body.owner_number||'').trim() && lastCfg && lastCfg.owner_number){
+        body.owner_number = lastCfg.owner_number;
+        body.bot_number = body.bot_number || body.owner_number;
       }
-      if(!String(body.bot_number||'').trim()) body.bot_number = body.owner_number;
-      const d = await api('/api/config',{method:'POST',body:JSON.stringify(body)});
-      if(!d.ok){ setGlobalMsg(d.error||'Gagal simpan settings', true); }
-      else { settingsTouched = false; setGlobalMsg('Settings disimpan.', false); setTimeout(()=>{ if($('globalMsg') && $('globalMsg').textContent==='Settings disimpan.') setGlobalMsg('',false); },1500); }
-      refresh(false);
+      await saveConfig(body, 'aiMsg');
     }
 
     async function saveLoginConfig(){
@@ -343,10 +396,11 @@
         owner_number: owner,
         bot_number: bot || owner,
         block_self_chat: c.block_self_chat !== false,
-        read_chat: c.read_chat || false,
+        read_chat: !!c.read_chat,
         typing_before_reply: c.typing_before_reply !== false,
         typing_delay_sec: c.typing_delay_sec || 1.5,
-        update_manifest_url: c.update_manifest_url || ''
+        update_manifest_url: c.update_manifest_url || '',
+        ai_system_prompt: c.ai_system_prompt || ''
       };
       const d = await api('/api/config',{method:'POST',body:JSON.stringify(body)});
       if(!d.ok){ $('connMsg').innerHTML=`<span class="err">${esc(d.error||'Gagal simpan konfigurasi')}</span>`; return null; }
@@ -356,8 +410,7 @@
 
     async function toggleRun(){
       const paused = !!(lastStatus && lastStatus.paused);
-      if(paused) await api('/api/start',{method:'POST'});
-      else await api('/api/pause',{method:'POST'});
+      if(paused) await api('/api/start',{method:'POST'}); else await api('/api/pause',{method:'POST'});
       await refresh(false);
     }
 
@@ -365,8 +418,9 @@
       if(confirm('Logout sesi WhatsApp di perangkat ini?')){
         await api('/api/logout',{method:'POST'});
         $('qrWrap').classList.add('hidden'); $('pairBox').classList.add('hidden');
-        $('connMsg').textContent=''; settingsTouched = false;
-        showPage('login');
+        $('connMsg').textContent=''; formTouched = false;
+        isLogged = false; nav('dashboard');
+        $('viewShell').classList.add('hidden'); $('viewLogin').classList.remove('hidden');
         refresh(true);
       }
     }
@@ -401,6 +455,22 @@
       if(d.ok){ $('pairCode').textContent=d.pairing_code||'-'; $('connMsg').textContent='Pairing code diterima.'; }
       else { $('connMsg').innerHTML=`<span class="err">${esc(d.error||'Gagal')}</span>`; }
       refresh(false);
+    }
+
+    function checkUpdate(){
+      const msgId = (currentPage==='settings') ? 'settingsMsg' : 'globalMsg';
+      try {
+        if (window.PuruNative && window.PuruNative.postMessage) {
+          setMsg(msgId, 'Mengecek update...', false);
+          clearTimeout(updateMsgTimer);
+          updateMsgTimer = setTimeout(()=>{ clearUpdateChecking(); }, 20000);
+          window.PuruNative.postMessage('checkUpdate');
+        } else {
+          setMsg(msgId, 'Tombol update aktif di aplikasi (WebView).', true);
+        }
+      } catch(e) {
+        setMsg(msgId, 'Gagal memicu cek update.', true);
+      }
     }
 
     function renderInstalled(list){
@@ -444,21 +514,22 @@
         const p = JSON.parse(decodeURIComponent(encoded));
         const d = await api('/api/plugins/install',{method:'POST',body:JSON.stringify(p)});
         if(!d.ok) alert(d.error||'Gagal install'); else { $('availablePlugins').innerHTML=''; }
-        await loadPlugins(); 
+        await loadPlugins();
       }catch(e){ alert('Gagal install'); }
     }
 
     async function removePlugin(id){
       const d = await api('/api/plugins/remove',{method:'POST',body:JSON.stringify({id})});
       if(!d.ok) alert(d.error||'Gagal hapus');
-      await loadPlugins(); 
+      await loadPlugins();
     }
 
-    // tandai settings disentuh agar auto-refresh tidak menimpa ketikan
     document.addEventListener('input', (e)=>{
-      if(currentPage==='dashboard' && e.target && ['INPUT'].includes(e.target.tagName)) settingsTouched = true;
+      if(isLogged && e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')) formTouched = true;
     });
 
+    // init
+    document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.page==='dashboard'));
     refresh(true);
     setInterval(()=>refresh(false), 5000);
   </script>

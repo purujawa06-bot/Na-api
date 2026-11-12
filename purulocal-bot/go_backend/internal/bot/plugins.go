@@ -185,13 +185,14 @@ func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Co
 
 func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, messages []ChatMessage) (ExecResult, error) {
 	body := map[string]any{
-		"command":      p.Command,
-		"args":         args,
-		"bot_name":     cfg.BotName,
-		"owner_name":   cfg.OwnerName,
-		"owner_number": cfg.OwnerNumber,
-		"plugin_id":    p.ID,
-		"user":         user,
+		"command":          p.Command,
+		"args":             args,
+		"bot_name":         cfg.BotName,
+		"owner_name":       cfg.OwnerName,
+		"owner_number":     cfg.OwnerNumber,
+		"plugin_id":        p.ID,
+		"user":             user,
+		"ai_system_prompt": strings.TrimSpace(cfg.AISystemPrompt),
 	}
 	if len(messages) > 0 {
 		msgs := make([]map[string]any, 0, len(messages))

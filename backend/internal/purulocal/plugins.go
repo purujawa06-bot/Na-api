@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -78,13 +79,14 @@ func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Command   string           `json:"command"`
-		PluginID  string           `json:"plugin_id"`
-		Args      string           `json:"args"`
-		BotName   string           `json:"bot_name"`
-		OwnerName string           `json:"owner_name"`
-		User      string           `json:"user"`
-		Messages  []map[string]any `json:"messages"`
+		Command        string           `json:"command"`
+		PluginID       string           `json:"plugin_id"`
+		Args           string           `json:"args"`
+		BotName        string           `json:"bot_name"`
+		OwnerName      string           `json:"owner_name"`
+		User           string           `json:"user"`
+		Messages       []map[string]any `json:"messages"`
+		AISystemPrompt string           `json:"ai_system_prompt"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	cmd := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(body.Command, ".")))
@@ -96,7 +98,7 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch cmd {
 	case "ai", "ai-chat":
-		reply, err := runAI(r, args, body.Messages)
+		reply, err := runAI(r, args, body.Messages, body.AISystemPrompt)
 		if err != nil {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -114,13 +116,26 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func runAI(r *http.Request, prompt string, messages []map[string]any) (string, error) {
+func runAI(r *http.Request, prompt string, messages []map[string]any, systemPrompt string) (string, error) {
+	systemPrompt = strings.TrimSpace(systemPrompt)
 	if len(messages) == 0 {
 		if strings.TrimSpace(prompt) == "" {
 			return "Gunakan: .ai <pertanyaan>", nil
 		}
 		messages = []map[string]any{{"role": "user", "content": prompt}}
 	}
+	if systemPrompt != "" {
+		hasSystem := false
+		if len(messages) > 0 {
+			if role, _ := messages[0]["role"].(string); strings.EqualFold(role, "system") {
+				hasSystem = true
+			}
+		}
+		if !hasSystem {
+			messages = append([]map[string]any{{"role": "system", "content": systemPrompt}}, messages...)
+		}
+	}
+
 	base := strings.TrimRight(baseURL(r), "/")
 	// jika diakses lokal, fallback ke backend publik Koyeb
 	if strings.Contains(base, "127.0.0.1") || strings.Contains(base, "localhost") {
@@ -157,12 +172,12 @@ func runAI(r *http.Request, prompt string, messages []map[string]any) (string, e
 	client := &http.Client{Timeout: 60 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		return "🤖 Gagal menghubungi AI: " + err.Error(), nil
+		return formatAIReply("Gagal menghubungi AI: " + err.Error()), nil
 	}
 	defer res.Body.Close()
 	if res.StatusCode >= 400 {
 		rb, _ := io.ReadAll(io.LimitReader(res.Body, 2000))
-		return "🤖 AI error: " + strings.TrimSpace(string(rb)), nil
+		return formatAIReply("AI error: " + strings.TrimSpace(string(rb))), nil
 	}
 	// baca SSE stream dan gabungkan delta.content
 	var out strings.Builder
@@ -200,12 +215,57 @@ func runAI(r *http.Request, prompt string, messages []map[string]any) (string, e
 	}
 	txt := strings.TrimSpace(out.String())
 	if txt == "" {
-		return "🤖 (AI tidak mengembalikan jawaban)", nil
+		return formatAIReply("(AI tidak mengembalikan jawaban)"), nil
 	}
 	if len(txt) > 3500 {
 		txt = txt[:3500] + "…"
 	}
-	return "🤖 " + txt, nil
+	return formatAIReply(txt), nil
+}
+
+var (
+	reMDBold   = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	reMDUBold  = regexp.MustCompile(`__(.+?)__`)
+	reMDStrike = regexp.MustCompile(`~~(.+?)~~`)
+	reMDHead   = regexp.MustCompile(`(?m)^(#{1,6})\s+(.+)$`)
+	reMDLink   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
+	reMDBullet = regexp.MustCompile(`(?m)^(\s*)[-*]\s+`)
+	reMDNum    = regexp.MustCompile(`(?m)^(\s*)\d+\.\s+`)
+)
+
+func formatAIReply(s string) string {
+	s = strings.TrimSpace(s)
+	// hapus emoji robot di awal
+	s = strings.TrimLeft(s, "\uFEFF")
+	for _, p := range []string{"🤖", ":robot:"} {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimSpace(strings.TrimPrefix(s, p))
+		}
+	}
+	// naturalisasi markdown -> syntax WhatsApp
+	lines := strings.Split(s, "\n")
+	inCode := false
+	for i, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "```") {
+			inCode = !inCode
+			continue
+		}
+		if inCode {
+			continue
+		}
+		if m := reMDHead.FindStringSubmatch(line); m != nil {
+			line = "*" + strings.TrimSpace(m[2]) + "*"
+		}
+		line = reMDLink.ReplaceAllString(line, "$1 ($2)")
+		line = reMDBold.ReplaceAllString(line, "*$1*")
+		line = reMDUBold.ReplaceAllString(line, "*$1*")
+		line = reMDStrike.ReplaceAllString(line, "~$1~")
+		line = reMDBullet.ReplaceAllString(line, "${1}• ")
+		line = reMDNum.ReplaceAllString(line, "${1}• ")
+		lines[i] = line
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func (h *handlers) updateManifest(w http.ResponseWriter, r *http.Request) {
