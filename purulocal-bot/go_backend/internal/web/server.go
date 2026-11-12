@@ -47,6 +47,7 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("POST /api/features/toggle", s.handleFeatureToggle)
 	mux.HandleFunc("GET /api/vipcodes", s.handleVIPCodes)
 	mux.HandleFunc("POST /api/vipcodes/generate", s.handleVIPCodeGenerate)
+	mux.HandleFunc("POST /api/vipcodes/remove", s.handleVIPCodeRemove)
 	return s
 }
 
@@ -346,4 +347,20 @@ func (s *Server) handleVIPCodeGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "code": code, "codes": s.mgr.VIP().ListCodes()})
+}
+
+func (s *Server) handleVIPCodeRemove(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.mgr.VIP() == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "vip store tidak tersedia"})
+		return
+	}
+	if err := s.mgr.VIP().RemoveCode(body.Code); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "codes": s.mgr.VIP().ListCodes()})
 }

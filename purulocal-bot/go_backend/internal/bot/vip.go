@@ -189,6 +189,29 @@ func (s *VIPStore) ListCodes() []VIPCode {
 	return out
 }
 
+func (s *VIPStore) RemoveCode(code string) error {
+	code = normalizeVIPCode(code)
+	if code == "" {
+		return errors.New("kode wajib diisi")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := make([]VIPCode, 0, len(s.data.Codes))
+	found := false
+	for _, c := range s.data.Codes {
+		if c.Code == code {
+			found = true
+			continue
+		}
+		n = append(n, c)
+	}
+	if !found {
+		return errors.New("kode VIP tidak ditemukan")
+	}
+	s.data.Codes = n
+	return s.saveLocked()
+}
+
 func (s *VIPStore) Redeem(user, code string, now time.Time) (expiry int64, err error) {
 	user = strings.TrimSpace(user)
 	code = normalizeVIPCode(code)

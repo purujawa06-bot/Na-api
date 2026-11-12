@@ -634,10 +634,11 @@
       const sorted = arr.slice().sort((a,b)=> (b.created_at||0)-(a.created_at||0));
       $('vipCodeList').innerHTML = sorted.map(c=>{
         const code = esc(c.code||'');
+        const raw = String(c.code||'');
         const used = !!(c.used_by && String(c.used_by).trim());
         const status = used ? '<span class="muted">Dipakai</span>' : '<span class="pill ok">Aktif</span>';
         const dur = formatDur(c.duration_seconds||0);
-        return `<div class="plugin-item"><div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px;letter-spacing:2px">${code} ${status}</div><div class="muted">Durasi: ${dur}${used ? ' · 1 user' : ' · untuk 1 user'}</div></div><button class="small-btn primary" onclick="copyVipCode('${code}')">Salin</button></div>`;
+        return `<div class="plugin-item"><div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px;letter-spacing:2px">${code} ${status}</div><div class="muted">Durasi: ${dur}${used ? ' · 1 user' : ' · untuk 1 user'}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="small-btn primary" onclick="copyVipCode('${raw}')">Salin</button><button class="small-btn danger" onclick="removeVipCode('${raw}')">Hapus</button></div></div>`;
       }).join('');
     }
 
@@ -672,6 +673,15 @@
         setMsg('vipCodeMsg','Kode '+code+' disalin.', false);
         setTimeout(()=>{ const el=$('vipCodeMsg'); if(el && el.textContent===('Kode '+code+' disalin.')) setMsg('vipCodeMsg','',false); }, 1500);
       }catch(e){ alert('Gagal menyalin'); }
+    }
+
+    async function removeVipCode(code){
+      if(!confirm('Hapus kode VIP '+code+'?')) return;
+      const d = await api('/api/vipcodes/remove', {method:'POST', body: JSON.stringify({code})});
+      if(!d.ok){ setMsg('vipCodeMsg', d.error||'Gagal menghapus', true); return; }
+      setMsg('vipCodeMsg','Kode '+code+' dihapus.', false);
+      renderVipCodes(d.codes||[]);
+      setTimeout(()=>{ const el=$('vipCodeMsg'); if(el && el.textContent===('Kode '+code+' dihapus.')) setMsg('vipCodeMsg','',false); }, 1500);
     }
     async function saveLoginConfig(){
       const owner = String($('login_owner_number').value||'').trim();
