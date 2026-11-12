@@ -659,7 +659,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 		"│  • .owner",
 		"│",
 		"├─ ꜱᴛɪᴄᴋᴇʀ",
-		"│  • .sticker / .s (kirim/reply gambar)",
+		"│  • .sticker",
 	}
 
 	// Kumpulkan plugin terpasang per kategori
