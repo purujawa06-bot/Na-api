@@ -174,7 +174,7 @@ func (m *Manager) isFeatureAllowed(featureID, user string) bool {
 }
 
 func (m *Manager) vipDeniedReply() ExecResult {
-	return ExecResult{Reply: "Fitur ini khusus VIP. Gunakan .vip <kode> untuk aktivasi."}
+	return ExecResult{Reply: "*Fitur VIP*\nFitur ini khusus VIP.\nGunakan *.vip* <kode> untuk aktivasi."}
 }
 
 func (m *Manager) ListAllFeatures() []FeatureItem {
@@ -723,30 +723,30 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		}
 		code := normalizeVIPCode(args)
 		if len(code) != 4 {
-			return ExecResult{Reply: "Gunakan: .vip <kode 4 karakter>"}, true
+			return ExecResult{Reply: "*VIP*\nGunakan: *.vip* <kode 4 karakter>"}, true
 		}
 		if m.vip == nil {
-			return ExecResult{Reply: "Fitur VIP tidak tersedia."}, true
+			return ExecResult{Reply: "*VIP*\nFitur VIP tidak tersedia."}, true
 		}
 		exp, err := m.vip.Redeem(userKey, code, time.Now())
 		if err != nil {
-			return ExecResult{Reply: "Gagal redeem VIP: " + err.Error()}, true
+			return ExecResult{Reply: "*Gagal Redeem VIP*\n" + err.Error()}, true
 		}
 		remain := exp - time.Now().Unix()
-		return ExecResult{Reply: "VIP aktif. Sisa: " + formatRemaining(remain)}, true
+		return ExecResult{Reply: "*VIP Aktif*\n*Sisa:* " + formatRemaining(remain)}, true
 	case "stats":
 		if !m.isFeatureAllowed("builtin:stats", userKey) {
 			return m.vipDeniedReply(), true
 		}
 		if m.vip == nil {
-			return ExecResult{Reply: "Status: Bukan VIP"}, true
+			return ExecResult{Reply: "*Status:* Bukan VIP"}, true
 		}
 		ok, exp := m.vip.IsUserVIP(userKey, time.Now())
 		if !ok {
-			return ExecResult{Reply: "Status: Bukan VIP"}, true
+			return ExecResult{Reply: "*Status:* Bukan VIP"}, true
 		}
 		remain := exp - time.Now().Unix()
-		return ExecResult{Reply: "Status: VIP\nSisa: " + formatRemaining(remain)}, true
+		return ExecResult{Reply: "*Status:* VIP\n*Sisa:* " + formatRemaining(remain)}, true
 	}
 	if m.plugins != nil {
 		if p, okp := m.plugins.Find(cmd); okp {
