@@ -74,6 +74,8 @@ export default function App() {
   const [aiMsg, setAiMsg] = useState({ text: '', err: false })
   const [stickerMsg, setStickerMsg] = useState({ text: '', err: false })
   const [formTouched, setFormTouched] = useState(false)
+  const formTouchedRef = useRef(false)
+  const setFormTouchedFlag = (v) => { formTouchedRef.current = !!v; setFormTouched(!!v) }
 
   // plugins
   const [installed, setInstalled] = useState([])
@@ -108,11 +110,9 @@ export default function App() {
   const applyConfigToForm = useCallback((c, force = false) => {
     if (!c) return
     setSettings(prev => {
-      if (!force && formTouched) {
-        return {
-          ...prev,
-          ai_system_prompt: prev.ai_system_prompt ?? (c.ai_system_prompt || ''),
-        }
+      // saat form sedang diedit (belum disimpan), jangan timpa input user dari polling
+      if (!force && formTouchedRef.current) {
+        return prev
       }
       return {
         bot_name: c.bot_name || 'puruLocal Bot',
@@ -128,10 +128,10 @@ export default function App() {
         sticker_author: c.sticker_author || '',
       }
     })
-    if (force) setFormTouched(false)
+    if (force) setFormTouchedFlag(false)
     setLoginOwner(v => v || c.owner_number || '')
     setLoginBot(v => v || c.bot_number || c.owner_number || '')
-  }, [formTouched])
+  }, [])
 
   const refresh = useCallback(async (manual = false) => {
     try {
@@ -193,7 +193,7 @@ export default function App() {
     const d = await api('/api/config', { method: 'POST', body: JSON.stringify(body) })
     if (!d.ok) { setMsg({ text: d.error || 'Gagal menyimpan', err: true }); return false }
     setConfig(d.config || body)
-    setFormTouched(false)
+    setFormTouchedFlag(false)
     flash(setMsg, 'Tersimpan.')
     refresh(false)
     return true
@@ -271,7 +271,7 @@ export default function App() {
     if (!window.confirm('Logout sesi WhatsApp di perangkat ini?')) return
     await api('/api/logout', { method: 'POST' })
     setShowQr(false); setShowPair(false); setQrData(''); setConnMsg({ text: '', err: false })
-    setFormTouched(false); setIsLogged(false); setPage('dashboard')
+    setFormTouchedFlag(false); setIsLogged(false); setPage('dashboard')
     refresh(true)
   }
 
@@ -459,7 +459,7 @@ export default function App() {
   }, [page])
 
   const nav = (p) => { setPage(p); setDrawer(false) }
-  const onField = (k) => (e) => { setFormTouched(true); const v = e && e.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e; setSettings(s => ({ ...s, [k]: v })) }
+  const onField = (k) => (e) => { setFormTouchedFlag(true); const v = e && e.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e; setSettings(s => ({ ...s, [k]: v })) }
 
   const pageTitle = (PAGES.find(p => p.id === page) || PAGES[0]).title
   const paused = !!(status && status.paused)
