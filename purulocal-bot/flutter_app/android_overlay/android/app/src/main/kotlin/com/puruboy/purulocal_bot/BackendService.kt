@@ -138,15 +138,44 @@ class BackendService : Service() {
         return try { f.exists() && f.isFile && f.length() > 1024 } catch (_: Exception) { false }
     }
 
+    private fun prepareExecutableRuntimeCopy(src: File): File? {
+        // Android/data (external app-specific) sering noexec, jadi salin ke lokasi executable internal
+        val targets = listOf(
+            File(codeCacheDir, "purulocal-runtime"),
+            File(filesDir, "purulocal-runtime"),
+            File(cacheDir, "purulocal-runtime"),
+        )
+        for (dir in targets) {
+            try {
+                dir.mkdirs()
+                val dst = File(dir, "libpurulocal.so")
+                val needCopy = !dst.exists() || dst.length() != src.length() || dst.lastModified() < src.lastModified()
+                if (needCopy) {
+                    src.inputStream().use { input -> FileOutputStream(dst).use { output -> input.copyTo(output) } }
+                    Log.i("puruLocal", "Copied runtime payload to executable location: ${dst.absolutePath}")
+                }
+                ensureExecutable(dst)
+                if (isValidBackendBinary(dst)) return dst
+            } catch (e: Exception) {
+                Log.w("puruLocal", "Failed to prepare runtime copy in ${dir.absolutePath}", e)
+            }
+        }
+        return null
+    }
+
     private fun findBackendBinary(): File? {
-        // 1) Runtime payload terunduh (launcher): Android/data/<pkg>/files/purulocal-runtime/current/libpurulocal.so
+        // 1) Runtime payload terunduh (launcher): disimpan di Android/data/<pkg>/files/purulocal-runtime/current/
+        //    (sesuai permintaan) namun dieksekusi dari salinan di lokasi internal yang executable.
         try {
             val runtimeCurrent = File(getRuntimeBaseDir(this), "current")
             val runtimeBin = File(runtimeCurrent, "libpurulocal.so")
             if (isValidBackendBinary(runtimeBin)) {
-                ensureExecutable(runtimeBin)
-                Log.i("puruLocal", "Using runtime payload backend: ${runtimeBin.absolutePath} len=${runtimeBin.length()}")
-                return runtimeBin
+                val execBin = prepareExecutableRuntimeCopy(runtimeBin)
+                if (execBin != null) {
+                    Log.i("puruLocal", "Using runtime payload backend: src=${runtimeBin.absolutePath} exec=${execBin.absolutePath} len=${runtimeBin.length()}")
+                    return execBin
+                }
+                Log.w("puruLocal", "Could not prepare executable copy of runtime payload, fallback to bundled")
             } else if (runtimeBin.exists()) {
                 Log.w("puruLocal", "Runtime payload binary invalid, fallback to bundled: ${runtimeBin.absolutePath} len=${runtimeBin.length()}")
             }
