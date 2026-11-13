@@ -566,6 +566,27 @@ func buildOwnerVCard(name, number string) string {
 	}, "\n")
 }
 
+func isOwner(userKey, ownerNumber string) bool {
+	owner := normalizeNumber(ownerNumber)
+	if owner == "" {
+		return false
+	}
+	var b strings.Builder
+	for _, r := range userKey {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	u := b.String()
+	if u == "" {
+		return false
+	}
+	if u == owner || strings.Contains(u, owner) || strings.Contains(owner, u) {
+		return true
+	}
+	return false
+}
+
 func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error {
 	m.mu.RLock()
 	c := m.client
@@ -588,6 +609,9 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
 	hc := &http.Client{Timeout: 90 * time.Second}
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -602,7 +626,7 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 		return err
 	}
 	if len(data) == 0 {
-		return errors.New("audio kosong")
+		return fmt.Errorf("audio kosong (HTTP %d)", resp.StatusCode)
 	}
 	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaAudio)
 	if err != nil {
@@ -644,6 +668,14 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+	// beberapa CDN TikTok/ssstik memerlukan referer/origin agar tidak mengembalikan body kosong
+	if strings.Contains(res.VideoURL, "tiktok") || strings.Contains(res.VideoURL, "ssstik") || strings.Contains(res.VideoURL, "tikcdn") || strings.Contains(res.VideoURL, "ssscdn") {
+		req.Header.Set("Referer", "https://www.tiktok.com/")
+		req.Header.Set("Origin", "https://www.tiktok.com")
+	}
 	hc := &http.Client{Timeout: 120 * time.Second}
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -658,7 +690,7 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 		return err
 	}
 	if len(data) == 0 {
-		return errors.New("video kosong")
+		return fmt.Errorf("video kosong (HTTP %d, ct=%s)", resp.StatusCode, strings.TrimSpace(resp.Header.Get("Content-Type")))
 	}
 	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
 	if err != nil {
@@ -778,6 +810,11 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		}
 		remain := exp - time.Now().Unix()
 		return ExecResult{Reply: "*Status:* VIP\n*Sisa:* " + formatRemaining(remain)}, true
+	case "logs":
+		if !isOwner(userKey, cfg.OwnerNumber) {
+			return ExecResult{Reply: "Perintah ini khusus owner."}, true
+		}
+		return ExecResult{Reply: m.formatLogsForOwner()}, true
 	}
 	if m.plugins != nil {
 		if p, okp := m.plugins.Find(cmd); okp {
@@ -817,6 +854,38 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		}
 	}
 	return ExecResult{}, false
+}
+
+func (m *Manager) formatLogsForOwner() string {
+	if m == nil || m.logger == nil {
+		return "*Logs*\nLogger tidak tersedia."
+	}
+	entries := m.logger.List()
+	if len(entries) == 0 {
+		return "*Logs*\nBelum ada log. (Bisa lihat juga di halaman Logger)"
+	}
+	// ambil terbaru, batasi ukuran pesan
+	start := 0
+	if len(entries) > 40 {
+		start = len(entries) - 40
+	}
+	lines := []string{"*Logs (terbaru)*"}
+	for i := len(entries) - 1; i >= start; i-- {
+		e := entries[i]
+		lvl := strings.ToUpper(strings.TrimSpace(e.Level))
+		if lvl == "" {
+			lvl = "INFO"
+		}
+		line := fmt.Sprintf("[%s][%s][%s] %s", e.Time, lvl, e.Source, strings.TrimSpace(e.Message))
+		lines = append(lines, line)
+	}
+	out := strings.Join(lines, "\n")
+	// batasi agar aman di WA
+	r := []rune(out)
+	if len(r) > 3500 {
+		out = string(r[:3500]) + "\n...(dipotong, lihat halaman Logger untuk lengkap)"
+	}
+	return out
 }
 
 func (m *Manager) buildMenu(cfg Config) string {
