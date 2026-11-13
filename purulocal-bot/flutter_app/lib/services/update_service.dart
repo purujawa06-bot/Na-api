@@ -180,6 +180,33 @@ class UpdateService {
       }
     }
 
+    // siapkan payload baru di staging lalu switch agar tidak meninggalkan state rusak
+    final stagingDir = Directory('${runtimeDir.path}/staging');
+    try { if (await stagingDir.exists()) await stagingDir.delete(recursive: true); } catch (_) {}
+    await stagingDir.create(recursive: true);
+    final stagedBin = File('${stagingDir.path}/libpurulocal.so');
+    await tmpFile.copy(stagedBin.path);
+    try { await tmpFile.delete(); } catch (_) {}
+    try {
+      final len = await stagedBin.length();
+      if (len < 1024) throw Exception('File runtime tidak valid');
+    } catch (e) {
+      try { await stagingDir.delete(recursive: true); } catch (_) {}
+      rethrow;
+    }
+    try {
+      if (Platform.isAndroid || Platform.isLinux) {
+        await Process.run('chmod', ['755', stagedBin.path]);
+      }
+    } catch (_) {}
+    final meta = File('${stagingDir.path}/runtime.json');
+    await meta.writeAsString(jsonEncode({
+      'version': u.runtimeVersion,
+      'sha256': u.runtimeSha256,
+      'versionName': u.versionName,
+      'installedAt': DateTime.now().toIso8601String(),
+    }));
+
     try { if (await backupDir.exists()) await backupDir.delete(recursive: true); } catch (_) {}
     try {
       if (await currentDir.exists()) { await currentDir.rename(backupDir.path); }
@@ -187,24 +214,14 @@ class UpdateService {
       try { if (await backupDir.exists()) await backupDir.delete(recursive: true); } catch (_) {}
       try { if (await currentDir.exists()) await currentDir.rename(backupDir.path); } catch (_) {}
     }
-    if (!await currentDir.exists()) await currentDir.create(recursive: true);
-
-    final dest = File('${currentDir.path}/libpurulocal.so');
-    await tmpFile.copy(dest.path);
-    try { await tmpFile.delete(); } catch (_) {}
     try {
-      if (Platform.isAndroid || Platform.isLinux) {
-        await Process.run('chmod', ['755', dest.path]);
-      }
-    } catch (_) {}
-
-    final meta = File('${currentDir.path}/runtime.json');
-    await meta.writeAsString(jsonEncode({
-      'version': u.runtimeVersion,
-      'sha256': u.runtimeSha256,
-      'versionName': u.versionName,
-      'installedAt': DateTime.now().toIso8601String(),
-    }));
+      await stagingDir.rename(currentDir.path);
+    } catch (_) {
+      if (!await currentDir.exists()) await currentDir.create(recursive: true);
+      await stagedBin.copy('${currentDir.path}/libpurulocal.so');
+      await meta.copy('${currentDir.path}/runtime.json');
+      try { await stagingDir.delete(recursive: true); } catch (_) {}
+    }
 
     try { await _native.invokeMethod('restartBackend'); } catch (_) {}
     return u.runtimeVersion;

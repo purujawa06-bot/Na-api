@@ -133,15 +133,22 @@ class BackendService : Service() {
         return try { java.net.Socket("127.0.0.1", port).use { true } } catch (_: Exception) { false }
     }
 
+    private fun isValidBackendBinary(f: File?): Boolean {
+        if (f == null) return false
+        return try { f.exists() && f.isFile && f.length() > 1024 } catch (_: Exception) { false }
+    }
+
     private fun findBackendBinary(): File? {
         // 1) Runtime payload terunduh (launcher): Android/data/<pkg>/files/purulocal-runtime/current/libpurulocal.so
         try {
             val runtimeCurrent = File(getRuntimeBaseDir(this), "current")
             val runtimeBin = File(runtimeCurrent, "libpurulocal.so")
-            if (runtimeBin.exists()) {
+            if (isValidBackendBinary(runtimeBin)) {
                 ensureExecutable(runtimeBin)
-                Log.i("puruLocal", "Using runtime payload backend: ${runtimeBin.absolutePath}")
+                Log.i("puruLocal", "Using runtime payload backend: ${runtimeBin.absolutePath} len=${runtimeBin.length()}")
                 return runtimeBin
+            } else if (runtimeBin.exists()) {
+                Log.w("puruLocal", "Runtime payload binary invalid, fallback to bundled: ${runtimeBin.absolutePath} len=${runtimeBin.length()}")
             }
         } catch (e: Exception) {
             Log.w("puruLocal", "Runtime payload lookup failed", e)
@@ -158,11 +165,11 @@ class BackendService : Service() {
             parent.listFiles()?.forEach { dir -> if (dir.isDirectory) candidates.add(File(dir, "libpurulocal.so")) }
         }
         candidates.add(File("/data/data/$packageName/lib/libpurulocal.so"))
-        for (c in candidates) { try { if (c.exists() && c.canExecute()) return c } catch (_: Exception) {} }
-        for (c in candidates) { try { if (c.exists()) return c } catch (_: Exception) {} }
+        for (c in candidates) { try { if (isValidBackendBinary(c) && c.canExecute()) return c } catch (_: Exception) {} }
+        for (c in candidates) { try { if (isValidBackendBinary(c)) { ensureExecutable(c); return c } } catch (_: Exception) {} }
         try {
             val extracted = extractBackendFromApk()
-            if (extracted != null && extracted.exists()) return extracted
+            if (isValidBackendBinary(extracted)) return extracted
         } catch (e: Exception) { Log.e("puruLocal", "Failed to extract backend from APK", e) }
         Log.e("puruLocal", "Backend binary not found. nativeLibraryDir=$nativeDir candidates=${candidates.map { it.absolutePath }}")
         return null
