@@ -127,12 +127,16 @@ class _ShellScreenState extends State<ShellScreen> {
     _checkingUpdate = true;
     try {
       final svc = UpdateService(manifestUrl);
-      final info = await svc.check();
-      if (info == null || !mounted) return;
+      final decision = await svc.checkDecision();
+      if (decision.kind == UpdateKind.none || !mounted) return;
       // jika sudah pernah prompt dan tidak force, jangan spam (kecuali transisi login pertama)
-      if (_updatePrompted && !info.force && !loginTransition) return;
+      if (_updatePrompted && !decision.info.force && !loginTransition) return;
       _updatePrompted = true;
-      await _showUpdateDialog(svc, info);
+      if (decision.kind == UpdateKind.runtime) {
+        await _applyRuntimeUpdate(svc, decision.info, silent: !loginTransition);
+      } else if (decision.kind == UpdateKind.apk) {
+        await _showApkUpdateDialog(svc, decision.info);
+      }
     } catch (_) {
       // abaikan kegagalan cek otomatis
     } finally {
@@ -158,16 +162,21 @@ class _ShellScreenState extends State<ShellScreen> {
     _checkingUpdate = true;
     try {
       final svc = UpdateService(manifestUrl);
-      final info = await svc.check();
+      final decision = await svc.checkDecision();
       if (!mounted) return;
-      if (info == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada update tersedia (atau gagal mengecek).')));
+      if (decision.kind == UpdateKind.none) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada update tersedia.')));
         _notifyWebUpdate('Tidak ada update tersedia.');
         return;
       }
       _updatePrompted = true;
-      _notifyWebUpdate('Update tersedia: ${info.versionName}');
-      await _showUpdateDialog(svc, info);
+      if (decision.kind == UpdateKind.runtime) {
+        _notifyWebUpdate('Update fitur/UI tersedia (runtime ${decision.info.runtimeVersion})');
+        await _applyRuntimeUpdate(svc, decision.info, silent: false);
+      } else {
+        _notifyWebUpdate('Update APK tersedia: ${decision.info.versionName}');
+        await _showApkUpdateDialog(svc, decision.info);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cek update: $e')));
@@ -178,14 +187,16 @@ class _ShellScreenState extends State<ShellScreen> {
     }
   }
 
-  Future<void> _showUpdateDialog(UpdateService svc, UpdateInfo info) async {
+  Future<void> _applyRuntimeUpdate(UpdateService svc, UpdateInfo info, {bool silent = false}) async {
     if (!mounted) return;
     final doUpdate = info.force ? true : await showDialog<bool>(
       context: context,
       barrierDismissible: !info.force,
       builder: (c) => AlertDialog(
-        title: Text('Update tersedia: ${info.versionName} (build ${info.buildNumber})'),
-        content: Text(info.changelog.isEmpty ? 'Versi baru tersedia. Update sekarang?' : info.changelog),
+        title: Text('Update tersedia (runtime ${info.runtimeVersion})'),
+        content: Text(info.changelog.isEmpty
+            ? 'Pembaruan fitur/UI tersedia. Unduh dan terapkan sekarang? (tanpa update APK)'
+            : '${info.changelog}\n\nUnduh dan terapkan sekarang? (tanpa update APK)'),
         actions: [
           if (!info.force) TextButton(onPressed: ()=>Navigator.pop(c,false), child: const Text('Nanti')),
           FilledButton(onPressed: ()=>Navigator.pop(c,true), child: const Text('Update')),
@@ -199,7 +210,56 @@ class _ShellScreenState extends State<ShellScreen> {
     showDialog(context: context, barrierDismissible: false, builder: (c) => StatefulBuilder(builder: (c, sp){
       setP = sp;
       return AlertDialog(
-        title: const Text('Mengunduh update...'),
+        title: const Text('Mengunduh pembaruan...'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          LinearProgressIndicator(value: progress <= 0 ? null : progress),
+          const SizedBox(height: 8),
+          Text(progress <= 0 ? 'Menyiapkan...' : '${(progress*100).toStringAsFixed(0)}%'),
+        ]),
+      );
+    }));
+    try {
+      await svc.downloadAndInstallRuntime(info, onProgress: (r,t){ if(t>0){ progress = r/t; setP?.call((){}); } });
+      if (mounted) {
+        try { Navigator.of(context, rootNavigator: true).pop(); } catch (_) {}
+      }
+      if (!mounted) return;
+      _notifyWebUpdate('Pembaruan runtime ${info.runtimeVersion} diterapkan. Memuat ulang...');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pembaruan runtime ${info.runtimeVersion} diterapkan.')));
+      // beri waktu backend restart lalu muat ulang UI lokal
+      await Future.delayed(const Duration(seconds: 2));
+      _tryLoad();
+    } catch (e) {
+      if (mounted) {
+        try { Navigator.of(context, rootNavigator: true).pop(); } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update runtime gagal: $e')));
+        _notifyWebUpdate('Update runtime gagal.', isErr: true);
+      }
+    }
+  }
+
+  Future<void> _showApkUpdateDialog(UpdateService svc, UpdateInfo info) async {
+    if (!mounted) return;
+    final doUpdate = info.force ? true : await showDialog<bool>(
+      context: context,
+      barrierDismissible: !info.force,
+      builder: (c) => AlertDialog(
+        title: Text('Update APK tersedia: ${info.versionName} (build ${info.buildNumber})'),
+        content: Text(info.changelog.isEmpty ? 'Versi aplikasi baru tersedia. Update APK sekarang?' : info.changelog),
+        actions: [
+          if (!info.force) TextButton(onPressed: ()=>Navigator.pop(c,false), child: const Text('Nanti')),
+          FilledButton(onPressed: ()=>Navigator.pop(c,true), child: const Text('Update')),
+        ],
+      ),
+    );
+    if (doUpdate != true || !mounted) return;
+
+    double progress = 0;
+    StateSetter? setP;
+    showDialog(context: context, barrierDismissible: false, builder: (c) => StatefulBuilder(builder: (c, sp){
+      setP = sp;
+      return AlertDialog(
+        title: const Text('Mengunduh update APK...'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           LinearProgressIndicator(value: progress <= 0 ? null : progress),
           const SizedBox(height: 8),
@@ -215,7 +275,7 @@ class _ShellScreenState extends State<ShellScreen> {
         context: context,
         barrierDismissible: !info.force,
         builder: (c) => AlertDialog(
-          title: const Text('Update siap dipasang'),
+          title: const Text('Update APK siap dipasang'),
           content: Text(
             info.changelog.isNotEmpty
                 ? 'Versi ${info.versionName} (build ${info.buildNumber}) siap dipasang.\n\n${info.changelog}'
@@ -230,7 +290,7 @@ class _ShellScreenState extends State<ShellScreen> {
     } catch (e) {
       if (mounted) {
         try { Navigator.of(context, rootNavigator: true).pop(); } catch (_) {}
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update gagal: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update APK gagal: $e')));
       }
     }
   }

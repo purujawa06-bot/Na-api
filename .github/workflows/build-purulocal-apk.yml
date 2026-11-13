@@ -184,14 +184,34 @@ jobs:
           sha256sum app-release.apk > app-release.apk.sha256
           cat app-release.apk.sha256
           HASH=$(awk '{print $1}' app-release.apk.sha256)
+          # runtime payload (backend+UI embed) agar update fitur/UI tidak wajib update APK
+          RUNTIME_SRC="../../../../android/app/src/main/jniLibs/arm64-v8a/libpurulocal.so"
+          if [ ! -f "$RUNTIME_SRC" ]; then RUNTIME_SRC="libpurulocal-arm64-v8a.so"; fi
+          if [ -f "$RUNTIME_SRC" ]; then
+            cp "$RUNTIME_SRC" libpurulocal-arm64-v8a.so
+          fi
+          RUNTIME_HASH=""
+          if [ -f "libpurulocal-arm64-v8a.so" ]; then
+            sha256sum libpurulocal-arm64-v8a.so > libpurulocal-arm64-v8a.so.sha256
+            cat libpurulocal-arm64-v8a.so.sha256
+            RUNTIME_HASH=$(awk '{print $1}' libpurulocal-arm64-v8a.so.sha256)
+          fi
           cat > update-manifest.json <<EOF
           {
             "app": "puruLocalBot",
             "versionName": "0.1.${{ github.run_number }}",
             "buildNumber": ${{ github.run_number }},
             "minBuild": 1,
+            "minShellBuild": 1,
             "apkUrl": "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/app-release.apk",
             "sha256": "${HASH}",
+            "runtimeVersion": ${{ github.run_number }},
+            "runtime": {
+              "arm64-v8a": {
+                "url": "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/libpurulocal-arm64-v8a.so",
+                "sha256": "${RUNTIME_HASH}"
+              }
+            },
             "force": false,
             "changelog": "Auto-update build #${{ github.run_number }} (commit ${{ github.sha }})"
           }
@@ -207,13 +227,15 @@ jobs:
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/update-manifest.json
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/libpurulocal-arm64-v8a.so
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/libpurulocal-arm64-v8a.so.sha256
 
       - name: Publish rolling experiment release (APK + manifest)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: purulocal-experiment
           name: puruLocal Bot (experiment)
-          body: "Rolling experiment build APK puruLocal Bot. Sesi bot berjalan lokal di perangkat."
+          body: "Rolling experiment build puruLocal Bot. Runtime (backend+UI) dapat di-update tanpa ganti APK; APK untuk first install/fallback/perubahan shell."
           draft: false
           prerelease: true
           make_latest: false
@@ -221,6 +243,8 @@ jobs:
           files: |
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/libpurulocal-arm64-v8a.so
+            purulocal-bot/flutter_app/build/app/outputs/flutter-apk/libpurulocal-arm64-v8a.so.sha256
             purulocal-bot/flutter_app/build/app/outputs/flutter-apk/update-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

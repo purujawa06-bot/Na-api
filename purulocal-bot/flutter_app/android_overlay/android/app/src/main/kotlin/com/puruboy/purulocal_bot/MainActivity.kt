@@ -1,4 +1,4 @@
-package com.puruboy.purulocal_bot
+﻿package com.puruboy.purulocal_bot
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -7,13 +7,48 @@ import android.os.Bundle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
+    private val CHANNEL = "purulocal/native"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestStoragePermissionIfNeeded()
         // Start backend as foreground service so it can keep running in background
         BackendService.ensureStarted(this)
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getRuntimeDir" -> {
+                    try {
+                        val dir = BackendService.getRuntimeBaseDir(this)
+                        dir.mkdirs()
+                        result.success(dir.absolutePath)
+                    } catch (e: Exception) {
+                        result.error("err", e.message, null)
+                    }
+                }
+                "getDeviceAbi" -> result.success(BackendService.getDeviceAbi())
+                "getInstalledRuntimeVersion" -> result.success(BackendService.getInstalledRuntimeVersion(this))
+                "restartBackend" -> {
+                    try { BackendService.restartBackend(); result.success(true) } catch (e: Exception) { result.error("err", e.message, null) }
+                }
+                "getAppVersionCode" -> {
+                    try {
+                        val pInfo = packageManager.getPackageInfo(packageName, 0)
+                        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode.toInt() else @Suppress("DEPRECATION") pInfo.versionCode
+                        result.success(code)
+                    } catch (e: Exception) { result.success(0) }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     private fun requestStoragePermissionIfNeeded() {

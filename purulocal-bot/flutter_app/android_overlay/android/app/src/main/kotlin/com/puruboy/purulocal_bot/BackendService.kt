@@ -1,4 +1,4 @@
-package com.puruboy.purulocal_bot
+﻿package com.puruboy.purulocal_bot
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import android.util.Log
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipFile
@@ -54,6 +55,28 @@ class BackendService : Service() {
             } catch (e: Exception) {
                 Log.e("puruLocal", "restartBackend failed", e)
             }
+        }
+
+        // === Runtime payload (launcher) helpers ===
+        fun getRuntimeBaseDir(ctx: Context): File {
+            val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+            return File(base, "purulocal-runtime")
+        }
+
+        fun getInstalledRuntimeVersion(ctx: Context): Int {
+            return try {
+                val f = File(getRuntimeBaseDir(ctx), "current/runtime.json")
+                if (!f.exists()) return 0
+                val j = JSONObject(f.readText())
+                j.optInt("version", 0)
+            } catch (_: Exception) { 0 }
+        }
+
+        fun getDeviceAbi(): String {
+            return try {
+                val abis = Build.SUPPORTED_ABIS
+                if (abis != null && abis.isNotEmpty()) abis[0] else Build.CPU_ABI ?: "arm64-v8a"
+            } catch (_: Exception) { "arm64-v8a" }
         }
     }
 
@@ -111,6 +134,19 @@ class BackendService : Service() {
     }
 
     private fun findBackendBinary(): File? {
+        // 1) Runtime payload terunduh (launcher): Android/data/<pkg>/files/purulocal-runtime/current/libpurulocal.so
+        try {
+            val runtimeCurrent = File(getRuntimeBaseDir(this), "current")
+            val runtimeBin = File(runtimeCurrent, "libpurulocal.so")
+            if (runtimeBin.exists()) {
+                ensureExecutable(runtimeBin)
+                Log.i("puruLocal", "Using runtime payload backend: ${runtimeBin.absolutePath}")
+                return runtimeBin
+            }
+        } catch (e: Exception) {
+            Log.w("puruLocal", "Runtime payload lookup failed", e)
+        }
+
         val nativeDir = applicationInfo.nativeLibraryDir
         val candidates = mutableListOf<File>()
         candidates.add(File(nativeDir, "libpurulocal.so"))
@@ -130,6 +166,11 @@ class BackendService : Service() {
         } catch (e: Exception) { Log.e("puruLocal", "Failed to extract backend from APK", e) }
         Log.e("puruLocal", "Backend binary not found. nativeLibraryDir=$nativeDir candidates=${candidates.map { it.absolutePath }}")
         return null
+    }
+
+    private fun ensureExecutable(f: File) {
+        try { f.setReadable(true, true); f.setExecutable(true, false) } catch (_: Exception) {}
+        try { Runtime.getRuntime().exec(arrayOf("chmod", "755", f.absolutePath)).waitFor() } catch (_: Exception) {}
     }
 
     private fun extractBackendFromApk(): File? {
@@ -153,9 +194,7 @@ class BackendService : Service() {
                         } else {
                             Log.i("puruLocal", "Using cached extracted backend: ${outFile.absolutePath}")
                         }
-                        outFile.setReadable(true, true)
-                        outFile.setExecutable(true, false)
-                        try { Runtime.getRuntime().exec(arrayOf("chmod", "755", outFile.absolutePath)).waitFor() } catch (_: Exception) {}
+                        ensureExecutable(outFile)
                         return outFile
                     }
                 }
@@ -191,10 +230,10 @@ class BackendService : Service() {
                 }
                 Log.i("puruLocal", "Starting local backend. nativeLibraryDir=${applicationInfo.nativeLibraryDir} sourceDir=${applicationInfo.sourceDir} abi=${Build.SUPPORTED_ABIS?.joinToString()}")
                 val bin = findBackendBinary() ?: run { Log.e("puruLocal", "No backend binary available"); return@Thread }
-                try { bin.setReadable(true, true); bin.setExecutable(true, false) } catch (_: Exception) {}
-                try { Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor() } catch (_: Exception) {}
+                ensureExecutable(bin)
                 Log.i("puruLocal", "Using backend binary: ${bin.absolutePath} exists=${bin.exists()} canExec=${bin.canExecute()} len=${bin.length()}")
 
+                // Sesi/data tetap di folder persisten (puruLocalBot) seperti sebelumnya
                 val dataDir = getPersistentDataDir(this)
                 if (!dataDir.exists()) dataDir.mkdirs()
                 migrateLegacyDataIfNeeded(dataDir)
