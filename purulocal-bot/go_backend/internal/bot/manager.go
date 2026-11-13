@@ -1029,6 +1029,71 @@ func (m *Manager) formatLogsForOwner() string {
 	return out
 }
 
+func menuSmallCaps(s string) string {
+	// konversi ke gaya teks submenu menu (small caps unicode) agar konsisten
+	s = strings.ToUpper(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case 'A':
+			b.WriteRune('\u1d00')
+		case 'B':
+			b.WriteRune('\u0299')
+		case 'C':
+			b.WriteRune('\u1d04')
+		case 'D':
+			b.WriteRune('\u1d05')
+		case 'E':
+			b.WriteRune('\u1d07')
+		case 'F':
+			b.WriteRune('\ua730')
+		case 'G':
+			b.WriteRune('\u0262')
+		case 'H':
+			b.WriteRune('\u029c')
+		case 'I':
+			b.WriteRune('\u026a')
+		case 'J':
+			b.WriteRune('\u1d0a')
+		case 'K':
+			b.WriteRune('\u1d0b')
+		case 'L':
+			b.WriteRune('\u029f')
+		case 'M':
+			b.WriteRune('\u1d0d')
+		case 'N':
+			b.WriteRune('\u0274')
+		case 'O':
+			b.WriteRune('\u1d0f')
+		case 'P':
+			b.WriteRune('\u1d18')
+		case 'Q':
+			b.WriteRune('\u01eb')
+		case 'R':
+			b.WriteRune('\u0280')
+		case 'S':
+			b.WriteRune('\ua731')
+		case 'T':
+			b.WriteRune('\u1d1b')
+		case 'U':
+			b.WriteRune('\u1d1c')
+		case 'V':
+			b.WriteRune('\u1d20')
+		case 'W':
+			b.WriteRune('\u1d21')
+		case 'X':
+			b.WriteRune('x')
+		case 'Y':
+			b.WriteRune('\u028f')
+		case 'Z':
+			b.WriteRune('\u1d22')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func (m *Manager) buildMenu(cfg Config) string {
 	lines := []string{
 		"╭─〔 " + cfg.BotName + " 〕",
@@ -1050,6 +1115,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 	// Kumpulkan custom commands (aktif) per kategori
 	if m.customCmds != nil {
 		catMap := map[string][]string{}
+		catLabel := map[string]string{}
 		catOrder := []string{}
 		for _, c := range m.customCmds.List() {
 			if !c.Enabled || strings.TrimSpace(c.Command) == "" {
@@ -1064,19 +1130,21 @@ func (m *Manager) buildMenu(cfg Config) string {
 			if _, ok := catMap[key]; !ok {
 				catOrder = append(catOrder, key)
 				catMap[key] = []string{}
+				catLabel[key] = menuSmallCaps(cat)
 			}
 			// menu: 1 command utama per entri, tanpa alias & tanpa penjelasan
 			catMap[key] = append(catMap[key], "│  • ."+cmdName)
 		}
-		for _, cat := range catOrder {
-			lines = append(lines, "│", "├─ "+cat)
-			lines = append(lines, catMap[cat]...)
+		for _, key := range catOrder {
+			lines = append(lines, "│", "├─ "+catLabel[key])
+			lines = append(lines, catMap[key]...)
 		}
 	}
 
 	// Kumpulkan plugin terpasang per kategori
 	if m.plugins != nil {
 		catMap := map[string][]string{}
+		catLabel := map[string]string{}
 		catOrder := []string{}
 		for _, p := range m.plugins.ListInstalled() {
 			if !p.Enabled || p.Command == "" {
@@ -1096,12 +1164,13 @@ func (m *Manager) buildMenu(cfg Config) string {
 			if _, ok := catMap[key]; !ok {
 				catOrder = append(catOrder, key)
 				catMap[key] = []string{}
+				catLabel[key] = menuSmallCaps(cat)
 			}
 			catMap[key] = append(catMap[key], "│  • "+label)
 		}
-		for _, cat := range catOrder {
-			lines = append(lines, "│", "├─ "+cat)
-			lines = append(lines, catMap[cat]...)
+		for _, key := range catOrder {
+			lines = append(lines, "│", "├─ "+catLabel[key])
+			lines = append(lines, catMap[key]...)
 		}
 	}
 
