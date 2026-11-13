@@ -50,6 +50,8 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("GET /api/vipcodes", s.handleVIPCodes)
 	mux.HandleFunc("POST /api/vipcodes/generate", s.handleVIPCodeGenerate)
 	mux.HandleFunc("POST /api/vipcodes/remove", s.handleVIPCodeRemove)
+	mux.HandleFunc("GET /api/logs", s.handleLogs)
+	mux.HandleFunc("POST /api/logs/clear", s.handleLogsClear)
 	mux.HandleFunc("GET /", s.handleStatic)
 	return s
 }
@@ -383,4 +385,21 @@ func (s *Server) handleVIPCodeRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "codes": s.mgr.VIP().ListCodes()})
+}
+
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	if s.mgr == nil || s.mgr.Logger() == nil {
+		writeJSON(w, 200, map[string]any{"ok": true, "logs": []any{}})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "logs": s.mgr.Logger().List()})
+}
+
+func (s *Server) handleLogsClear(w http.ResponseWriter, r *http.Request) {
+	if s.mgr == nil || s.mgr.Logger() == nil {
+		writeJSON(w, 200, map[string]any{"ok": true})
+		return
+	}
+	s.mgr.Logger().Clear()
+	writeJSON(w, 200, map[string]any{"ok": true})
 }

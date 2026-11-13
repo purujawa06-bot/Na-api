@@ -63,6 +63,7 @@ type Manager struct {
 	aiHist     *AIHistoryStore
 	customCmds *CustomCommandStore
 	vip        *VIPStore
+	logger     *Logger
 
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
@@ -100,6 +101,7 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 		aiHist:      ahist,
 		customCmds:  ccstore,
 		vip:         vstore,
+		logger:      NewLogger(300),
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
 	}, nil
@@ -161,6 +163,29 @@ func (m *Manager) Plugins() *PluginStore { return m.plugins }
 func (m *Manager) CustomCmds() *CustomCommandStore { return m.customCmds }
 
 func (m *Manager) VIP() *VIPStore { return m.vip }
+
+func (m *Manager) Logger() *Logger { return m.logger }
+
+func (m *Manager) logError(source, msg string) {
+	if m != nil && m.logger != nil {
+		m.logger.Error(source, msg)
+	}
+}
+
+func (m *Manager) logWarn(source, msg string) {
+	if m != nil && m.logger != nil {
+		m.logger.Warn(source, msg)
+	}
+}
+
+func truncateLog(s string, max int) string {
+	s = strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "..."
+}
 
 func (m *Manager) isFeatureAllowed(featureID, user string) bool {
 	if m.vip == nil || strings.TrimSpace(featureID) == "" {
@@ -350,9 +375,14 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if !ok {
 		return
 	}
+	// catat indikasi kegagalan dari hasil plugin/command untuk debug (mis. gagal download tiktok)
+	if txt := strings.TrimSpace(res.Reply + " " + res.Caption); txt != "" && strings.Contains(strings.ToLower(txt), "gagal") {
+		m.logWarn("command."+cmd, "reply mengindikasikan kegagalan: "+truncateLog(txt, 300))
+	}
 	// kirim video (mis. .tt/.tiktok): video siap putar + caption info (tanpa link)
 	if strings.TrimSpace(res.VideoURL) != "" {
 		if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
+			m.logError("send.video", "cmd="+cmd+" err="+err.Error())
 			fb := strings.TrimSpace(res.Caption)
 			if fb == "" {
 				fb = strings.TrimSpace(res.Reply)
@@ -374,6 +404,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 		time.Sleep(1 * time.Second)
 		if err := m.sendAudioFromURL(ctx, evt, res); err != nil {
+			m.logError("send.audio", "cmd="+cmd+" err="+err.Error())
 			// fallback teks jika gagal kirim audio
 			fb := info
 			if fb == "" {
@@ -766,6 +797,7 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 			hist = CompactIfNeeded(hist, 6000)
 			res, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, hist)
 			if err != nil {
+				m.logError("plugin."+cmd, err.Error())
 				return ExecResult{Reply: "Plugin error: " + err.Error()}, true
 			}
 			if ok {
@@ -780,6 +812,7 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		if res, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, nil); err == nil && ok {
 			return res, true
 		} else if err != nil {
+			m.logError("plugin."+cmd, err.Error())
 			return ExecResult{Reply: "Plugin error: " + err.Error()}, true
 		}
 	}

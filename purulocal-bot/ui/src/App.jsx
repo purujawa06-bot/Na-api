@@ -10,6 +10,7 @@ const PAGES = [
   { id: 'customcmd', title: 'Custom Command' },
   { id: 'features', title: 'Fitur' },
   { id: 'vipcode', title: 'VIP Code' },
+  { id: 'logger', title: 'Logger' },
   { id: 'settings', title: 'Settings' },
 ]
 
@@ -94,6 +95,10 @@ export default function App() {
   const [vipDurVal, setVipDurVal] = useState(1)
   const [vipDurUnit, setVipDurUnit] = useState('d')
   const [vipMaxUses, setVipMaxUses] = useState(1)
+
+  // logs
+  const [logs, setLogs] = useState([])
+  const [logsMsg, setLogsMsg] = useState({ text: '', err: false })
 
   const flash = (setter, text, err = false, ms = 1500) => {
     setter({ text, err })
@@ -371,6 +376,39 @@ export default function App() {
     if (d.ok) setVipCodes(d.codes || [])
   }
   useEffect(() => { if (page === 'vipcode') loadVipCodes() }, [page])
+
+  // logs
+  const loadLogs = async (silent = false) => {
+    try {
+      const d = await api('/api/logs')
+      if (d && d.ok && Array.isArray(d.logs)) setLogs(d.logs)
+      else if (!silent) setLogsMsg({ text: d.error || 'Gagal memuat log', err: true })
+    } catch (e) {
+      if (!silent) setLogsMsg({ text: 'Gagal memuat log', err: true })
+    }
+  }
+  useEffect(() => {
+    if (page !== 'logger') return
+    loadLogs(true)
+    const t = setInterval(() => loadLogs(true), 4000)
+    return () => clearInterval(t)
+  }, [page])
+
+  const copyLogs = async () => {
+    const text = logs.length ? logs.map(l => `[${l.time}] [${String(l.level || '').toUpperCase()}] [${l.source || '-'}] ${l.message || ''}`).join('\n') : '(log kosong)'
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text)
+      else { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t) }
+      flash(setLogsMsg, 'Log disalin.')
+    } catch {
+      setLogsMsg({ text: 'Gagal menyalin log', err: true })
+    }
+  }
+  const clearLogs = async () => {
+    const d = await api('/api/logs/clear', { method: 'POST' })
+    if (d && d.ok) { setLogs([]); flash(setLogsMsg, 'Log dibersihkan.') }
+    else setLogsMsg({ text: (d && d.error) || 'Gagal membersihkan log', err: true })
+  }
 
   const generateVipCode = async () => {
     const val = Math.max(1, parseInt(vipDurVal || 1, 10) || 1)
@@ -719,6 +757,34 @@ export default function App() {
                       <button className="small-btn primary" onClick={() => copyVipCode(raw)}>Salin</button>
                       <button className="small-btn danger" onClick={() => removeVipCode(raw)}>Hapus</button>
                     </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {page === 'logger' && (
+        <div className="page">
+          <div className="page-head">Logger</div>
+          <div className="card">
+            <div className="card-h"><div className="card-title">Log Error & Event</div></div>
+            <div className="muted mb8">Menampilkan log error/proses (mis. gagal download video TikTok) untuk membantu debug. Log bisa disalin.</div>
+            <div className="actions" style={{justifyContent:'flex-start', marginBottom:10}}>
+              <button className="small-btn" onClick={() => loadLogs(false)}>Refresh</button>
+              <button className="small-btn primary" onClick={copyLogs}>Salin Semua</button>
+              <button className="small-btn danger" onClick={clearLogs}>Bersihkan</button>
+            </div>
+            <div className={'msg' + (logsMsg.err ? ' err' : '')}>{logsMsg.text}</div>
+            <div style={{maxHeight: '55vh', overflow:'auto', border:'1px solid var(--border)', borderRadius:12, padding:10, background:'#0b0f14'}}>
+              {logs.length === 0 ? <span className="muted">Belum ada log.</span> : logs.slice().reverse().map((l, i) => {
+                const level = String(l.level || 'info').toUpperCase()
+                const color = level === 'ERROR' ? 'var(--danger)' : (level === 'WARN' ? 'var(--warn)' : 'var(--accent2)')
+                return (
+                  <div key={(l.time||'')+i} style={{padding:'8px 0', borderBottom:'1px solid var(--border)'}}>
+                    <div style={{fontSize:11, color:'var(--muted)', marginBottom:2}}>{l.time || ''} <span style={{color, fontWeight:700}}>[{level}]</span> <span>[{l.source || '-'}]</span></div>
+                    <div style={{fontSize:13, whiteSpace:'pre-wrap', wordBreak:'break-word'}}>{l.message || ''}</div>
                   </div>
                 )
               })}
