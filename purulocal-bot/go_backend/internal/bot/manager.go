@@ -567,21 +567,54 @@ func buildOwnerVCard(name, number string) string {
 }
 
 func isOwner(userKey, ownerNumber string) bool {
-	owner := normalizeNumber(ownerNumber)
-	if owner == "" {
-		return false
-	}
-	var b strings.Builder
-	for _, r := range userKey {
+	ownerDigits := ""
+	for _, r := range ownerNumber {
 		if r >= '0' && r <= '9' {
-			b.WriteRune(r)
+			ownerDigits += string(r)
 		}
 	}
-	u := b.String()
-	if u == "" {
+	if ownerDigits == "" {
 		return false
 	}
-	if u == owner || strings.Contains(u, owner) || strings.Contains(owner, u) {
+	// ambil bagian user dari JID (sebelum @) dan buang suffix device (:n)
+	uk := userKey
+	if i := strings.Index(uk, "@"); i >= 0 {
+		uk = uk[:i]
+	}
+	if i := strings.Index(uk, ":"); i >= 0 {
+		uk = uk[:i]
+	}
+	userDigits := ""
+	for _, r := range uk {
+		if r >= '0' && r <= '9' {
+			userDigits += string(r)
+		}
+	}
+	if userDigits == "" {
+		// fallback: semua digit dari key
+		for _, r := range userKey {
+			if r >= '0' && r <= '9' {
+				userDigits += string(r)
+			}
+		}
+	}
+	if userDigits == "" {
+		return false
+	}
+	// normalisasi: buang prefix 0 / 62 untuk bandingkan inti nomor
+	trim := func(s string) string {
+		s = strings.TrimLeft(s, "0")
+		s = strings.TrimPrefix(s, "62")
+		s = strings.TrimLeft(s, "0")
+		return s
+	}
+	uCore := trim(userDigits)
+	oCore := trim(ownerDigits)
+	if uCore != "" && oCore != "" && uCore == oCore {
+		return true
+	}
+	// fallback: kecocokan langsung/contains pada digit penuh
+	if userDigits == ownerDigits || strings.HasSuffix(userDigits, ownerDigits) || strings.HasSuffix(ownerDigits, userDigits) {
 		return true
 	}
 	return false
