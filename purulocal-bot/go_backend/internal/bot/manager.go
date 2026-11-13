@@ -368,7 +368,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 	}
 
-	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg)
+	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg, evt.Info.Sender.String(), evt.Info.SenderAlt.String(), "pn:"+evt.Info.PushName)
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
 	}
@@ -567,6 +567,10 @@ func buildOwnerVCard(name, number string) string {
 }
 
 func isOwner(userKey, ownerNumber string) bool {
+	return isOwnerAny(ownerNumber, userKey)
+}
+
+func isOwnerAny(ownerNumber string, userKeys ...string) bool {
 	ownerDigits := ""
 	for _, r := range ownerNumber {
 		if r >= '0' && r <= '9' {
@@ -576,46 +580,49 @@ func isOwner(userKey, ownerNumber string) bool {
 	if ownerDigits == "" {
 		return false
 	}
-	// ambil bagian user dari JID (sebelum @) dan buang suffix device (:n)
-	uk := userKey
-	if i := strings.Index(uk, "@"); i >= 0 {
-		uk = uk[:i]
-	}
-	if i := strings.Index(uk, ":"); i >= 0 {
-		uk = uk[:i]
-	}
-	userDigits := ""
-	for _, r := range uk {
-		if r >= '0' && r <= '9' {
-			userDigits += string(r)
-		}
-	}
-	if userDigits == "" {
-		// fallback: semua digit dari key
-		for _, r := range userKey {
-			if r >= '0' && r <= '9' {
-				userDigits += string(r)
-			}
-		}
-	}
-	if userDigits == "" {
-		return false
-	}
-	// normalisasi: buang prefix 0 / 62 untuk bandingkan inti nomor
 	trim := func(s string) string {
 		s = strings.TrimLeft(s, "0")
 		s = strings.TrimPrefix(s, "62")
 		s = strings.TrimLeft(s, "0")
 		return s
 	}
-	uCore := trim(userDigits)
 	oCore := trim(ownerDigits)
-	if uCore != "" && oCore != "" && uCore == oCore {
-		return true
-	}
-	// fallback: kecocokan langsung/contains pada digit penuh
-	if userDigits == ownerDigits || strings.HasSuffix(userDigits, ownerDigits) || strings.HasSuffix(ownerDigits, userDigits) {
-		return true
+	for _, userKey := range userKeys {
+		if strings.TrimSpace(userKey) == "" {
+			continue
+		}
+		// ambil bagian user dari JID (sebelum @) dan buang suffix device (:n)
+		uk := userKey
+		if i := strings.Index(uk, "@"); i >= 0 {
+			uk = uk[:i]
+		}
+		if i := strings.Index(uk, ":"); i >= 0 {
+			uk = uk[:i]
+		}
+		userDigits := ""
+		for _, r := range uk {
+			if r >= '0' && r <= '9' {
+				userDigits += string(r)
+			}
+		}
+		if userDigits == "" {
+			for _, r := range userKey {
+				if r >= '0' && r <= '9' {
+					userDigits += string(r)
+				}
+			}
+		}
+		if userDigits == "" {
+			continue
+		}
+		uCore := trim(userDigits)
+		if uCore != "" && oCore != "" && uCore == oCore {
+			return true
+		}
+		// fallback: kecocokan langsung/suffix pada digit penuh
+		if userDigits == ownerDigits || strings.HasSuffix(userDigits, ownerDigits) || strings.HasSuffix(ownerDigits, userDigits) {
+			return true
+		}
 	}
 	return false
 }
@@ -793,7 +800,7 @@ func parseCommand(text string) (cmd, args string) {
 	return cmd, args
 }
 
-func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config) (ExecResult, bool) {
+func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config, senderIDs ...string) (ExecResult, bool) {
 	switch cmd {
 	case "ping":
 		if !m.isFeatureAllowed("builtin:ping", userKey) {
@@ -834,17 +841,45 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		if !m.isFeatureAllowed("builtin:stats", userKey) {
 			return m.vipDeniedReply(), true
 		}
+		debugLines := []string{}
+		pushName := ""
+		senderID := ""
+		senderAltID := ""
+		if len(senderIDs) > 0 {
+			senderID = senderIDs[0]
+		}
+		if len(senderIDs) > 1 {
+			senderAltID = senderIDs[1]
+		}
+		if len(senderIDs) > 2 && strings.HasPrefix(senderIDs[2], "pn:") {
+			pushName = strings.TrimPrefix(senderIDs[2], "pn:")
+		}
+		debugLines = append(debugLines, "UserKey: "+userKey)
+		if senderID != "" {
+			debugLines = append(debugLines, "Sender: "+senderID)
+		}
+		if senderAltID != "" {
+			debugLines = append(debugLines, "SenderAlt: "+senderAltID)
+		}
+		if strings.TrimSpace(pushName) != "" {
+			debugLines = append(debugLines, "Username: "+strings.TrimSpace(pushName))
+		}
+		debugBlock := "\n\n*Debug*\n" + strings.Join(debugLines, "\n")
 		if m.vip == nil {
-			return ExecResult{Reply: "*Status:* Bukan VIP"}, true
+			return ExecResult{Reply: "*Status:* Bukan VIP" + debugBlock}, true
 		}
 		ok, exp := m.vip.IsUserVIP(userKey, time.Now())
 		if !ok {
-			return ExecResult{Reply: "*Status:* Bukan VIP"}, true
+			return ExecResult{Reply: "*Status:* Bukan VIP" + debugBlock}, true
 		}
 		remain := exp - time.Now().Unix()
-		return ExecResult{Reply: "*Status:* VIP\n*Sisa:* " + formatRemaining(remain)}, true
+		return ExecResult{Reply: "*Status:* VIP\n*Sisa:* " + formatRemaining(remain) + debugBlock}, true
 	case "logs":
-		if !isOwner(userKey, cfg.OwnerNumber) {
+		ids := senderIDs
+		if len(ids) == 0 {
+			ids = []string{userKey}
+		}
+		if !isOwnerAny(cfg.OwnerNumber, ids...) {
 			return ExecResult{Reply: "Perintah ini khusus owner."}, true
 		}
 		return ExecResult{Reply: m.formatLogsForOwner()}, true
