@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"strings"
 	"time"
@@ -11,8 +12,10 @@ import (
 	"purulocal-bot/internal/bot"
 )
 
-//go:embed static/*
+//go:embed all:static
 var staticFS embed.FS
+
+var staticContent, _ = fs.Sub(staticFS, "static")
 
 type Server struct {
 	addr string
@@ -24,7 +27,6 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux := http.NewServeMux()
 	s := &Server{addr: addr, mgr: mgr, srv: &http.Server{Addr: addr, Handler: mux}}
 
-	mux.HandleFunc("GET /", s.handleIndex)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/config", s.handleGetConfig)
 	mux.HandleFunc("POST /api/config", s.handleSaveConfig)
@@ -48,6 +50,7 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("GET /api/vipcodes", s.handleVIPCodes)
 	mux.HandleFunc("POST /api/vipcodes/generate", s.handleVIPCodeGenerate)
 	mux.HandleFunc("POST /api/vipcodes/remove", s.handleVIPCodeRemove)
+	mux.HandleFunc("GET /", s.handleStatic)
 	return s
 }
 
@@ -67,8 +70,24 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	b, err := staticFS.ReadFile("static/index.html")
+func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
+	if staticContent == nil {
+		http.Error(w, "ui not found", 500)
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	if path == "" {
+		path = "index.html"
+	}
+	// serve existing static file (assets, etc.), otherwise SPA fallback to index.html
+	if f, err := staticContent.Open(path); err == nil {
+		_ = f.Close()
+		if info, err2 := fs.Stat(staticContent, path); err2 == nil && !info.IsDir() {
+			http.FileServer(http.FS(staticContent)).ServeHTTP(w, r)
+			return
+		}
+	}
+	b, err := fs.ReadFile(staticContent, "index.html")
 	if err != nil {
 		http.Error(w, "ui not found", 500)
 		return

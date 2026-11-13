@@ -3,6 +3,8 @@ flutter_app/android/
 flutter_app/android_overlay/android/app/src/main/jniLibs/
 flutter_app/build/
 dist/
+ui/dist/
+ui/node_modules/
 go_backend/data/
 go_backend/config.json
 *.apk
