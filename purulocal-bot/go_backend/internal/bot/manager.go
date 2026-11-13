@@ -368,7 +368,36 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 	}
 
-	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg, evt.Info.Sender.String(), evt.Info.SenderAlt.String(), "pn:"+evt.Info.PushName)
+	// kumpulkan kandidat ID pengirim (termasuk resolusi LID<->PN) untuk owner/debug
+	senderIDs := []string{userKey, evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
+	resolvedPN := ""
+	resolvedLID := ""
+	if c := m.client; c != nil && c.Store != nil {
+		tryResolve := func(j types.JID) {
+			if j.IsEmpty() {
+				return
+			}
+			if alt, err := c.Store.GetAltJID(ctx, j); err == nil && !alt.IsEmpty() {
+				s := alt.String()
+				senderIDs = append(senderIDs, s)
+				if alt.Server == types.DefaultUserServer || alt.Server == "s.whatsapp.net" {
+					resolvedPN = s
+				} else if alt.Server == types.HiddenUserServer || alt.Server == "lid" {
+					resolvedLID = s
+				}
+			}
+		}
+		tryResolve(evt.Info.Sender)
+		tryResolve(evt.Info.SenderAlt)
+		if evt.Info.Sender.Server == types.DefaultUserServer {
+			resolvedPN = evt.Info.Sender.String()
+		}
+		if evt.Info.SenderAlt.Server == types.DefaultUserServer && resolvedPN == "" {
+			resolvedPN = evt.Info.SenderAlt.String()
+		}
+	}
+	senderIDs = append(senderIDs, "pn:"+evt.Info.PushName, "resolved_pn:"+resolvedPN, "resolved_lid:"+resolvedLID)
+	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg, senderIDs...)
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
 	}
@@ -845,14 +874,27 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		pushName := ""
 		senderID := ""
 		senderAltID := ""
-		if len(senderIDs) > 0 {
-			senderID = senderIDs[0]
-		}
-		if len(senderIDs) > 1 {
-			senderAltID = senderIDs[1]
-		}
-		if len(senderIDs) > 2 && strings.HasPrefix(senderIDs[2], "pn:") {
-			pushName = strings.TrimPrefix(senderIDs[2], "pn:")
+		resolvedPN := ""
+		resolvedLID := ""
+		for _, id := range senderIDs {
+			switch {
+			case strings.HasPrefix(id, "pn:"):
+				if pushName == "" {
+					pushName = strings.TrimPrefix(id, "pn:")
+				}
+			case strings.HasPrefix(id, "resolved_pn:"):
+				if resolvedPN == "" {
+					resolvedPN = strings.TrimPrefix(id, "resolved_pn:")
+				}
+			case strings.HasPrefix(id, "resolved_lid:"):
+				if resolvedLID == "" {
+					resolvedLID = strings.TrimPrefix(id, "resolved_lid:")
+				}
+			case senderID == "":
+				senderID = id
+			case senderAltID == "" && id != senderID:
+				senderAltID = id
+			}
 		}
 		debugLines = append(debugLines, "UserKey: "+userKey)
 		if senderID != "" {
@@ -860,6 +902,12 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		}
 		if senderAltID != "" {
 			debugLines = append(debugLines, "SenderAlt: "+senderAltID)
+		}
+		if resolvedPN != "" {
+			debugLines = append(debugLines, "ResolvedPN: "+resolvedPN)
+		}
+		if resolvedLID != "" {
+			debugLines = append(debugLines, "ResolvedLID: "+resolvedLID)
 		}
 		if strings.TrimSpace(pushName) != "" {
 			debugLines = append(debugLines, "Username: "+strings.TrimSpace(pushName))
