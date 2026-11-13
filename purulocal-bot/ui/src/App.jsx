@@ -19,6 +19,7 @@ function catClass(cat) {
   const c = String(cat || '').toLowerCase()
   if (c === 'music') return 'tag music'
   if (c === 'ai') return 'tag ai'
+  if (c === 'downloader') return 'tag downloader'
   return 'tag'
 }
 function formatDur(sec) {
