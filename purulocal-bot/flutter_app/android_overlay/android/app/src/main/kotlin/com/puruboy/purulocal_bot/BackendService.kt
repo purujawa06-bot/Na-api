@@ -18,6 +18,13 @@ import java.util.zip.ZipFile
 
 class BackendService : Service() {
     companion object {
+        fun hasRuntimePayload(ctx: Context): Boolean {
+            return try {
+                val runtimeBin = File(getRuntimeBaseDir(ctx), "current/libpurulocal.so")
+                runtimeBin.exists() && runtimeBin.isFile && runtimeBin.length() > 1024
+            } catch (_: Exception) { false }
+        }
+
         const val CHANNEL_ID = "purulocal_backend"
         const val NOTIF_ID = 1001
         @Volatile var backendProcess: Process? = null
@@ -190,13 +197,6 @@ class BackendService : Service() {
             }
         }
         return null
-    }
-
-    fun hasRuntimePayload(ctx: Context): Boolean {
-        return try {
-            val runtimeBin = File(getRuntimeBaseDir(ctx), "current/libpurulocal.so")
-            isValidBackendBinary(runtimeBin)
-        } catch (_: Exception) { false }
     }
 
     private fun findBackendBinary(): File? {
