@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -329,6 +330,8 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if cfg.LoadingReact {
 		m.sendReaction(ctx, evt, "⏳")
 		defer func() {
+			// jeda acak 500-1000ms agar penghapusan react tidak terlihat spam
+			time.Sleep(time.Duration(500+rand.IntN(501)) * time.Millisecond)
 			rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer rcancel()
 			m.sendReaction(rctx, evt, "")
