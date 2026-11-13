@@ -40,7 +40,8 @@ class BackendService : Service() {
 
         fun restartBackend() {
             try {
-                val svc = instance ?: return
+                val svc = instance
+                if (svc == null) return
                 try { backendProcess?.destroy() } catch (_: Exception) {}
                 backendProcess = null
                 Thread {
@@ -54,6 +55,23 @@ class BackendService : Service() {
                 }.start()
             } catch (e: Exception) {
                 Log.e("puruLocal", "restartBackend failed", e)
+            }
+        }
+
+        fun startBackend(ctx: Context) {
+            try {
+                ensureStarted(ctx)
+                val svc = instance
+                if (svc != null) {
+                    svc.startLocalBackend(force = true)
+                } else {
+                    val i = Intent(ctx, BackendService::class.java).putExtra("cmd", "start")
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i) else ctx.startService(i)
+                    } catch (_: Exception) {}
+                }
+            } catch (e: Exception) {
+                Log.e("puruLocal", "startBackend failed", e)
             }
         }
 
@@ -86,8 +104,13 @@ class BackendService : Service() {
         super.onCreate()
         instance = this
         createChannel()
-        startForeground(NOTIF_ID, buildNotification("puruLocal Bot berjalan"))
-        startLocalBackend()
+        startForeground(NOTIF_ID, buildNotification("puruLocal Bot"))
+        // Launcher murni: backend dijalankan setelah runtime siap (dipicu oleh shell/Flutter)
+        if (hasRuntimePayload(this)) {
+            startLocalBackend()
+        } else {
+            Log.i("puruLocal", "Runtime payload belum tersedia, menunggu unduhan")
+        }
     }
 
     override fun onDestroy() {
@@ -96,8 +119,14 @@ class BackendService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (backendProcess == null || backendProcess?.isAlive != true) {
-            startLocalBackend()
+        val cmd = intent?.getStringExtra("cmd")
+        if (cmd == "start" || cmd == "restart") {
+            startLocalBackend(force = true)
+        } else if (backendProcess == null || backendProcess?.isAlive != true) {
+            // coba start bila runtime/binary tersedia
+            if (hasRuntimePayload(this) || findBackendBinary() != null) {
+                startLocalBackend()
+            }
         }
         return START_STICKY
     }
@@ -163,9 +192,16 @@ class BackendService : Service() {
         return null
     }
 
+    fun hasRuntimePayload(ctx: Context): Boolean {
+        return try {
+            val runtimeBin = File(getRuntimeBaseDir(ctx), "current/libpurulocal.so")
+            isValidBackendBinary(runtimeBin)
+        } catch (_: Exception) { false }
+    }
+
     private fun findBackendBinary(): File? {
-        // 1) Runtime payload terunduh (launcher): disimpan di Android/data/<pkg>/files/purulocal-runtime/current/
-        //    (sesuai permintaan) namun dieksekusi dari salinan di lokasi internal yang executable.
+        // 1) Runtime payload terunduh (launcher murni): disimpan di Android/data/<pkg>/files/purulocal-runtime/current/
+        //    namun dieksekusi dari salinan di lokasi internal yang executable (external bisa noexec).
         try {
             val runtimeCurrent = File(getRuntimeBaseDir(this), "current")
             val runtimeBin = File(runtimeCurrent, "libpurulocal.so")
@@ -175,14 +211,15 @@ class BackendService : Service() {
                     Log.i("puruLocal", "Using runtime payload backend: src=${runtimeBin.absolutePath} exec=${execBin.absolutePath} len=${runtimeBin.length()}")
                     return execBin
                 }
-                Log.w("puruLocal", "Could not prepare executable copy of runtime payload, fallback to bundled")
+                Log.w("puruLocal", "Could not prepare executable copy of runtime payload")
             } else if (runtimeBin.exists()) {
-                Log.w("puruLocal", "Runtime payload binary invalid, fallback to bundled: ${runtimeBin.absolutePath} len=${runtimeBin.length()}")
+                Log.w("puruLocal", "Runtime payload binary invalid: ${runtimeBin.absolutePath} len=${runtimeBin.length()}")
             }
         } catch (e: Exception) {
             Log.w("puruLocal", "Runtime payload lookup failed", e)
         }
 
+        // 2) Fallback kompatibilitas (APK lama yang masih membundel binary)
         val nativeDir = applicationInfo.nativeLibraryDir
         val candidates = mutableListOf<File>()
         candidates.add(File(nativeDir, "libpurulocal.so"))
@@ -200,7 +237,7 @@ class BackendService : Service() {
             val extracted = extractBackendFromApk()
             if (isValidBackendBinary(extracted)) return extracted
         } catch (e: Exception) { Log.e("puruLocal", "Failed to extract backend from APK", e) }
-        Log.e("puruLocal", "Backend binary not found. nativeLibraryDir=$nativeDir candidates=${candidates.map { it.absolutePath }}")
+        Log.w("puruLocal", "Backend binary not found (runtime belum diunduh?). nativeLibraryDir=$nativeDir")
         return null
     }
 

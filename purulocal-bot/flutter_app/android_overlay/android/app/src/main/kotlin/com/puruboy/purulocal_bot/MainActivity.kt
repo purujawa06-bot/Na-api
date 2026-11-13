@@ -17,7 +17,7 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestStoragePermissionIfNeeded()
-        // Start backend as foreground service so it can keep running in background
+        // Start foreground service; backend runtime akan dijalankan setelah payload siap (launcher flow)
         BackendService.ensureStarted(this)
     }
 
@@ -36,6 +36,10 @@ class MainActivity : FlutterActivity() {
                 }
                 "getDeviceAbi" -> result.success(BackendService.getDeviceAbi())
                 "getInstalledRuntimeVersion" -> result.success(BackendService.getInstalledRuntimeVersion(this))
+                "hasRuntimePayload" -> result.success(BackendService.hasRuntimePayload(this))
+                "startBackend" -> {
+                    try { BackendService.startBackend(this); result.success(true) } catch (e: Exception) { result.error("err", e.message, null) }
+                }
                 "restartBackend" -> {
                     try { BackendService.restartBackend(); result.success(true) } catch (e: Exception) { result.error("err", e.message, null) }
                 }
@@ -81,7 +85,9 @@ class MainActivity : FlutterActivity() {
                     i < grantResults.size && grantResults[i] == PackageManager.PERMISSION_GRANTED
             }
             if (storageGranted) {
-                try { BackendService.restartBackend() } catch (_: Exception) {}
+                try {
+                    if (BackendService.hasRuntimePayload(this)) BackendService.restartBackend()
+                } catch (_: Exception) {}
             }
         }
     }

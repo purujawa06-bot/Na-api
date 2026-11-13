@@ -1,0 +1,133 @@
+﻿name: Build puruLocal Runtime (.so)
+# Update UI/fitur/backend runtime tanpa membangun/memperbarui APK.
+# APK hanya untuk perubahan arsitektur/shell (lihat workflow build-purulocal-apk).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-purulocal-runtime.yml'
+      - 'purulocal-bot/go_backend/**'
+      - 'purulocal-bot/ui/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: purulocal-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Build UI (embed) if present
+        working-directory: purulocal-bot/ui
+        run: |
+          if [ -f package.json ]; then
+            npm ci 2>/dev/null || npm install
+            npm run build
+            rm -rf ../go_backend/internal/web/static/*
+            cp -R dist/* ../go_backend/internal/web/static/
+          fi
+
+      - name: Build Go backend (host check)
+        working-directory: purulocal-bot/go_backend
+        run: |
+          go mod tidy
+          go build ./...
+
+      - name: Build Go backend runtime for Android (arm64)
+        working-directory: purulocal-bot/go_backend
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p ../runtime-out
+          go build -trimpath -ldflags="-s -w" -o ../runtime-out/libpurulocal-arm64-v8a.so ./cmd/purulocal
+          ls -lh ../runtime-out/
+
+      - name: Prepare runtime manifest
+        working-directory: purulocal-bot/runtime-out
+        run: |
+          sha256sum libpurulocal-arm64-v8a.so > libpurulocal-arm64-v8a.so.sha256
+          cat libpurulocal-arm64-v8a.so.sha256
+          RUNTIME_HASH=$(awk '{print $1}' libpurulocal-arm64-v8a.so.sha256)
+          curl -fsSL "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json" -o prev-manifest.json || echo '{}' > prev-manifest.json
+          export RUNTIME_HASH
+          python3 - <<'PY'
+          import json, os
+          run = int(os.environ.get('GITHUB_RUN_NUMBER', '0') or '0')
+          sha_env = os.environ.get('GITHUB_SHA','')
+          rhash = os.environ.get('RUNTIME_HASH','')
+          prev = {}
+          try:
+            with open('prev-manifest.json','r',encoding='utf-8') as f:
+              prev = json.load(f) or {}
+          except Exception:
+            prev = {}
+          # versi runtime harus monoton naik
+          prev_rv = int(prev.get('runtimeVersion') or 0)
+          runtime_version = max(run, prev_rv + 1)
+          m = dict(prev) if isinstance(prev, dict) else {}
+          m.update({
+            "app": "puruLocalBot",
+            "runtimeVersion": runtime_version,
+            "runtime": {
+              "arm64-v8a": {
+                "url": "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/libpurulocal-arm64-v8a.so",
+                "sha256": rhash
+              }
+            },
+            "force": False,
+            "changelog": f"Runtime update (UI/fitur) #{runtime_version} (commit {sha_env})"
+          })
+          # pastikan field APK minimal ada (launcher rilis terpisah)
+          m.setdefault("versionName", prev.get("versionName","0.1.0"))
+          m.setdefault("buildNumber", int(prev.get("buildNumber") or 1))
+          m.setdefault("minBuild", int(prev.get("minBuild") or 1))
+          m.setdefault("minShellBuild", int(prev.get("minShellBuild") or m.get("buildNumber") or 1))
+          m.setdefault("apkUrl", prev.get("apkUrl","https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/app-release.apk"))
+          m.setdefault("sha256", prev.get("sha256",""))
+          with open('update-manifest.json','w',encoding='utf-8') as f:
+            json.dump(m, f, indent=2)
+            f.write('\n')
+          print(json.dumps(m, indent=2))
+          PY
+
+      - name: Upload runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: puruLocal-runtime
+          path: |
+            purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so
+            purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so.sha256
+            purulocal-bot/runtime-out/update-manifest.json
+
+      - name: Publish rolling runtime release (no APK)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: purulocal-experiment
+          name: puruLocal Bot (experiment)
+          body: "Rolling runtime puruLocal Bot (backend+UI). Diunduh otomatis oleh launcher tanpa update APK."
+          draft: false
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: |
+            purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so
+            purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so.sha256
+            purulocal-bot/runtime-out/update-manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
