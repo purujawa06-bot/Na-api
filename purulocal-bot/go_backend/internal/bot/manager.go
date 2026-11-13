@@ -325,6 +325,16 @@ func (m *Manager) onMessage(evt *events.Message) {
 		return
 	}
 
+	// react emoji saat memproses command (opsional)
+	if cfg.LoadingReact {
+		m.sendReaction(ctx, evt, "⏳")
+		defer func() {
+			rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer rcancel()
+			m.sendReaction(rctx, evt, "")
+		}()
+	}
+
 	// typing status sebelum membalas command
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, true)
@@ -471,6 +481,17 @@ func (m *Manager) sendTyping(ctx context.Context, chat types.JID, composing bool
 		state = types.ChatPresenceComposing
 	}
 	_ = c.SendChatPresence(ctx, chat, state, types.ChatPresenceMediaText)
+}
+
+func (m *Manager) sendReaction(ctx context.Context, evt *events.Message, emoji string) {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil || evt == nil {
+		return
+	}
+	msg := c.BuildReaction(evt.Info.Chat, evt.Info.Sender, evt.Info.ID, emoji)
+	_, _ = c.SendMessage(ctx, evt.Info.Chat, msg)
 }
 
 func (m *Manager) markRead(ctx context.Context, evt *events.Message) {

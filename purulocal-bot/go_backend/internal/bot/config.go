@@ -22,6 +22,7 @@ type Config struct {
 	TypingBeforeReply bool    `json:"typing_before_reply"`  // bot status mengetik sebelum membalas command
 	TypingDelaySec    float64 `json:"typing_delay_sec"`     // detik (default 1.5)
 	AntiSpam          bool    `json:"anti_spam"`            // deteksi spam: pesan beruntun cepat -> ban sementara
+	LoadingReact      bool    `json:"loading_react"`        // react emoji saat memproses command
 	AISystemPrompt    string  `json:"ai_system_prompt,omitempty"` // system prompt untuk command .ai
 	// Watermark/copyright sticker (.s/.sticker)
 	StickerPack   string `json:"sticker_pack,omitempty"`
@@ -29,7 +30,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{BotName: "puruLocal Bot", BlockSelfChat: true, ReadChat: false, TypingBeforeReply: true, TypingDelaySec: 1.5, AntiSpam: true}
+	return Config{BotName: "puruLocal Bot", BlockSelfChat: true, ReadChat: false, TypingBeforeReply: true, TypingDelaySec: 1.5, AntiSpam: true, LoadingReact: false}
 }
 
 func (c *Config) Normalize() {

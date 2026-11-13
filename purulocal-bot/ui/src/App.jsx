@@ -67,7 +67,7 @@ export default function App() {
   // settings/ai/sticker forms
   const [settings, setSettings] = useState({
     bot_name: 'puruLocal Bot', owner_name: 'Owner', owner_number: '', bot_number: '',
-    block_self_chat: true, read_chat: false, typing_before_reply: true, anti_spam: true,
+    block_self_chat: true, read_chat: false, typing_before_reply: true, anti_spam: true, loading_react: false,
     ai_system_prompt: '', sticker_pack: '', sticker_author: ''
   })
   const [settingsMsg, setSettingsMsg] = useState({ text: '', err: false })
@@ -123,6 +123,7 @@ export default function App() {
         read_chat: !!c.read_chat,
         typing_before_reply: c.typing_before_reply !== false,
         anti_spam: c.anti_spam !== false,
+        loading_react: !!c.loading_react,
         ai_system_prompt: c.ai_system_prompt || '',
         sticker_pack: c.sticker_pack || '',
         sticker_author: c.sticker_author || '',
@@ -181,6 +182,7 @@ export default function App() {
       typing_before_reply: settings.typing_before_reply,
       typing_delay_sec: c.typing_delay_sec || 1.5,
       anti_spam: settings.anti_spam,
+      loading_react: !!settings.loading_react,
       update_manifest_url: c.update_manifest_url || '',
       ai_system_prompt: settings.ai_system_prompt || '',
       sticker_pack: settings.sticker_pack || '',
@@ -226,7 +228,7 @@ export default function App() {
       owner_number: owner, bot_number: bot || owner,
       block_self_chat: c.block_self_chat !== false, read_chat: !!c.read_chat,
       typing_before_reply: c.typing_before_reply !== false, typing_delay_sec: c.typing_delay_sec || 1.5,
-      anti_spam: c.anti_spam !== false, update_manifest_url: c.update_manifest_url || '',
+      anti_spam: c.anti_spam !== false, loading_react: !!c.loading_react, update_manifest_url: c.update_manifest_url || '',
       ai_system_prompt: c.ai_system_prompt || '', sticker_pack: c.sticker_pack || '', sticker_author: c.sticker_author || '',
     }
     const d = await api('/api/config', { method: 'POST', body: JSON.stringify(body) })
@@ -813,6 +815,7 @@ export default function App() {
             <div className="row"><div className="l"><div className="t">Bot read chat</div><div className="d">Tandai pesan masuk sebagai dibaca</div></div><label className="switch"><input type="checkbox" checked={settings.read_chat} onChange={onField('read_chat')} /><span className="slider" /></label></div>
             <div className="row"><div className="l"><div className="t">Bot status mengetik</div><div className="d">Ketik 1.5 detik sebelum membalas command</div></div><label className="switch"><input type="checkbox" checked={settings.typing_before_reply} onChange={onField('typing_before_reply')} /><span className="slider" /></label></div>
             <div className="row"><div className="l"><div className="t">Anti-spam</div><div className="d">Ban 10 detik jika user mengirim pesan beruntun cepat (&lt;500 ms)</div></div><label className="switch"><input type="checkbox" checked={settings.anti_spam} onChange={onField('anti_spam')} /><span className="slider" /></label></div>
+            <div className="row"><div className="l"><div className="t">Loading react</div><div className="d">Beri react emoji ⏳ pada pesan command saat bot sedang memproses, lalu hapus setelah selesai</div></div><label className="switch"><input type="checkbox" checked={settings.loading_react} onChange={onField('loading_react')} /><span className="slider" /></label></div>
           </div>
           <div className="card">
             <div className="card-h"><div className="card-title">Aplikasi</div></div>
