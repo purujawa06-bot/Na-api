@@ -219,6 +219,7 @@ func (m *Manager) ListAllFeatures() []FeatureItem {
 		{"builtin:sticker", "Sticker", "sticker"},
 		{"builtin:vip", "VIP Redeem", "vip"},
 		{"builtin:stats", "Stats", "stats"},
+		{"builtin:logs", "Logs", "logs"},
 	}
 	for _, b := range builtins {
 		items = append(items, FeatureItem{ID: b.id, Name: b.name, Command: b.cmd, Type: "builtin", VIP: isVIP(b.id)})
@@ -1041,6 +1042,9 @@ func (m *Manager) buildMenu(cfg Config) string {
 		"│",
 		"├─ ꜱᴛɪᴄᴋᴇʀ",
 		"│  • .sticker",
+		"│",
+		"├─ ᴏᴡɴᴇʀ",
+		"│  • .logs",
 	}
 
 	// Kumpulkan custom commands (aktif) per kategori
