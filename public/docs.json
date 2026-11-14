@@ -561,9 +561,9 @@
       ]
     },
     {
-      "title": "JJ CapCut Generator",
-      "summary": "Generate video JJ (CapCut template) dari foto via cc.fgsi.dpdns.org.",
-      "description": "Mengunggah foto ke layanan JJ Capcut (cc.fgsi.dpdns.org) dan\n              menghasilkan video dari template CapCut. Endpoint otomatis\n              memilih template secara acak yang jumlah slot fotonya sesuai\n              dengan jumlah foto yang diunggah. Jumlah foto tidak boleh\n              melebihi slot terbanyak dari template yang tersedia. Proses\n              render membutuhkan waktu (beberapa menit) dan tautan hasil\n              (download_url) bertoken/bermasa berlaku — simpan/unduh segera.",
+      "title": "JJ CapCut Generator (Create Job)",
+      "summary": "Buat job generate video JJ (CapCut template) dari foto via cc.fgsi.dpdns.org.",
+      "description": "Mengunggah foto ke layanan JJ Capcut (cc.fgsi.dpdns.org) dan\n              membuat job render video dari template CapCut secara asinkron.\n              Endpoint otomatis memilih template secara acak yang jumlah slot\n              fotonya sesuai dengan jumlah foto yang diunggah. Jumlah foto\n              tidak boleh melebihi slot terbanyak dari template yang tersedia.\n              Respons mengembalikan `job_id`; gunakan endpoint GET untuk cek\n              status/hasil. Tautan hasil (`download_url`) bertoken/bermasa berlaku.",
       "method": "POST",
       "path": "/api/downloader/jj",
       "responseType": "json",

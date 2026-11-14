@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -25,6 +27,7 @@ const (
 	jjMaxPhotoBytes = 15 << 20 // 15 MB, selaras batas situs
 	jjRenderTimeout = 8 * time.Minute
 	jjPollInterval  = 5 * time.Second
+	jjJobTTL        = 30 * time.Minute
 )
 
 // jjTemplate describes one CapCut template scraped from the JJ site.
@@ -43,18 +46,137 @@ type jjPhoto struct {
 	Data []byte
 }
 
+type jjJob struct {
+	ID          string      `json:"id"`
+	Status      string      `json:"status"` // processing|selesai|gagal|timeout|error
+	Success     bool        `json:"success"`
+	Source      string      `json:"source"`
+	Template    *jjTemplate `json:"template,omitempty"`
+	PhotoCount  int         `json:"photo_count"`
+	DownloadURL string      `json:"download_url,omitempty"`
+	ViewAction  string      `json:"view_action,omitempty"`
+	TaskText    string      `json:"task_text,omitempty"`
+	Error       string      `json:"error,omitempty"`
+	Note        string      `json:"note,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+}
+
 var (
+	jjJobsMu sync.RWMutex
+	jjJobs   = map[string]*jjJob{}
+
 	reJJSlots = regexp.MustCompile(`(?i)(\d+)\s*foto`)
 	reJJRatio = regexp.MustCompile(`(?i)\b(\d+:\d+)\b`)
 	reJJView  = regexp.MustCompile(`/view/(\d+)`)
+	reJJID    = regexp.MustCompile(`^\d+$`)
 )
 
+func jjNewID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("jj%d", time.Now().UnixNano())
+	}
+	return "jj_" + hex.EncodeToString(b)
+}
+
+func jjStoreJob(job *jjJob) {
+	jjJobsMu.Lock()
+	// cleanup expired
+	now := time.Now()
+	for id, j := range jjJobs {
+		if now.Sub(j.UpdatedAt) > jjJobTTL {
+			delete(jjJobs, id)
+		}
+	}
+	jjJobs[job.ID] = job
+	jjJobsMu.Unlock()
+}
+
+func jjGetJob(id string) *jjJob {
+	jjJobsMu.RLock()
+	j, ok := jjJobs[id]
+	jjJobsMu.RUnlock()
+	if !ok {
+		return nil
+	}
+	return j
+}
+
+func jjUpdateJob(id string, fn func(*jjJob)) {
+	jjJobsMu.Lock()
+	if j, ok := jjJobs[id]; ok {
+		fn(j)
+		j.UpdatedAt = time.Now()
+	}
+	jjJobsMu.Unlock()
+}
+
+func jjJobSnapshot(j *jjJob) map[string]any {
+	jjJobsMu.RLock()
+	defer jjJobsMu.RUnlock()
+	resp := map[string]any{
+		"success":     j.Success,
+		"job_id":      j.ID,
+		"status":      j.Status,
+		"source":      j.Source,
+		"photo_count": j.PhotoCount,
+		"created_at":  j.CreatedAt.Format(time.RFC3339),
+		"updated_at":  j.UpdatedAt.Format(time.RFC3339),
+	}
+	if j.Template != nil {
+		resp["template"] = j.Template
+	}
+	if j.DownloadURL != "" {
+		resp["download_url"] = j.DownloadURL
+	}
+	if j.ViewAction != "" {
+		resp["view_action"] = j.ViewAction
+	}
+	if j.TaskText != "" {
+		resp["task_text"] = j.TaskText
+	}
+	if j.Error != "" {
+		resp["error"] = j.Error
+	}
+	if j.Note != "" {
+		resp["note"] = j.Note
+	}
+	return resp
+}
+
+// jjPOST creates a JJ generation job (async). Use GET ?id=... to fetch status/result.
 func (h *handler) jjPOST(w http.ResponseWriter, r *http.Request) {
-	status, payload := h.produceJJ(r)
+	status, payload := h.createJJJob(r)
 	httpx.JSON(w, status, payload)
 }
 
-func (h *handler) produceJJ(r *http.Request) (int, any) {
+// jjGET returns status/result of a JJ generation job.
+func (h *handler) jjGET(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		id = strings.TrimSpace(r.URL.Query().Get("job_id"))
+	}
+	if id == "" {
+		httpx.JSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"error":   "Parameter id (job_id) wajib diisi",
+		})
+		return
+	}
+	job := jjGetJob(id)
+	if job == nil {
+		httpx.JSON(w, http.StatusNotFound, map[string]any{
+			"success": false,
+			"error":   "Job tidak ditemukan atau sudah kedaluwarsa",
+			"job_id":  id,
+		})
+		return
+	}
+	httpx.JSON(w, http.StatusOK, jjJobSnapshot(job))
+}
+
+func (h *handler) createJJJob(r *http.Request) (int, any) {
 	// multipart body: field file "photos"/"files"/"file" (multiple), opsional "template_id".
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		return http.StatusBadRequest, map[string]any{
@@ -70,7 +192,7 @@ func (h *handler) produceJJ(r *http.Request) (int, any) {
 	if templateID == "" {
 		templateID = strings.TrimSpace(r.FormValue("template"))
 	}
-	if templateID != "" && !regexp.MustCompile(`^\d+$`).MatchString(templateID) {
+	if templateID != "" && !reJJID.MatchString(templateID) {
 		return http.StatusBadRequest, map[string]any{
 			"success": false,
 			"error":   "template_id tidak valid",
@@ -88,10 +210,11 @@ func (h *handler) produceJJ(r *http.Request) (int, any) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), jjRenderTimeout+2*time.Minute)
-	defer cancel()
+	// fetch templates & validate/pick synchronously so client gets fast feedback
+	ctxPick, cancelPick := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancelPick()
 
-	templates, err := jjFetchTemplates(ctx)
+	templates, err := jjFetchTemplates(ctxPick)
 	if err != nil {
 		return http.StatusFailedDependency, map[string]any{
 			"success": false,
@@ -131,41 +254,57 @@ func (h *handler) produceJJ(r *http.Request) (int, any) {
 		}
 	}
 
-	result, genErr := jjGenerate(ctx, selected, photos)
-	if genErr != nil {
-		return http.StatusFailedDependency, map[string]any{
-			"success":  false,
-			"error":    genErr.Error(),
-			"template": selected,
-			"source":   jjBaseURL,
-		}
+	now := time.Now()
+	job := &jjJob{
+		ID:         jjNewID(),
+		Status:     "processing",
+		Success:    false,
+		Source:     jjBaseURL,
+		Template:   &selected,
+		PhotoCount: len(photos),
+		Note:       "Render berjalan di latar; cek status via GET ?id=. Tautan hasil bertoken/bermasa berlaku.",
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
+	jjStoreJob(job)
 
-	status := "selesai"
-	if !result.Done {
-		if result.Failed {
-			status = "gagal"
-		} else {
-			status = "timeout"
-		}
-	}
+	go jjRunJob(job.ID, selected, photos)
 
-	resp := map[string]any{
-		"success":      result.Done && result.DownloadURL != "",
-		"source":       jjBaseURL,
-		"status":       status,
-		"template":     selected,
-		"photo_count":  len(photos),
-		"task_text":    result.TaskText,
-		"download_url": result.DownloadURL,
-		"view_action":  result.ViewURL,
-		"note":         "Tautan hasil bertoken/bermasa berlaku; simpan/unduh segera.",
-	}
-	if !result.Done {
-		// tetap 200 dengan status timeout/gagal agar klien bisa baca detail; success=false.
-		return http.StatusOK, resp
-	}
-	return http.StatusOK, resp
+	return http.StatusAccepted, jjJobSnapshot(job)
+}
+
+func jjRunJob(id string, tpl jjTemplate, photos []jjPhoto) {
+	ctx, cancel := context.WithTimeout(context.Background(), jjRenderTimeout+2*time.Minute)
+	defer cancel()
+
+	result, genErr := jjGenerate(ctx, tpl, photos)
+	jjUpdateJob(id, func(j *jjJob) {
+		if genErr != nil {
+			j.Status = "error"
+			j.Success = false
+			j.Error = genErr.Error()
+			return
+		}
+		j.TaskText = result.TaskText
+		j.ViewAction = result.ViewURL
+		j.DownloadURL = result.DownloadURL
+		switch {
+		case result.Done && result.DownloadURL != "":
+			j.Status = "selesai"
+			j.Success = true
+			j.Note = "Tautan hasil bertoken/bermasa berlaku; simpan/unduh segera."
+		case result.Failed:
+			j.Status = "gagal"
+			j.Success = false
+			if j.Error == "" {
+				j.Error = "Proses render gagal"
+			}
+		default:
+			j.Status = "timeout"
+			j.Success = false
+			j.Error = "Timeout menunggu hasil render"
+		}
+	})
 }
 
 // collectJJPhotos reads uploaded image files from multipart form.

@@ -24,6 +24,7 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("POST /api/downloader/instagram", h.instagramPOST)
 	mux.HandleFunc("GET /api/downloader/tiktok", h.tiktokGET)
 	mux.HandleFunc("POST /api/downloader/tiktok", h.tiktokPOST)
+	mux.HandleFunc("GET /api/downloader/jj", h.jjGET)
 	mux.HandleFunc("POST /api/downloader/jj", h.jjPOST)
 	mux.HandleFunc("GET /api/downloader/youtube", h.youtubeGET)
 	mux.HandleFunc("POST /api/downloader/youtube", h.youtubePOST)
