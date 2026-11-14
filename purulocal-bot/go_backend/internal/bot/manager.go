@@ -867,7 +867,12 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 		req.Header.Set("Referer", "https://www.tiktok.com/")
 		req.Header.Set("Origin", "https://www.tiktok.com")
 	}
-	hc := &http.Client{Timeout: 120 * time.Second}
+	// CDN CapCut/evercloud kadang lebih stabil dengan header referer umum
+	if strings.Contains(res.VideoURL, "capcut") || strings.Contains(res.VideoURL, "evercloud") || strings.Contains(res.VideoURL, "byteimg") || strings.Contains(res.VideoURL, "bytedance") {
+		req.Header.Set("Referer", "https://www.capcut.com/")
+		req.Header.Set("Origin", "https://www.capcut.com")
+	}
+	hc := &http.Client{Timeout: 180 * time.Second}
 	resp, err := hc.Do(req)
 	if err != nil {
 		return err
@@ -876,37 +881,81 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("download video: HTTP %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20)) // batas ~50MB
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 100<<20)) // batas ~100MB
 	if err != nil {
 		return err
 	}
 	if len(data) == 0 {
 		return fmt.Errorf("video kosong (HTTP %d, ct=%s)", resp.StatusCode, strings.TrimSpace(resp.Header.Get("Content-Type")))
 	}
-	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
-	if err != nil {
-		return err
-	}
 	mime := strings.TrimSpace(res.Mimetype)
 	if mime == "" {
-		mime = "video/mp4"
+		ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+		if i := strings.Index(ct, ";"); i >= 0 {
+			ct = strings.TrimSpace(ct[:i])
+		}
+		if strings.HasPrefix(ct, "video/") {
+			mime = ct
+		} else {
+			mime = http.DetectContentType(data)
+			if !strings.HasPrefix(mime, "video/") {
+				mime = "video/mp4"
+			}
+		}
 	}
 	caption := strings.TrimSpace(res.Caption)
 	if caption == "" {
 		caption = strings.TrimSpace(res.Reply)
 	}
-	video := &waE2E.VideoMessage{
-		URL:           proto.String(uploaded.URL),
-		DirectPath:    proto.String(uploaded.DirectPath),
-		MediaKey:      uploaded.MediaKey,
+
+	// coba kirim sebagai video
+	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
+	if err == nil {
+		video := &waE2E.VideoMessage{
+			URL:           proto.String(uploaded.URL),
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String(mime),
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
+			FileLength:    proto.Uint64(uint64(len(data))),
+			Caption:       proto.String(caption),
+			ContextInfo:   buildReplyContext(evt),
+		}
+		if _, sendErr := c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{VideoMessage: video}); sendErr == nil {
+			return nil
+		}
+		// jika send gagal, coba fallback dokumen di bawah
+	}
+
+	// fallback: kirim sebagai dokumen (lebih andal untuk beberapa format/ukuran)
+	upDoc, err2 := c.Upload(ctx, data, whatsmeow.MediaDocument)
+	if err2 != nil {
+		if err != nil {
+			return err
+		}
+		return err2
+	}
+	fileName := "video-jj.mp4"
+	if !strings.Contains(mime, "mp4") && strings.Contains(mime, "/") {
+		parts := strings.Split(mime, "/")
+		if len(parts) == 2 && parts[1] != "" {
+			fileName = "video-jj." + parts[1]
+		}
+	}
+	doc := &waE2E.DocumentMessage{
+		URL:           proto.String(upDoc.URL),
+		DirectPath:    proto.String(upDoc.DirectPath),
+		MediaKey:      upDoc.MediaKey,
 		Mimetype:      proto.String(mime),
-		FileEncSHA256: uploaded.FileEncSHA256,
-		FileSHA256:    uploaded.FileSHA256,
+		FileEncSHA256: upDoc.FileEncSHA256,
+		FileSHA256:    upDoc.FileSHA256,
 		FileLength:    proto.Uint64(uint64(len(data))),
+		FileName:      proto.String(fileName),
 		Caption:       proto.String(caption),
 		ContextInfo:   buildReplyContext(evt),
 	}
-	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{VideoMessage: video})
+	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{DocumentMessage: doc})
 	return err
 }
 
