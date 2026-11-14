@@ -390,7 +390,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		if !cfg.LoadingReact || reacted {
 			return
 		}
-		m.sendReaction(ctx, evt, "â³")
+		m.sendReaction(ctx, evt, "⏳")
 		reacted = true
 	}
 
@@ -1197,26 +1197,26 @@ func (m *Manager) buildMenu(cfg Config) string {
 		botName = "PuruBot"
 	}
 	var b strings.Builder
-	b.WriteString("â•­â”€ã€” " + botName + " ã€•\n")
-	b.WriteString("â”‚\n")
-	b.WriteString("â”œâ”€ á´œá´á´œá´\n")
-	b.WriteString("â”‚  â€¢ .ping\n")
-	b.WriteString("â”‚  â€¢ .menu\n")
-	b.WriteString("â”‚  â€¢ .owner\n")
-	b.WriteString("â”‚  â€¢ .vip\n")
-	b.WriteString("â”‚  â€¢ .stats\n")
-	b.WriteString("â”‚\n")
-	b.WriteString("â”œâ”€ êœ±á´›Éªá´„á´‹á´‡Ê€\n")
-	b.WriteString("â”‚  â€¢ .sticker\n")
-	b.WriteString("â”‚\n")
-	b.WriteString("â”œâ”€ á´Šá´Š\n")
-	b.WriteString("â”‚  â€¢ .jj\n")
-	b.WriteString("â”‚  â€¢ .jjgc\n")
-	b.WriteString("â”‚  â€¢ .pilih\n")
-	b.WriteString("â”‚  â€¢ .reset\n")
-	b.WriteString("â”‚\n")
-	b.WriteString("â”œâ”€ á´á´¡É´á´‡Ê€\n")
-	b.WriteString("â”‚  â€¢ .logs\n")
+	b.WriteString("╭─〔 " + botName + " 〕\n")
+	b.WriteString("│\\n")
+	b.WriteString("├─ ᴜᴍᴜᴍ\\n")
+	b.WriteString("│  • .ping\\n")
+	b.WriteString("│  • .menu\\n")
+	b.WriteString("│  • .owner\\n")
+	b.WriteString("│  • .vip\\n")
+	b.WriteString("│  • .stats\\n")
+	b.WriteString("│\\n")
+	b.WriteString("├─ ꜱᴛɪᴄᴋᴇʀ\\n")
+	b.WriteString("│  • .sticker\\n")
+	b.WriteString("│\\n")
+	b.WriteString("├─ ᴊᴊ\\n")
+	b.WriteString("│  • .jj\\n")
+	b.WriteString("│  • .jjgc\\n")
+	b.WriteString("│  • .pilih\\n")
+	b.WriteString("│  • .reset\\n")
+	b.WriteString("│\\n")
+	b.WriteString("├─ ᴏᴡɴᴇʀ\\n")
+	b.WriteString("│  • .logs\\n")
 
 	// Custom commands (aktif) per kategori
 	if m.customCmds != nil {
@@ -1238,11 +1238,11 @@ func (m *Manager) buildMenu(cfg Config) string {
 				catMap[key] = []string{}
 				catLabel[key] = menuSmallCaps(cat)
 			}
-			catMap[key] = append(catMap[key], "â”‚  â€¢ ."+cmdName)
+			catMap[key] = append(catMap[key], "│  • ."+cmdName)
 		}
 		for _, key := range catOrder {
-			b.WriteString("â”‚\n")
-			b.WriteString("â”œâ”€ " + catLabel[key] + "\n")
+			b.WriteString("│\\n")
+			b.WriteString("├─ " + catLabel[key] + "\n")
 			for _, line := range catMap[key] {
 				b.WriteString(line + "\n")
 			}
@@ -1270,7 +1270,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 				cat = "Downloader"
 			}
 			key := strings.ToUpper(cat)
-			label := "â”‚  â€¢ ." + cmdName
+			label := "│  • ." + cmdName
 			if _, ok := catMap[key]; !ok {
 				catOrder = append(catOrder, key)
 				catMap[key] = []string{}
@@ -1279,25 +1279,25 @@ func (m *Manager) buildMenu(cfg Config) string {
 			catMap[key] = append(catMap[key], label)
 		}
 		for _, key := range catOrder {
-			b.WriteString("â”‚\n")
-			b.WriteString("â”œâ”€ " + catLabel[key] + "\n")
+			b.WriteString("│\\n")
+			b.WriteString("├─ " + catLabel[key] + "\n")
 			for _, line := range catMap[key] {
 				b.WriteString(line + "\n")
 			}
 		}
 	}
 
-	b.WriteString("â”‚\n")
-	b.WriteString("â”œâ”€ É¢Ê€á´á´œá´˜ á´á´€É´á´€É¢á´‡á´á´‡É´á´›\n")
-	b.WriteString("â”‚  â€¢ .antilink on/off\n")
-	b.WriteString("â”‚  â€¢ .welcome on/off\n")
-	b.WriteString("â”‚  â€¢ .setwelcome <text>\n")
-	b.WriteString("â”‚  â€¢ .goodbye on/off\n")
-	b.WriteString("â”‚  â€¢ .setgoodbye <text>\n")
-	b.WriteString("â”‚  â€¢ .tagall <text>\n")
-	b.WriteString("â”‚  â€¢ .hidetag <text>\n")
-	b.WriteString("â”‚\n")
-	b.WriteString("â•°â”€â”€â”€â”€â”€â”€â”€â”€")
+	b.WriteString("│\\n")
+	b.WriteString("├─ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ\\n")
+	b.WriteString("│  • .antilink on/off\\n")
+	b.WriteString("│  • .welcome on/off\\n")
+	b.WriteString("│  • .setwelcome <text>\\n")
+	b.WriteString("│  • .goodbye on/off\\n")
+	b.WriteString("│  • .setgoodbye <text>\\n")
+	b.WriteString("│  • .tagall <text>\\n")
+	b.WriteString("│  • .hidetag <text>\\n")
+	b.WriteString("│\\n")
+	b.WriteString("╰────────")
 	return b.String()
 }
 
