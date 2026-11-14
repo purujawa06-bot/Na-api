@@ -642,7 +642,7 @@
     {
       "title": "TikTok Downloader",
       "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
-      "description": "Mengambil link download video TikTok tanpa watermark beserta\n              metadata (author, avatar, caption) dan link MP3. Hanya menerima\n              URL HTTPS dari domain tiktok.com.",
+      "description": "Mengambil link download video TikTok tanpa watermark beserta\n              metadata (author, avatar, caption) dan link MP3. Hanya menerima\n              URL HTTPS dari domain tiktok.com. Mendukung GET (query url) dan POST (body url).",
       "method": "GET",
       "path": "/api/downloader/tiktok",
       "responseType": "json",
@@ -651,24 +651,6 @@
         {
           "name": "url",
           "in": "query",
-          "type": "string",
-          "description": "URL video TikTok (wajib, https only).",
-          "required": true
-        }
-      ]
-    },
-    {
-      "title": "TikTok Downloader",
-      "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
-      "description": "Mengambil link download video TikTok tanpa watermark beserta\n              metadata (author, avatar, caption) dan link MP3. Hanya menerima\n              URL HTTPS dari domain tiktok.com.",
-      "method": "POST",
-      "path": "/api/downloader/tiktok",
-      "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/tiktok', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ url: 'https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534' })\n }).then(res => res.json()).then(console.log);",
-      "params": [
-        {
-          "name": "url",
-          "in": "body",
           "type": "string",
           "description": "URL video TikTok (wajib, https only).",
           "required": true

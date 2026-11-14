@@ -3,7 +3,7 @@
  * @summary Download video TikTok tanpa watermark (via ssstik.io).
  * @description Mengambil link download video TikTok tanpa watermark beserta
  *              metadata (author, avatar, caption) dan link MP3. Hanya menerima
- *              URL HTTPS dari domain tiktok.com.
+ *              URL HTTPS dari domain tiktok.com. Mendukung GET (query url) dan POST (body url).
  * @method GET
  * @path /api/downloader/tiktok
  * @param {string} query.url - URL video TikTok (wajib, https only).
@@ -12,24 +12,6 @@
  * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/tiktok?url=https%3A%2F%2Fwww.tiktok.com%2F%40agungdarmawn_%2Fvideo%2F7374017020418870534')
  *     .then(res => res.json())
  *     .then(console.log);
- */
-
-/**
- * @title TikTok Downloader
- * @summary Download video TikTok tanpa watermark (via ssstik.io).
- * @description Mengambil link download video TikTok tanpa watermark beserta
- *              metadata (author, avatar, caption) dan link MP3. Hanya menerima
- *              URL HTTPS dari domain tiktok.com.
- * @method POST
- * @path /api/downloader/tiktok
- * @param {string} body.url - URL video TikTok (wajib, https only).
- * @response json
- * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/tiktok', {
- *   method: 'POST',
- *   headers: { 'Content-Type': 'application/json' },
- *   body: JSON.stringify({ url: 'https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534' })
- * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { downloadTiktok } from '../../../../lib/ssstik.js';
