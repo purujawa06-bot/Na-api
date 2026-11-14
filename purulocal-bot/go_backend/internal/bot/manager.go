@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -65,6 +66,7 @@ type Manager struct {
 	customCmds *CustomCommandStore
 	vip        *VIPStore
 	logger     *Logger
+	group      *GroupSettingsStore
 
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
@@ -95,6 +97,10 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	gstore, err := NewGroupSettingsStore(filepath.Join(dataDir, "group_settings.json"))
+	if err != nil {
+		return nil, err
+	}
 	return &Manager{
 		cfgStore:    cfgStore,
 		dataDir:     dataDir,
@@ -103,6 +109,7 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 		customCmds:  ccstore,
 		vip:         vstore,
 		logger:      NewLogger(300),
+		group:       gstore,
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
 	}, nil
@@ -167,6 +174,8 @@ func (m *Manager) VIP() *VIPStore { return m.vip }
 
 func (m *Manager) Logger() *Logger { return m.logger }
 
+func (m *Manager) GroupSettings() *GroupSettingsStore { return m.group }
+
 func (m *Manager) logError(source, msg string) {
 	if m != nil && m.logger != nil {
 		m.logger.Error(source, msg)
@@ -220,6 +229,13 @@ func (m *Manager) ListAllFeatures() []FeatureItem {
 		{"builtin:vip", "VIP Redeem", "vip"},
 		{"builtin:stats", "Stats", "stats"},
 		{"builtin:logs", "Logs", "logs"},
+		{"builtin:antilink", "Antilink", "antilink"},
+		{"builtin:welcome", "Welcome", "welcome"},
+		{"builtin:setwelcome", "Set Welcome", "setwelcome"},
+		{"builtin:goodbye", "Goodbye", "goodbye"},
+		{"builtin:setgoodbye", "Set Goodbye", "setgoodbye"},
+		{"builtin:tagall", "Tagall", "tagall"},
+		{"builtin:hidetag", "Hidetag", "hidetag"},
 	}
 	for _, b := range builtins {
 		items = append(items, FeatureItem{ID: b.id, Name: b.name, Command: b.cmd, Type: "builtin", VIP: isVIP(b.id)})
@@ -276,6 +292,8 @@ func (m *Manager) eventHandler(evt interface{}) {
 	case *events.Message:
 		// proses command secara bersamaan (tidak mengantri) agar user berbeda bisa paralel
 		go m.onMessage(v)
+	case *events.GroupInfo:
+		go m.onGroupInfo(v)
 	case *events.Disconnected:
 		m.mu.Lock()
 		m.status.LastError = "disconnected"
@@ -320,6 +338,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 
 	text := extractText(evt)
 	if text == "" {
+		return
+	}
+	// Antilink (grup): deteksi & tindak sebelum memproses command
+	if evt.Info.IsGroup && m.enforceAntilink(evt, text) {
 		return
 	}
 	cmd, args := parseCommand(text)
@@ -378,6 +400,20 @@ func (m *Manager) onMessage(evt *events.Message) {
 				return
 			}
 			m.handleCustomCommand(ctx, evt, cc)
+			return
+		}
+	}
+
+	// group management commands (butuh konteks evt/chat)
+	if isGroupMgmtCommand(cmd) {
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		senderIDsBasic := []string{userKey, evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
+		if res, ok := m.handleGroupMgmtCommand(ctx, evt, cmd, args, userKey, cfg, senderIDsBasic...); ok {
+			if strings.TrimSpace(res.Reply) != "" {
+				_ = m.sendReply(ctx, evt, res.Reply)
+			}
 			return
 		}
 	}
@@ -1174,6 +1210,20 @@ func (m *Manager) buildMenu(cfg Config) string {
 		}
 	}
 
+	// Group management (submenu)
+	gmHeader := "├─ " + menuSmallCaps("GROUP MANAGEMENT")
+	lines = append(lines,
+		"│",
+		gmHeader,
+		"│  • .antilink on/off",
+		"│  • .welcome on/off",
+		"│  • .setwelcome <text>",
+		"│  • .goodbye on/off",
+		"│  • .setgoodbye <text>",
+		"│  • .tagall <text>",
+		"│  • .hidetag <text>",
+	)
+
 	lines = append(lines, "│", "╰────────")
 	return strings.Join(lines, "\n")
 }
@@ -1347,4 +1397,359 @@ func (m *Manager) SelfJID() *types.JID {
 		return m.client.Store.ID
 	}
 	return nil
+}
+
+
+// ===== Group management helpers & commands =====
+
+var antilinkRegex = regexp.MustCompile(`(?i)(https?://\S+|www\.\S+|chat\.whatsapp\.com/\S*|wa\.me/\S+|t\.me/\S+|bit\.ly/\S+)`)
+
+func isGroupMgmtCommand(cmd string) bool {
+	switch strings.ToLower(strings.TrimSpace(cmd)) {
+	case "antilink", "welcome", "setwelcome", "goodbye", "setgoodbye", "tagall", "hidetag":
+		return true
+	}
+	return false
+}
+
+func hasLink(text string) bool {
+	return antilinkRegex.MatchString(strings.TrimSpace(text))
+}
+
+func (m *Manager) isGroupAdmin(ctx context.Context, chat, sender types.JID) bool {
+	if chat.IsEmpty() || sender.IsEmpty() {
+		return false
+	}
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return false
+	}
+	info, err := c.GetGroupInfo(ctx, chat)
+	if err != nil || info == nil {
+		return false
+	}
+	sUser := sender.User
+	for _, p := range info.Participants {
+		if p.JID.User == sUser || p.JID.String() == sender.String() {
+			if p.IsAdmin || p.IsSuperAdmin {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m *Manager) getGroupParticipants(ctx context.Context, chat types.JID) ([]types.JID, error) {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return nil, errors.New("client not ready")
+	}
+	info, err := c.GetGroupInfo(ctx, chat)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, errors.New("info grup tidak ditemukan")
+	}
+	out := make([]types.JID, 0, len(info.Participants))
+	for _, p := range info.Participants {
+		if !p.JID.IsEmpty() {
+			out = append(out, p.JID)
+		}
+	}
+	return out, nil
+}
+
+func (m *Manager) canManageGroup(ctx context.Context, evt *events.Message, cfg Config, senderIDs ...string) (bool, string) {
+	if evt == nil || !evt.Info.IsGroup {
+		return false, "*「 GROUP 」*\n\nPerintah ini hanya dapat digunakan di dalam grup."
+	}
+	if isOwnerAny(cfg.OwnerNumber, senderIDs...) {
+		return true, ""
+	}
+	if m.isGroupAdmin(ctx, evt.Info.Chat, evt.Info.Sender) {
+		return true, ""
+	}
+	return false, "*「 AKSES DITOLAK 」*\n\nPerintah ini khusus admin grup atau owner."
+}
+
+func (m *Manager) sendTextWithMentions(ctx context.Context, to types.JID, text string, mentions []types.JID) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+	if len(mentions) == 0 {
+		_, err := c.SendMessage(ctx, to, &waE2E.Message{Conversation: proto.String(text)})
+		return err
+	}
+	ms := make([]string, 0, len(mentions))
+	seen := map[string]bool{}
+	for _, j := range mentions {
+		s := j.String()
+		if strings.TrimSpace(s) == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		ms = append(ms, s)
+	}
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(text),
+			ContextInfo: &waE2E.ContextInfo{
+				MentionedJID: ms,
+			},
+		},
+	}
+	_, err := c.SendMessage(ctx, to, msg)
+	return err
+}
+
+func renderGroupTemplate(tpl string, user types.JID, groupName string) string {
+	tag := "@" + user.User
+	if strings.TrimSpace(user.User) == "" {
+		tag = "@" + strings.Split(user.String(), "@")[0]
+	}
+	tpl = strings.ReplaceAll(tpl, "@user", tag)
+	tpl = strings.ReplaceAll(tpl, "{user}", tag)
+	tpl = strings.ReplaceAll(tpl, "{name}", tag)
+	tpl = strings.ReplaceAll(tpl, "{group}", groupName)
+	return strings.TrimSpace(tpl)
+}
+
+func groupNameFromInfo(info *types.GroupInfo, fallback types.JID) string {
+	if info != nil {
+		if strings.TrimSpace(info.Name) != "" {
+			return info.Name
+		}
+	}
+	return fallback.User
+}
+
+func (m *Manager) onGroupInfo(evt *events.GroupInfo) {
+	if m == nil || evt == nil || m.IsPaused() || m.group == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	chat := evt.JID
+	gs := m.group.Get(chat.String())
+
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	groupName := chat.User
+	if c != nil {
+		if info, err := c.GetGroupInfo(ctx, chat); err == nil && info != nil {
+			groupName = groupNameFromInfo(info, chat)
+		}
+	}
+
+	// Welcome: join/add
+	if gs.Welcome.Enabled && len(evt.Join) > 0 {
+		for _, u := range evt.Join {
+			if u.IsEmpty() {
+				continue
+			}
+			tpl := strings.TrimSpace(gs.Welcome.Text)
+			if tpl == "" {
+				tpl = "*「 WELCOME 」*\n\nHalo @user, selamat datang di *{group}*!\nJangan lupa baca deskripsi grup ya."
+			}
+			msg := renderGroupTemplate(tpl, u, groupName)
+			_ = m.sendTextWithMentions(ctx, chat, msg, []types.JID{u})
+		}
+	}
+
+	// Goodbye: leave/remove
+	if gs.Goodbye.Enabled && len(evt.Leave) > 0 {
+		for _, u := range evt.Leave {
+			if u.IsEmpty() {
+				continue
+			}
+			tpl := strings.TrimSpace(gs.Goodbye.Text)
+			if tpl == "" {
+				tpl = "*「 GOODBYE 」*\n\n@user telah keluar dari *{group}*. Sampai jumpa!"
+			}
+			msg := renderGroupTemplate(tpl, u, groupName)
+			_ = m.sendTextWithMentions(ctx, chat, msg, []types.JID{u})
+		}
+	}
+}
+
+func (m *Manager) enforceAntilink(evt *events.Message, text string) bool {
+	if evt == nil || !evt.Info.IsGroup || strings.TrimSpace(text) == "" || m.group == nil {
+		return false
+	}
+	gs := m.group.Get(evt.Info.Chat.String())
+	if !gs.Antilink || !hasLink(text) {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	cfg := m.Config()
+	senderIDs := []string{evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
+	if isOwnerAny(cfg.OwnerNumber, senderIDs...) || m.isGroupAdmin(ctx, evt.Info.Chat, evt.Info.Sender) {
+		return false
+	}
+
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return false
+	}
+
+	revoked := false
+	rev := c.BuildRevoke(evt.Info.Chat, evt.Info.Sender, evt.Info.ID)
+	if rev != nil {
+		if _, err := c.SendMessage(ctx, evt.Info.Chat, rev); err == nil {
+			revoked = true
+		}
+	}
+
+	mention := "@" + evt.Info.Sender.User
+	warn := "*「 ANTILINK 」*\n\nTerdeteksi " + mention + " mengirim link.\n"
+	if revoked {
+		warn += "Pesan dihapus karena antilink aktif."
+	} else {
+		warn += "Antilink aktif. (Bot gagal menghapus pesan, pastikan bot admin.)"
+	}
+	_ = m.sendTextWithMentions(ctx, evt.Info.Chat, warn, []types.JID{evt.Info.Sender})
+	return true
+}
+
+func onOffArg(args string) (bool, bool) {
+	a := strings.ToLower(strings.TrimSpace(args))
+	switch a {
+	case "on", "1", "true", "enable", "aktif":
+		return true, true
+	case "off", "0", "false", "disable", "nonaktif", "mati":
+		return false, true
+	}
+	return false, false
+}
+
+func statusWord(on bool) string {
+	if on {
+		return "*AKTIF*"
+	}
+	return "*NONAKTIF*"
+}
+
+func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Message, cmd, args, userKey string, cfg Config, senderIDs ...string) (ExecResult, bool) {
+	cmd = strings.ToLower(strings.TrimSpace(cmd))
+	if !isGroupMgmtCommand(cmd) {
+		return ExecResult{}, false
+	}
+
+	// VIP/feature gate untuk builtin terkait
+	feat := "builtin:" + cmd
+	if !m.isFeatureAllowed(feat, userKey) {
+		return m.vipDeniedReply(), true
+	}
+
+	if ok, deny := m.canManageGroup(ctx, evt, cfg, senderIDs...); !ok {
+		return ExecResult{Reply: deny}, true
+	}
+	if m.group == nil {
+		return ExecResult{Reply: "*「 GROUP 」*\n\nFitur group management tidak tersedia."}, true
+	}
+
+	chatID := evt.Info.Chat.String()
+	switch cmd {
+	case "antilink":
+		if on, ok := onOffArg(args); ok {
+			gs, err := m.group.SetAntilink(chatID, on)
+			if err != nil {
+				return ExecResult{Reply: "*「 ANTILINK 」*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
+			}
+			return ExecResult{Reply: "*「 ANTILINK 」*\n\nStatus: " + statusWord(gs.Antilink)}, true
+		}
+		gs := m.group.Get(chatID)
+		return ExecResult{Reply: "*「 ANTILINK 」*\n\nStatus: " + statusWord(gs.Antilink) + "\n\n*Penggunaan:*\n.antilink on/off"}, true
+	case "welcome":
+		if on, ok := onOffArg(args); ok {
+			gs, err := m.group.SetWelcomeEnabled(chatID, on)
+			if err != nil {
+				return ExecResult{Reply: "*「 WELCOME 」*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
+			}
+			return ExecResult{Reply: "*「 WELCOME 」*\n\nStatus: " + statusWord(gs.Welcome.Enabled)}, true
+		}
+		gs := m.group.Get(chatID)
+		return ExecResult{Reply: "*「 WELCOME 」*\n\nStatus: " + statusWord(gs.Welcome.Enabled) + "\n\n*Penggunaan:*\n.welcome on/off\n.setwelcome <text>"}, true
+	case "setwelcome":
+		text := strings.TrimSpace(args)
+		if text == "" {
+			return ExecResult{Reply: "*「 WELCOME 」*\n\nKirim teks welcome yang diinginkan.\n\n*Penggunaan:*\n.setwelcome <text>\n\n*Placeholder:* @user, {group}\n*Contoh:* .setwelcome Halo @user, selamat datang di {group}!"}, true
+		}
+		_, err := m.group.SetWelcomeText(chatID, text)
+		if err != nil {
+			return ExecResult{Reply: "*「 WELCOME 」*\n\nGagal menyimpan: " + err.Error()}, true
+		}
+		return ExecResult{Reply: "*「 WELCOME 」*\n\nTeks welcome berhasil disimpan.\n*Placeholder:* @user, {group}"}, true
+	case "goodbye":
+		if on, ok := onOffArg(args); ok {
+			gs, err := m.group.SetGoodbyeEnabled(chatID, on)
+			if err != nil {
+				return ExecResult{Reply: "*「 GOODBYE 」*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
+			}
+			return ExecResult{Reply: "*「 GOODBYE 」*\n\nStatus: " + statusWord(gs.Goodbye.Enabled)}, true
+		}
+		gs := m.group.Get(chatID)
+		return ExecResult{Reply: "*「 GOODBYE 」*\n\nStatus: " + statusWord(gs.Goodbye.Enabled) + "\n\n*Penggunaan:*\n.goodbye on/off\n.setgoodbye <text>"}, true
+	case "setgoodbye":
+		text := strings.TrimSpace(args)
+		if text == "" {
+			return ExecResult{Reply: "*「 GOODBYE 」*\n\nKirim teks goodbye yang diinginkan.\n\n*Penggunaan:*\n.setgoodbye <text>\n\n*Placeholder:* @user, {group}\n*Contoh:* .setgoodbye Selamat tinggal @user dari {group}"}, true
+		}
+		_, err := m.group.SetGoodbyeText(chatID, text)
+		if err != nil {
+			return ExecResult{Reply: "*「 GOODBYE 」*\n\nGagal menyimpan: " + err.Error()}, true
+		}
+		return ExecResult{Reply: "*「 GOODBYE 」*\n\nTeks goodbye berhasil disimpan.\n*Placeholder:* @user, {group}"}, true
+	case "tagall":
+		parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
+		if err != nil || len(parts) == 0 {
+			return ExecResult{Reply: "*「 TAGALL 」*\n\nGagal mengambil daftar anggota grup."}, true
+		}
+		msgText := strings.TrimSpace(args)
+		if msgText == "" {
+			msgText = "Halo semuanya!"
+		}
+		var b strings.Builder
+		b.WriteString("*「 TAGALL 」*\n\n")
+		b.WriteString("*Pesan:* ")
+		b.WriteString(msgText)
+		b.WriteString("\n\n")
+		for _, p := range parts {
+			b.WriteString("• @")
+			b.WriteString(p.User)
+			b.WriteString("\n")
+		}
+		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, strings.TrimSpace(b.String()), parts); err != nil {
+			return ExecResult{Reply: "*「 TAGALL 」*\n\nGagal mengirim pesan: " + err.Error()}, true
+		}
+		return ExecResult{Reply: ""}, true
+	case "hidetag":
+		parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
+		if err != nil || len(parts) == 0 {
+			return ExecResult{Reply: "*「 HIDETAG 」*\n\nGagal mengambil daftar anggota grup."}, true
+		}
+		msgText := strings.TrimSpace(args)
+		if msgText == "" {
+			msgText = "*「 HIDETAG 」*\n\nPengumuman untuk semua anggota."
+		}
+		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, msgText, parts); err != nil {
+			return ExecResult{Reply: "*「 HIDETAG 」*\n\nGagal mengirim pesan: " + err.Error()}, true
+		}
+		return ExecResult{Reply: ""}, true
+	}
+
+	return ExecResult{}, false
 }
