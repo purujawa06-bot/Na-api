@@ -1,11 +1,14 @@
 package bot
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -386,6 +389,23 @@ func (m *Manager) onMessage(evt *events.Message) {
 			return
 		}
 		_ = m.handleStickerCommand(ctx, evt, cfg)
+		return
+	}
+
+	// built-in: JJ CapCut generator dari image (upload gambar -> video)
+	if cmd == "jj" {
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		if !m.isFeatureAllowed("builtin:jj", userKey) {
+			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+			return
+		}
+		jctx, jcancel := context.WithTimeout(context.Background(), 12*time.Minute)
+		defer jcancel()
+		if err := m.handleJJCommand(jctx, evt, cfg, args); err != nil {
+			m.logError("command.jj", err.Error())
+		}
 		return
 	}
 
@@ -1143,6 +1163,12 @@ func (m *Manager) buildMenu(cfg Config) string {
 		"│",
 		"├─ ꜱᴛɪᴄᴋᴇʀ",
 		"│  • .sticker",
+		"�� " + menuSmallCaps("DOWNLOADER"),
+		"�  � .jj",
+		"│",
+		"│",
+		"�� " + menuSmallCaps("DOWNLOADER"),
+		"�  � .jj",
 		"│",
 		"├─ ᴏᴡɴᴇʀ",
 		"│  • .logs",
@@ -1752,4 +1778,222 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 	}
 
 	return ExecResult{}, false
+}
+
+type jjPhotoUpload struct {
+	name string
+	mime string
+	data []byte
+}
+
+func (m *Manager) collectJJImages(evt *events.Message) []*waE2E.ImageMessage {
+	var imgs []*waE2E.ImageMessage
+	msg := evt.Message
+	if msg == nil {
+		return imgs
+	}
+	if img := msg.GetImageMessage(); img != nil {
+		imgs = append(imgs, img)
+	}
+	if ci := extractIncomingContextInfo(msg); ci != nil {
+		if q := ci.GetQuotedMessage(); q != nil {
+			if img := q.GetImageMessage(); img != nil {
+				// hindari duplikasi jika entah bagaimana sama
+				dup := false
+				for _, x := range imgs {
+					if x == img {
+						dup = true
+						break
+					}
+				}
+				if !dup {
+					imgs = append(imgs, img)
+				}
+			}
+		}
+	}
+	return imgs
+}
+
+func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg Config, args string) error {
+	_ = cfg
+	imgs := m.collectJJImages(evt)
+	if len(imgs) == 0 {
+		_ = m.sendReply(ctx, evt, "Kirim atau reply gambar dengan caption *.jj* untuk membuat video JJ.\n\nContoh: kirim 1-2 foto dengan caption *.jj*")
+		return nil
+	}
+
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+
+	// unduh semua gambar
+	photos := make([]jjPhotoUpload, 0, len(imgs))
+	for i, img := range imgs {
+		data, err := c.Download(ctx, img)
+		if err != nil {
+			_ = m.sendReply(ctx, evt, "Gagal mengunduh gambar: "+err.Error())
+			return nil
+		}
+		if len(data) == 0 {
+			continue
+		}
+		mime := strings.TrimSpace(img.GetMimetype())
+		if mime == "" {
+			mime = http.DetectContentType(data)
+		}
+		ext := ".jpg"
+		if strings.Contains(mime, "png") {
+			ext = ".png"
+		} else if strings.Contains(mime, "jpeg") || strings.Contains(mime, "jpg") {
+			ext = ".jpg"
+		}
+		photos = append(photos, jjPhotoUpload{name: fmt.Sprintf("photo%d%s", i+1, ext), mime: mime, data: data})
+	}
+	if len(photos) == 0 {
+		_ = m.sendReply(ctx, evt, "Gambar tidak dapat diunduh.")
+		return nil
+	}
+
+	_ = m.sendReply(ctx, evt, fmt.Sprintf("*? JJ CAPCUT ?*\n\nMemproses %d foto... mohon tunggu.", len(photos)))
+
+	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
+	templateID := strings.TrimSpace(args)
+	jobID, tpl, err := m.jjCreateJob(ctx, base, photos, templateID)
+	if err != nil {
+		_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nGagal membuat job: "+err.Error())
+		return nil
+	}
+	_ = tpl
+
+	// poll status
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nTimeout menunggu hasil render.")
+			return ctx.Err()
+		case <-ticker.C:
+			st, err := m.jjGetJob(ctx, base, jobID)
+			if err != nil {
+				continue
+			}
+			status, _ := st["status"].(string)
+			switch status {
+			case "selesai":
+				dl, _ := st["download_url"].(string)
+				if strings.TrimSpace(dl) == "" {
+					_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nSelesai tetapi tautan unduh tidak ditemukan.")
+					return nil
+				}
+				cap := "*? JJ CAPCUT ?*\n\nVideo selesai dibuat."
+				if t, ok := st["template"].(map[string]any); ok {
+					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
+						cap = "*? JJ CAPCUT ?*\n\n*Template:* " + title
+					}
+				}
+				res := ExecResult{VideoURL: dl, Caption: cap}
+				if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
+					_ = m.sendReply(ctx, evt, cap+"\n\nGagal mengirim video: "+err.Error()+"\nLink: "+dl)
+					return nil
+				}
+				return nil
+			case "gagal", "error", "timeout":
+				emsg, _ := st["error"].(string)
+				if emsg == "" {
+					emsg = status
+				}
+				_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nGagal: "+emsg)
+				return nil
+			case "processing", "queued", "":
+				// lanjut tunggu
+			default:
+				// status lain, lanjut
+			}
+		}
+	}
+}
+
+func (m *Manager) jjCreateJob(ctx context.Context, base string, photos []jjPhotoUpload, templateID string) (string, map[string]any, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for _, p := range photos {
+		fw, err := w.CreateFormFile("photos", p.name)
+		if err != nil {
+			return "", nil, err
+		}
+		if _, err := fw.Write(p.data); err != nil {
+			return "", nil, err
+		}
+	}
+	if strings.TrimSpace(templateID) != "" {
+		_ = w.WriteField("template_id", strings.TrimSpace(templateID))
+	}
+	if err := w.Close(); err != nil {
+		return "", nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/api/downloader/jj", &buf)
+	if err != nil {
+		return "", nil, err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", nil, err
+	}
+	defer resp.Body.Close()
+	rb, _ := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	var out map[string]any
+	if err := json.Unmarshal(rb, &out); err != nil {
+		return "", nil, fmt.Errorf("respons tidak valid: %s", strings.TrimSpace(string(rb)))
+	}
+	if resp.StatusCode >= 400 {
+		if em, _ := out["error"].(string); em != "" {
+			return "", nil, errors.New(em)
+		}
+		return "", nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	jobID, _ := out["job_id"].(string)
+	if strings.TrimSpace(jobID) == "" {
+		if em, _ := out["error"].(string); em != "" {
+			return "", nil, errors.New(em)
+		}
+		return "", nil, errors.New("job_id tidak ditemukan pada respons")
+	}
+	var tpl map[string]any
+	if t, ok := out["template"].(map[string]any); ok {
+		tpl = t
+	}
+	return jobID, tpl, nil
+}
+
+func (m *Manager) jjGetJob(ctx context.Context, base, id string) (map[string]any, error) {
+	u := strings.TrimRight(base, "/") + "/api/downloader/jj?id=" + urlQueryEscape(id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	rb, _ := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	var out map[string]any
+	if err := json.Unmarshal(rb, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func urlQueryEscape(s string) string {
+	// minimal escape
+	r := strings.NewReplacer("%", "%25", " ", "%20", "&", "%26", "=", "%3D", "?", "%3F", "#", "%23", "+", "%2B")
+	return r.Replace(s)
 }
