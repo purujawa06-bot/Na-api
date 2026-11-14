@@ -2066,7 +2066,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	}
 	jobID, tpl, err := m.jjCreateJob(ctx, base, ups, "")
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "âŒ Gagal memulai pembuatan video JJ.\n\n*Alasan:* "+err.Error())
+		_ = m.sendReply(ctx, evt, "❌ Gagal memulai pembuatan video JJ.\n\n*Alasan:* "+err.Error())
 		return nil
 	}
 	_ = tpl
@@ -2109,7 +2109,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 				if emsg == "" {
 					emsg = "Terjadi kesalahan saat render."
 				}
-				_ = m.sendReply(ctx, evt, "âŒ Pembuatan video JJ gagal.\n\n*Alasan:* "+emsg)
+				_ = m.sendReply(ctx, evt, "❌ Pembuatan video JJ gagal.\n\n*Alasan:* "+emsg)
 				return nil
 			}
 		}
@@ -2177,7 +2177,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
 	jobID, _, err := m.jjCreateJob(ctx, base, photos, "")
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "âŒ Gagal memulai pembuatan video JJ grup.\n\n*Alasan:* "+err.Error())
+		_ = m.sendReply(ctx, evt, "❌ Gagal memulai pembuatan video JJ grup.\n\n*Alasan:* "+err.Error())
 		return nil
 	}
 	ticker := time.NewTicker(5 * time.Second)
@@ -2217,7 +2217,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 				if emsg == "" {
 					emsg = "Terjadi kesalahan saat render."
 				}
-				_ = m.sendReply(ctx, evt, "âŒ Pembuatan video JJ grup gagal.\n\n*Alasan:* "+emsg)
+				_ = m.sendReply(ctx, evt, "❌ Pembuatan video JJ grup gagal.\n\n*Alasan:* "+emsg)
 				return nil
 			}
 		}
