@@ -345,7 +345,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		if action == spamTriggered {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			_ = m.sendReply(ctx, evt, "âš ï¸ Spam terdeteksi. Kamu dibanned sementara 10 detik.")
+			_ = m.sendReply(ctx, evt, "⚠️ Spam terdeteksi. Kamu dibanned sementara 10 detik.")
 			return
 		}
 	}
@@ -1198,25 +1198,25 @@ func (m *Manager) buildMenu(cfg Config) string {
 	}
 	var b strings.Builder
 	b.WriteString("╭─〔 " + botName + " 〕\n")
-	b.WriteString("│\\n")
-	b.WriteString("├─ ᴜᴍᴜᴍ\\n")
-	b.WriteString("│  • .ping\\n")
-	b.WriteString("│  • .menu\\n")
-	b.WriteString("│  • .owner\\n")
-	b.WriteString("│  • .vip\\n")
-	b.WriteString("│  • .stats\\n")
-	b.WriteString("│\\n")
-	b.WriteString("├─ ꜱᴛɪᴄᴋᴇʀ\\n")
-	b.WriteString("│  • .sticker\\n")
-	b.WriteString("│\\n")
-	b.WriteString("├─ ᴊᴊ\\n")
-	b.WriteString("│  • .jj\\n")
-	b.WriteString("│  • .jjgc\\n")
-	b.WriteString("│  • .pilih\\n")
-	b.WriteString("│  • .reset\\n")
-	b.WriteString("│\\n")
-	b.WriteString("├─ ᴏᴡɴᴇʀ\\n")
-	b.WriteString("│  • .logs\\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ᴜᴍᴜᴍ\n")
+	b.WriteString("│  • .ping\n")
+	b.WriteString("│  • .menu\n")
+	b.WriteString("│  • .owner\n")
+	b.WriteString("│  • .vip\n")
+	b.WriteString("│  • .stats\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ꜱᴛɪᴄᴋᴇʀ\n")
+	b.WriteString("│  • .sticker\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ᴊᴊ\n")
+	b.WriteString("│  • .jj\n")
+	b.WriteString("│  • .jjgc\n")
+	b.WriteString("│  • .pilih\n")
+	b.WriteString("│  • .reset\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ᴏᴡɴᴇʀ\n")
+	b.WriteString("│  • .logs\n")
 
 	// Custom commands (aktif) per kategori
 	if m.customCmds != nil {
@@ -1241,7 +1241,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 			catMap[key] = append(catMap[key], "│  • ."+cmdName)
 		}
 		for _, key := range catOrder {
-			b.WriteString("│\\n")
+			b.WriteString("│\n")
 			b.WriteString("├─ " + catLabel[key] + "\n")
 			for _, line := range catMap[key] {
 				b.WriteString(line + "\n")
@@ -1279,7 +1279,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 			catMap[key] = append(catMap[key], label)
 		}
 		for _, key := range catOrder {
-			b.WriteString("│\\n")
+			b.WriteString("│\n")
 			b.WriteString("├─ " + catLabel[key] + "\n")
 			for _, line := range catMap[key] {
 				b.WriteString(line + "\n")
@@ -1287,16 +1287,16 @@ func (m *Manager) buildMenu(cfg Config) string {
 		}
 	}
 
-	b.WriteString("│\\n")
-	b.WriteString("├─ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ\\n")
-	b.WriteString("│  • .antilink on/off\\n")
-	b.WriteString("│  • .welcome on/off\\n")
-	b.WriteString("│  • .setwelcome <text>\\n")
-	b.WriteString("│  • .goodbye on/off\\n")
-	b.WriteString("│  • .setgoodbye <text>\\n")
-	b.WriteString("│  • .tagall <text>\\n")
-	b.WriteString("│  • .hidetag <text>\\n")
-	b.WriteString("│\\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ\n")
+	b.WriteString("│  • .antilink on/off\n")
+	b.WriteString("│  • .welcome on/off\n")
+	b.WriteString("│  • .setwelcome <text>\n")
+	b.WriteString("│  • .goodbye on/off\n")
+	b.WriteString("│  • .setgoodbye <text>\n")
+	b.WriteString("│  • .tagall <text>\n")
+	b.WriteString("│  • .hidetag <text>\n")
+	b.WriteString("│\n")
 	b.WriteString("╰────────")
 	return b.String()
 }
@@ -1537,7 +1537,7 @@ func (m *Manager) getGroupParticipants(ctx context.Context, chat types.JID) ([]t
 
 func (m *Manager) canManageGroup(ctx context.Context, evt *events.Message, cfg Config, senderIDs ...string) (bool, string) {
 	if evt == nil || !evt.Info.IsGroup {
-		return false, "*ã€Œ GROUP ã€*\n\nPerintah ini hanya dapat digunakan di dalam grup."
+		return false, "*【 GROUP 】*\n\nPerintah ini hanya dapat digunakan di dalam grup."
 	}
 	if isOwnerAny(cfg.OwnerNumber, senderIDs...) {
 		return true, ""
@@ -1545,7 +1545,7 @@ func (m *Manager) canManageGroup(ctx context.Context, evt *events.Message, cfg C
 	if m.isGroupAdmin(ctx, evt.Info.Chat, evt.Info.Sender) {
 		return true, ""
 	}
-	return false, "*ã€Œ AKSES DITOLAK ã€*\n\nPerintah ini khusus admin grup atau owner."
+	return false, "*【 AKSES DITOLAK 】*\n\nPerintah ini khusus admin grup atau owner."
 }
 
 func (m *Manager) sendTextWithMentions(ctx context.Context, to types.JID, text string, mentions []types.JID) error {
@@ -1629,7 +1629,7 @@ func (m *Manager) onGroupInfo(evt *events.GroupInfo) {
 			}
 			tpl := strings.TrimSpace(gs.Welcome.Text)
 			if tpl == "" {
-				tpl = "*ã€Œ WELCOME ã€*\n\nHalo @user, selamat datang di *{group}*!\nJangan lupa baca deskripsi grup ya."
+				tpl = "*【 WELCOME 】*\n\nHalo @user, selamat datang di *{group}*!\nJangan lupa baca deskripsi grup ya."
 			}
 			msg := renderGroupTemplate(tpl, u, groupName)
 			_ = m.sendTextWithMentions(ctx, chat, msg, []types.JID{u})
@@ -1644,7 +1644,7 @@ func (m *Manager) onGroupInfo(evt *events.GroupInfo) {
 			}
 			tpl := strings.TrimSpace(gs.Goodbye.Text)
 			if tpl == "" {
-				tpl = "*ã€Œ GOODBYE ã€*\n\n@user telah keluar dari *{group}*. Sampai jumpa!"
+				tpl = "*【 GOODBYE 】*\n\n@user telah keluar dari *{group}*. Sampai jumpa!"
 			}
 			msg := renderGroupTemplate(tpl, u, groupName)
 			_ = m.sendTextWithMentions(ctx, chat, msg, []types.JID{u})
@@ -1685,7 +1685,7 @@ func (m *Manager) enforceAntilink(evt *events.Message, text string) bool {
 	}
 
 	mention := "@" + evt.Info.Sender.User
-	warn := "*ã€Œ ANTILINK ã€*\n\nTerdeteksi " + mention + " mengirim link.\n"
+	warn := "*【 ANTILINK 】*\n\nTerdeteksi " + mention + " mengirim link.\n"
 	if revoked {
 		warn += "Pesan dihapus karena antilink aktif."
 	} else {
@@ -1729,7 +1729,7 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 		return ExecResult{Reply: deny}, true
 	}
 	if m.group == nil {
-		return ExecResult{Reply: "*ã€Œ GROUP ã€*\n\nFitur group management tidak tersedia."}, true
+		return ExecResult{Reply: "*【 GROUP 】*\n\nFitur group management tidak tersedia."}, true
 	}
 
 	chatID := evt.Info.Chat.String()
@@ -1738,86 +1738,86 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 		if on, ok := onOffArg(args); ok {
 			gs, err := m.group.SetAntilink(chatID, on)
 			if err != nil {
-				return ExecResult{Reply: "*ã€Œ ANTILINK ã€*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
+				return ExecResult{Reply: "*【 ANTILINK 】*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
 			}
-			return ExecResult{Reply: "*ã€Œ ANTILINK ã€*\n\nStatus: " + statusWord(gs.Antilink)}, true
+			return ExecResult{Reply: "*【 ANTILINK 】*\n\nStatus: " + statusWord(gs.Antilink)}, true
 		}
 		gs := m.group.Get(chatID)
-		return ExecResult{Reply: "*ã€Œ ANTILINK ã€*\n\nStatus: " + statusWord(gs.Antilink) + "\n\n*Penggunaan:*\n.antilink on/off"}, true
+		return ExecResult{Reply: "*【 ANTILINK 】*\n\nStatus: " + statusWord(gs.Antilink) + "\n\n*Penggunaan:*\n.antilink on/off"}, true
 	case "welcome":
 		if on, ok := onOffArg(args); ok {
 			gs, err := m.group.SetWelcomeEnabled(chatID, on)
 			if err != nil {
-				return ExecResult{Reply: "*ã€Œ WELCOME ã€*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
+				return ExecResult{Reply: "*【 WELCOME 】*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
 			}
-			return ExecResult{Reply: "*ã€Œ WELCOME ã€*\n\nStatus: " + statusWord(gs.Welcome.Enabled)}, true
+			return ExecResult{Reply: "*【 WELCOME 】*\n\nStatus: " + statusWord(gs.Welcome.Enabled)}, true
 		}
 		gs := m.group.Get(chatID)
-		return ExecResult{Reply: "*ã€Œ WELCOME ã€*\n\nStatus: " + statusWord(gs.Welcome.Enabled) + "\n\n*Penggunaan:*\n.welcome on/off\n.setwelcome <text>"}, true
+		return ExecResult{Reply: "*【 WELCOME 】*\n\nStatus: " + statusWord(gs.Welcome.Enabled) + "\n\n*Penggunaan:*\n.welcome on/off\n.setwelcome <text>"}, true
 	case "setwelcome":
 		text := strings.TrimSpace(args)
 		if text == "" {
-			return ExecResult{Reply: "*ã€Œ WELCOME ã€*\n\nKirim teks welcome yang diinginkan.\n\n*Penggunaan:*\n.setwelcome <text>\n\n*Placeholder:* @user, {group}\n*Contoh:* .setwelcome Halo @user, selamat datang di {group}!"}, true
+			return ExecResult{Reply: "*【 WELCOME 】*\n\nKirim teks welcome yang diinginkan.\n\n*Penggunaan:*\n.setwelcome <text>\n\n*Placeholder:* @user, {group}\n*Contoh:* .setwelcome Halo @user, selamat datang di {group}!"}, true
 		}
 		_, err := m.group.SetWelcomeText(chatID, text)
 		if err != nil {
-			return ExecResult{Reply: "*ã€Œ WELCOME ã€*\n\nGagal menyimpan: " + err.Error()}, true
+			return ExecResult{Reply: "*【 WELCOME 】*\n\nGagal menyimpan: " + err.Error()}, true
 		}
-		return ExecResult{Reply: "*ã€Œ WELCOME ã€*\n\nTeks welcome berhasil disimpan.\n*Placeholder:* @user, {group}"}, true
+		return ExecResult{Reply: "*【 WELCOME 】*\n\nTeks welcome berhasil disimpan.\n*Placeholder:* @user, {group}"}, true
 	case "goodbye":
 		if on, ok := onOffArg(args); ok {
 			gs, err := m.group.SetGoodbyeEnabled(chatID, on)
 			if err != nil {
-				return ExecResult{Reply: "*ã€Œ GOODBYE ã€*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
+				return ExecResult{Reply: "*【 GOODBYE 】*\n\nGagal menyimpan pengaturan: " + err.Error()}, true
 			}
-			return ExecResult{Reply: "*ã€Œ GOODBYE ã€*\n\nStatus: " + statusWord(gs.Goodbye.Enabled)}, true
+			return ExecResult{Reply: "*【 GOODBYE 】*\n\nStatus: " + statusWord(gs.Goodbye.Enabled)}, true
 		}
 		gs := m.group.Get(chatID)
-		return ExecResult{Reply: "*ã€Œ GOODBYE ã€*\n\nStatus: " + statusWord(gs.Goodbye.Enabled) + "\n\n*Penggunaan:*\n.goodbye on/off\n.setgoodbye <text>"}, true
+		return ExecResult{Reply: "*【 GOODBYE 】*\n\nStatus: " + statusWord(gs.Goodbye.Enabled) + "\n\n*Penggunaan:*\n.goodbye on/off\n.setgoodbye <text>"}, true
 	case "setgoodbye":
 		text := strings.TrimSpace(args)
 		if text == "" {
-			return ExecResult{Reply: "*ã€Œ GOODBYE ã€*\n\nKirim teks goodbye yang diinginkan.\n\n*Penggunaan:*\n.setgoodbye <text>\n\n*Placeholder:* @user, {group}\n*Contoh:* .setgoodbye Selamat tinggal @user dari {group}"}, true
+			return ExecResult{Reply: "*【 GOODBYE 】*\n\nKirim teks goodbye yang diinginkan.\n\n*Penggunaan:*\n.setgoodbye <text>\n\n*Placeholder:* @user, {group}\n*Contoh:* .setgoodbye Selamat tinggal @user dari {group}"}, true
 		}
 		_, err := m.group.SetGoodbyeText(chatID, text)
 		if err != nil {
-			return ExecResult{Reply: "*ã€Œ GOODBYE ã€*\n\nGagal menyimpan: " + err.Error()}, true
+			return ExecResult{Reply: "*【 GOODBYE 】*\n\nGagal menyimpan: " + err.Error()}, true
 		}
-		return ExecResult{Reply: "*ã€Œ GOODBYE ã€*\n\nTeks goodbye berhasil disimpan.\n*Placeholder:* @user, {group}"}, true
+		return ExecResult{Reply: "*【 GOODBYE 】*\n\nTeks goodbye berhasil disimpan.\n*Placeholder:* @user, {group}"}, true
 	case "tagall":
 		parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
 		if err != nil || len(parts) == 0 {
-			return ExecResult{Reply: "*ã€Œ TAGALL ã€*\n\nGagal mengambil daftar anggota grup."}, true
+			return ExecResult{Reply: "*【 TAGALL 】*\n\nGagal mengambil daftar anggota grup."}, true
 		}
 		msgText := strings.TrimSpace(args)
 		if msgText == "" {
 			msgText = "Halo semuanya!"
 		}
 		var b strings.Builder
-		b.WriteString("*ã€Œ TAGALL ã€*\n\n")
+		b.WriteString("*【 TAGALL 】*\n\n")
 		b.WriteString("*Pesan:* ")
 		b.WriteString(msgText)
 		b.WriteString("\n\n")
 		for _, p := range parts {
-			b.WriteString("â€¢ @")
+			b.WriteString("• @")
 			b.WriteString(p.User)
 			b.WriteString("\n")
 		}
 		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, strings.TrimSpace(b.String()), parts); err != nil {
-			return ExecResult{Reply: "*ã€Œ TAGALL ã€*\n\nGagal mengirim pesan: " + err.Error()}, true
+			return ExecResult{Reply: "*【 TAGALL 】*\n\nGagal mengirim pesan: " + err.Error()}, true
 		}
 		return ExecResult{Reply: ""}, true
 	case "hidetag":
 		parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
 		if err != nil || len(parts) == 0 {
-			return ExecResult{Reply: "*ã€Œ HIDETAG ã€*\n\nGagal mengambil daftar anggota grup."}, true
+			return ExecResult{Reply: "*【 HIDETAG 】*\n\nGagal mengambil daftar anggota grup."}, true
 		}
 		msgText := strings.TrimSpace(args)
 		if msgText == "" {
-			msgText = "*ã€Œ HIDETAG ã€*\n\nPengumuman untuk semua anggota."
+			msgText = "*【 HIDETAG 】*\n\nPengumuman untuk semua anggota."
 		}
 		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, msgText, parts); err != nil {
-			return ExecResult{Reply: "*ã€Œ HIDETAG ã€*\n\nGagal mengirim pesan: " + err.Error()}, true
+			return ExecResult{Reply: "*【 HIDETAG 】*\n\nGagal mengirim pesan: " + err.Error()}, true
 		}
 		return ExecResult{Reply: ""}, true
 	}
@@ -1965,19 +1965,19 @@ func (m *Manager) jjHandlePilih(ctx context.Context, evt *events.Message, args s
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 	pool := m.jjGetPool(key)
 	if len(pool) == 0 {
-		_ = m.sendReply(ctx, evt, "ðŸ“¸ Belum ada foto yang diunggah.\n\nKirim foto yang ingin dijadikan JJ, lalu gunakan *.pilih* untuk memilihnya.\nContoh: *.pilih* (pilih semua) atau *.pilih 1 3*")
+		_ = m.sendReply(ctx, evt, "📸 Belum ada foto yang diunggah.\n\nKirim foto yang ingin dijadikan JJ, lalu gunakan *.pilih* untuk memilihnya.\nContoh: *.pilih* (pilih semua) atau *.pilih 1 3*")
 		return
 	}
 	nums := parseJJNumbers(args)
 	sel, err := m.jjSelect(key, nums)
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "âš ï¸ "+err.Error())
+		_ = m.sendReply(ctx, evt, "⚠️ "+err.Error())
 		return
 	}
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("âœ… Berhasil memilih %d foto dari %d foto yang tersedia.\n\n", len(sel), len(pool)))
 	for i, n := range sel {
-		b.WriteString(fmt.Sprintf("â€¢ Foto ke-%d (upload #%d) dipilih\n", i+1, n))
+		b.WriteString(fmt.Sprintf("• Foto ke-%d (upload #%d) dipilih\n", i+1, n))
 	}
 	b.WriteString("\nKetik *.jj* untuk membuat video, atau *.pilih 1 2* untuk mengubah pilihan. Ketik *.reset* untuk menghapus semua foto.")
 	_ = m.sendReply(ctx, evt, b.String())
@@ -1986,7 +1986,7 @@ func (m *Manager) jjHandlePilih(ctx context.Context, evt *events.Message, args s
 func (m *Manager) jjHandleReset(ctx context.Context, evt *events.Message) {
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 	m.jjReset(key)
-	_ = m.sendReply(ctx, evt, "ðŸ—‘ï¸ Daftar foto JJ sudah dikosongkan.\n\nKirim foto baru lalu pilih dengan *.pilih* jika ingin membuat video JJ.")
+	_ = m.sendReply(ctx, evt, "🗑️ Daftar foto JJ sudah dikosongkan.\n\nKirim foto baru lalu pilih dengan *.pilih* jika ingin membuat video JJ.")
 }
 
 func parseJJNumbers(args string) []int {
@@ -2053,11 +2053,11 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 	photos, err := m.jjSelectedPhotos(key)
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "ðŸ“¸ "+err.Error())
+		_ = m.sendReply(ctx, evt, "📸 "+err.Error())
 		return nil
 	}
 
-	_ = m.sendReply(ctx, evt, fmt.Sprintf("ðŸŽ¬ Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)))
+	_ = m.sendReply(ctx, evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)))
 
 	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
 	ups := make([]jjPhotoUpload, 0, len(photos))
@@ -2076,7 +2076,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	for {
 		select {
 		case <-ctx.Done():
-			_ = m.sendReply(ctx, evt, "â³ Proses JJ terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
+			_ = m.sendReply(ctx, evt, "⏳ Proses JJ terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -2088,7 +2088,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 			case "selesai":
 				dl, _ := st["download_url"].(string)
 				if strings.TrimSpace(dl) == "" {
-					_ = m.sendReply(ctx, evt, "âš ï¸ Video JJ sudah jadi, tetapi tautan unduh tidak tersedia. Coba lagi ya.")
+					_ = m.sendReply(ctx, evt, "⚠️ Video JJ sudah jadi, tetapi tautan unduh tidak tersedia. Coba lagi ya.")
 					return nil
 				}
 				m.jjReset(key)
@@ -2173,7 +2173,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 		_ = m.sendReply(ctx, evt, "Tidak ditemukan foto profil anggota grup yang bisa digunakan. Coba lagi nanti.")
 		return nil
 	}
-	_ = m.sendReply(ctx, evt, fmt.Sprintf("ðŸŽ² Mengambil %d foto profil anggota grup secara acak...\nSedang memproses video JJ, mohon tunggu sebentar.", len(photos)))
+	_ = m.sendReply(ctx, evt, fmt.Sprintf("🎲 Mengambil %d foto profil anggota grup secara acak...\nSedang memproses video JJ, mohon tunggu sebentar.", len(photos)))
 	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
 	jobID, _, err := m.jjCreateJob(ctx, base, photos, "")
 	if err != nil {
@@ -2185,7 +2185,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 	for {
 		select {
 		case <-ctx.Done():
-			_ = m.sendReply(ctx, evt, "â³ Proses JJ grup terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
+			_ = m.sendReply(ctx, evt, "⏳ Proses JJ grup terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -2197,7 +2197,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 			case "selesai":
 				dl, _ := st["download_url"].(string)
 				if strings.TrimSpace(dl) == "" {
-					_ = m.sendReply(ctx, evt, "âš ï¸ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.")
+					_ = m.sendReply(ctx, evt, "⚠️ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.")
 					return nil
 				}
 				cap := fmt.Sprintf("âœ… Video JJ grup sudah jadi!\n\n*Foto profil:* %d anggota (acak)", len(photos))
