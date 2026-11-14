@@ -1975,7 +1975,7 @@ func (m *Manager) jjHandlePilih(ctx context.Context, evt *events.Message, args s
 		return
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("âœ… Berhasil memilih %d foto dari %d foto yang tersedia.\n\n", len(sel), len(pool)))
+	b.WriteString(fmt.Sprintf("✅ Berhasil memilih %d foto dari %d foto yang tersedia.\n\n", len(sel), len(pool)))
 	for i, n := range sel {
 		b.WriteString(fmt.Sprintf("• Foto ke-%d (upload #%d) dipilih\n", i+1, n))
 	}
@@ -2092,10 +2092,10 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 					return nil
 				}
 				m.jjReset(key)
-				cap := "âœ… Video JJ kamu sudah jadi!"
+				cap := "✅ Video JJ kamu sudah jadi!"
 				if t, ok := st["template"].(map[string]any); ok {
 					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
-						cap = fmt.Sprintf("âœ… Video JJ kamu sudah jadi!\n\n*Template:* %s\n*Foto:* %d", title, len(photos))
+						cap = fmt.Sprintf("✅ Video JJ kamu sudah jadi!\n\n*Template:* %s\n*Foto:* %d", title, len(photos))
 					}
 				}
 				res := ExecResult{VideoURL: dl, Caption: cap}
@@ -2200,10 +2200,10 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 					_ = m.sendReply(ctx, evt, "⚠️ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.")
 					return nil
 				}
-				cap := fmt.Sprintf("âœ… Video JJ grup sudah jadi!\n\n*Foto profil:* %d anggota (acak)", len(photos))
+				cap := fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Foto profil:* %d anggota (acak)", len(photos))
 				if t, ok := st["template"].(map[string]any); ok {
 					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
-						cap = fmt.Sprintf("âœ… Video JJ grup sudah jadi!\n\n*Template:* %s\n*Foto profil:* %d anggota (acak)", title, len(photos))
+						cap = fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Template:* %s\n*Foto profil:* %d anggota (acak)", title, len(photos))
 					}
 				}
 				res := ExecResult{VideoURL: dl, Caption: cap}
