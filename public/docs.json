@@ -561,6 +561,31 @@
       ]
     },
     {
+      "title": "JJ CapCut Generator",
+      "summary": "Generate video JJ (CapCut template) dari foto via cc.fgsi.dpdns.org.",
+      "description": "Mengunggah foto ke layanan JJ Capcut (cc.fgsi.dpdns.org) dan\n              menghasilkan video dari template CapCut. Endpoint otomatis\n              memilih template secara acak yang jumlah slot fotonya sesuai\n              dengan jumlah foto yang diunggah. Jumlah foto tidak boleh\n              melebihi slot terbanyak dari template yang tersedia. Proses\n              render membutuhkan waktu (beberapa menit) dan tautan hasil\n              (download_url) bertoken/bermasa berlaku — simpan/unduh segera.",
+      "method": "POST",
+      "path": "/api/downloader/jj",
+      "responseType": "json",
+      "example": "const fd = new FormData();\n for (const file of fileInput.files) fd.append('photos', file);\n // opsional: fd.append('template_id', '7649585745329540360');\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/jj', { method: 'POST', body: fd })\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "photos",
+          "in": "formData",
+          "type": "file",
+          "description": "File foto JPG/PNG (bisa lebih dari satu, field dapat diulang). Jumlah harus sesuai slot template dan <= slot terbanyak (wajib).",
+          "required": true
+        },
+        {
+          "name": "template_id",
+          "in": "formData",
+          "type": "string",
+          "description": "ID template tertentu (opsional). Jika diisi, jumlah foto harus sama dengan slot template tersebut; jika kosong, template dipilih acak sesuai jumlah foto.",
+          "required": false
+        }
+      ]
+    },
+    {
       "title": "SoundCloud Downloader",
       "summary": "Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.",
       "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\n              Selalu merespons JSON (tanpa redirect/proxy byte): hasilnya berisi\n              metadata + stream_url/download_url CDN. Track Go+ (policy SNIP)\n              hanya menghasilkan preview 30 detik (ditandai is_preview=true).\n              Link kedaluwarsa ±1 jam.",

@@ -358,27 +358,6 @@ func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tikto
 	defer conn.Close(websocket.StatusNormalClosure, "done")
 	c := &cdpClient{conn: conn, ctx: ctx}
 
-	// create & attach target (selalu tutup semua page di akhir agar hemat RAM)
-	cleanupPages := func() {
-		raw, err := c.call("Target.getTargets", map[string]any{}, "")
-		if err == nil {
-			var gt struct {
-				TargetInfos []struct {
-					TargetID string `json:"targetId"`
-					Type     string `json:"type"`
-				} `json:"targetInfos"`
-			}
-			if json.Unmarshal(raw, &gt) == nil {
-				for _, ti := range gt.TargetInfos {
-					if ti.Type == "page" && ti.TargetID != "" {
-						_, _ = c.call("Target.closeTarget", map[string]any{"targetId": ti.TargetID}, "")
-					}
-				}
-			}
-		}
-	}
-	defer cleanupPages()
-
 	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
 	if err != nil {
 		return tiktokResult{}, fmt.Errorf("create target: %w", err)
@@ -390,7 +369,9 @@ func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tikto
 		return tiktokResult{}, errors.New("targetId tidak ditemukan")
 	}
 	targetID := ct.TargetID
-	_ = targetID
+	// tutup hanya target milik request ini (jangan global-close semua page:
+	// endpoint lain, mis. generator JJ, bisa sedang memakai CDP yang sama).
+	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
 
 	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
 	if err != nil {
