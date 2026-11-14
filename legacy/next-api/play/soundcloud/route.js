@@ -22,6 +22,11 @@
  * @method GET
  * @path /api/play/soundcloud
  * @param {string} query.q - Kata kunci pencarian (Judul/Artis).
+ * @response json
+ * @example
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/play/soundcloud?q=dj%20ya%20odna')
+ *     .then(res => res.json())
+ *     .then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';

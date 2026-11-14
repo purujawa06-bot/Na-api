@@ -17,15 +17,18 @@
  */
 /**
  * @title Instagram Downloader
- * @summary Download Reels/Post Instagram tanpa watermark.
- * @description Mengambil link download media Instagram (via kkinstagram/instasave).
- * @method GET
- * @path /api/downloader/instagram
- * @param {string} query.url - URL media Instagram (https only).
- * 
+ * @summary Download media Instagram (Reels, Post, IGTV) tanpa watermark.
+ * @description Mengambil link download video/foto dari URL Instagram publik (https only).
  * @method POST
  * @path /api/downloader/instagram
- * @param {string} body.url - URL media Instagram (https only).
+ * @param {string} body.url - URL Instagram publik (wajib, https only).
+ * @response json
+ * @example
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/instagram', {
+ *   method: 'POST',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({ url: 'https://www.instagram.com/reel/DVDX96NCdXc/' })
+ * }).then(res => res.json()).then(console.log);
  */
 import { NextResponse } from 'next/server';
 import { downloadInstagram } from '../../../../lib/instagram.js';

@@ -561,6 +561,24 @@
       ]
     },
     {
+      "title": "Instagram Downloader",
+      "summary": "Download media Instagram (Reels, Post, IGTV) tanpa watermark.",
+      "description": "Mengambil link download video/foto dari URL Instagram publik (https only).",
+      "method": "POST",
+      "path": "/api/downloader/instagram",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/instagram', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ url: 'https://www.instagram.com/reel/DVDX96NCdXc/' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "body",
+          "type": "string",
+          "description": "URL Instagram publik (wajib, https only).",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "JJ CapCut Generator (Create Job)",
       "summary": "Buat job generate video JJ (CapCut template) dari foto via cc.fgsi.dpdns.org.",
       "description": "Mengunggah foto ke layanan JJ Capcut (cc.fgsi.dpdns.org) dan\n              membuat job render video dari template CapCut secara asinkron.\n              Endpoint otomatis memilih template secara acak yang jumlah slot\n              fotonya sesuai dengan jumlah foto yang diunggah. Jumlah foto\n              tidak boleh melebihi slot terbanyak dari template yang tersedia.\n              Respons mengembalikan `job_id`; gunakan endpoint GET untuk cek\n              status/hasil. Tautan hasil (`download_url`) bertoken/bermasa berlaku.",
@@ -586,6 +604,24 @@
       ]
     },
     {
+      "title": "JJ CapCut Generator (Get Job)",
+      "summary": "Cek status/hasil job generate video JJ.",
+      "description": "Mengambil status dan hasil job render JJ berdasarkan `id`/`job_id`\n              yang dikembalikan saat create job. Status: `processing`,\n              `selesai`, `gagal`, `timeout`, atau `error`. Jika selesai,\n              `download_url` berisi tautan unduh (bertoken/bermasa berlaku).",
+      "method": "GET",
+      "path": "/api/downloader/jj",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/jj?id=JOB_ID')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "id",
+          "in": "query",
+          "type": "string",
+          "description": "ID job yang dikembalikan oleh endpoint create (wajib).",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "SoundCloud Downloader",
       "summary": "Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.",
       "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\n              Selalu merespons JSON (tanpa redirect/proxy byte): hasilnya berisi\n              metadata + stream_url/download_url CDN. Track Go+ (policy SNIP)\n              hanya menghasilkan preview 30 detik (ditandai is_preview=true).\n              Link kedaluwarsa ±1 jam.",
@@ -606,7 +642,7 @@
     {
       "title": "TikTok Downloader",
       "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
-      "description": "Endpoint untuk mengambil link download video TikTok tanpa watermark\n              beserta metadata (author, avatar, caption) dan link MP3.\n              Hanya menerima URL HTTPS (http ditolak). Juga mendukung method\n              POST dengan body JSON {\"url\": \"...\"}.",
+      "description": "Mengambil link download video TikTok tanpa watermark beserta\n              metadata (author, avatar, caption) dan link MP3. Hanya menerima\n              URL HTTPS dari domain tiktok.com.",
       "method": "GET",
       "path": "/api/downloader/tiktok",
       "responseType": "json",
@@ -615,6 +651,24 @@
         {
           "name": "url",
           "in": "query",
+          "type": "string",
+          "description": "URL video TikTok (wajib, https only).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "TikTok Downloader",
+      "summary": "Download video TikTok tanpa watermark (via ssstik.io).",
+      "description": "Mengambil link download video TikTok tanpa watermark beserta\n              metadata (author, avatar, caption) dan link MP3. Hanya menerima\n              URL HTTPS dari domain tiktok.com.",
+      "method": "POST",
+      "path": "/api/downloader/tiktok",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/tiktok', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ url: 'https://www.tiktok.com/@agungdarmawn_/video/7374017020418870534' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "body",
           "type": "string",
           "description": "URL video TikTok (wajib, https only).",
           "required": true
@@ -703,6 +757,24 @@
           "in": "query",
           "type": "string",
           "description": "Kata kunci pencarian lagu SoundCloud (wajib).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "SoundCloud Play (Direct)",
+      "summary": "Cari dan dapatkan stream URL MP3 SoundCloud.",
+      "description": "Mencari track di SoundCloud dan mengembalikan metadata beserta link stream MP3 128kbps.",
+      "method": "GET",
+      "path": "/api/play/soundcloud",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/play/soundcloud?q=dj%20ya%20odna')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "description": "Kata kunci pencarian (Judul/Artis).",
           "required": true
         }
       ]
