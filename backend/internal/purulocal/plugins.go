@@ -83,6 +83,28 @@ func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
 			Version:     "1.0.0",
 			Enabled:     true,
 		},
+		{
+			ID:          "jj-generator",
+			Name:        "JJ Generator",
+			Command:     "jj",
+			Category:    "JJ",
+			Description: "Buat video JJ dari foto yang dipilih",
+			ExecURL:     exec,
+			Server:      base,
+			Version:     "1.0.0",
+			Enabled:     true,
+		},
+		{
+			ID:          "jj-group",
+			Name:        "JJ Group",
+			Command:     "jjgc",
+			Category:    "JJ",
+			Description: "Buat video JJ dari 3 foto profil anggota grup acak",
+			ExecURL:     exec,
+			Server:      base,
+			Version:     "1.0.0",
+			Enabled:     true,
+		},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "plugins": plugins})
@@ -129,6 +151,12 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(res)
+	case "jj", "jj-generator", "jjgc", "jj-group", "pilih", "hapus", "reset":
+		// ditangani di sisi bot puruLocal (butuh akses media/seleksi lokal)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":    true,
+			"reply": "Fitur ini diproses di bot. Pastikan bot puruLocal sudah versi terbaru.",
+		})
 	default:
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "plugin command tidak dikenali"})
 	}

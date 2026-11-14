@@ -55,6 +55,12 @@ type Status struct {
 	LastError string `json:"last_error,omitempty"`
 }
 
+type jjStoredPhoto struct {
+	Name string
+	Mime string
+	Data []byte
+}
+
 type Manager struct {
 	cfgStore *ConfigStore
 	dataDir  string
@@ -74,6 +80,11 @@ type Manager struct {
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
 	bannedUntil map[string]time.Time
+
+	jjMu       sync.Mutex
+	jjUploads  map[string][]jjStoredPhoto // key: chat|sender
+	jjSelected map[string][]int           // 1-based indices terpilih
+	jjExpiry   map[string]time.Time
 }
 
 func NewManager(configPath, dataDir string) (*Manager, error) {
@@ -115,6 +126,9 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 		group:       gstore,
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
+		jjUploads:   map[string][]jjStoredPhoto{},
+		jjSelected:  map[string][]int{},
+		jjExpiry:    map[string]time.Time{},
 	}, nil
 }
 
@@ -312,6 +326,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if cfg.BlockSelfChat && evt.Info.IsFromMe {
 		return
 	}
+	// abaikan pesan usang (> 5 menit), mis. pesan yang masuk saat bot offline
+	if !evt.Info.Timestamp.IsZero() && time.Since(evt.Info.Timestamp) > 5*time.Minute {
+		return
+	}
 
 	// Anti-spam (opsional): pesan dari user yang sama dalam jeda sangat cepat -> ban 10 detik
 	if cfg.AntiSpam {
@@ -340,6 +358,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 	}
 
 	text := extractText(evt)
+	// simpan foto yang diupload ke galeri sementara JJ (tanpa react/command)
+	if evt.Message != nil && evt.Message.GetImageMessage() != nil {
+		m.jjCaptureUpload(ctx, evt)
+	}
 	if text == "" {
 		return
 	}
@@ -352,26 +374,36 @@ func (m *Manager) onMessage(evt *events.Message) {
 		return
 	}
 
-	// react emoji saat memproses command (opsional)
-	if cfg.LoadingReact {
+	// react emoji saat memproses command (opsional) - dikirim hanya saat command dikenali
+	reacted := false
+	stopReact := func() {
+		if !reacted {
+			return
+		}
+		reacted = false
+		time.Sleep(time.Duration(500+rand.IntN(501)) * time.Millisecond)
+		rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer rcancel()
+		m.sendReaction(rctx, evt, "")
+	}
+	maybeReact := func() {
+		if !cfg.LoadingReact || reacted {
+			return
+		}
 		m.sendReaction(ctx, evt, "⏳")
-		defer func() {
-			// jeda acak 500-1000ms agar penghapusan react tidak terlihat spam
-			time.Sleep(time.Duration(500+rand.IntN(501)) * time.Millisecond)
-			rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer rcancel()
-			m.sendReaction(rctx, evt, "")
-		}()
+		reacted = true
 	}
 
-	// typing status sebelum membalas command
-	if cfg.TypingBeforeReply {
-		m.sendTyping(ctx, evt.Info.Chat, true)
-		delay := cfg.TypingDelaySec
-		if delay <= 0 {
-			delay = 1.5
+	// typing status sebelum membalas command (untuk command yang diproses)
+	doTyping := func() {
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, true)
+			delay := cfg.TypingDelaySec
+			if delay <= 0 {
+				delay = 1.5
+			}
+			time.Sleep(time.Duration(delay * float64(time.Second)))
 		}
-		time.Sleep(time.Duration(delay * float64(time.Second)))
 	}
 
 	userKey := evt.Info.Sender.String()
@@ -379,66 +411,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		userKey = evt.Info.Chat.String()
 	}
 
-	// built-in: sticker dari image (kirim/reply image dengan caption .s/.sticker)
-	if cmd == "s" || cmd == "sticker" {
-		if cfg.TypingBeforeReply {
-			m.sendTyping(ctx, evt.Info.Chat, false)
-		}
-		if !m.isFeatureAllowed("builtin:sticker", userKey) {
-			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
-			return
-		}
-		_ = m.handleStickerCommand(ctx, evt, cfg)
-		return
-	}
-
-	// built-in: JJ CapCut generator dari image (upload gambar -> video)
-	if cmd == "jj" {
-		if cfg.TypingBeforeReply {
-			m.sendTyping(ctx, evt.Info.Chat, false)
-		}
-		if !m.isFeatureAllowed("builtin:jj", userKey) {
-			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
-			return
-		}
-		jctx, jcancel := context.WithTimeout(context.Background(), 12*time.Minute)
-		defer jcancel()
-		if err := m.handleJJCommand(jctx, evt, cfg, args); err != nil {
-			m.logError("command.jj", err.Error())
-		}
-		return
-	}
-
-	// custom commands (lokal)
-	if m.customCmds != nil {
-		if cc, okc := m.customCmds.Find(cmd); okc {
-			if cfg.TypingBeforeReply {
-				m.sendTyping(ctx, evt.Info.Chat, false)
-			}
-			if !m.isFeatureAllowed("custom:"+cc.ID, userKey) {
-				_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
-				return
-			}
-			m.handleCustomCommand(ctx, evt, cc)
-			return
-		}
-	}
-
-	// group management commands (butuh konteks evt/chat)
-	if isGroupMgmtCommand(cmd) {
-		if cfg.TypingBeforeReply {
-			m.sendTyping(ctx, evt.Info.Chat, false)
-		}
-		senderIDsBasic := []string{userKey, evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
-		if res, ok := m.handleGroupMgmtCommand(ctx, evt, cmd, args, userKey, cfg, senderIDsBasic...); ok {
-			if strings.TrimSpace(res.Reply) != "" {
-				_ = m.sendReply(ctx, evt, res.Reply)
-			}
-			return
-		}
-	}
-
-	// kumpulkan kandidat ID pengirim (termasuk resolusi LID<->PN) untuk owner/debug
+	// kumpulkan kandidat ID pengirim (termasuk resolusi LID<->PN) untuk owner/izin
 	senderIDs := []string{userKey, evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
 	resolvedPN := ""
 	resolvedLID := ""
@@ -467,12 +440,80 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 	}
 	senderIDs = append(senderIDs, "pn:"+evt.Info.PushName, "resolved_pn:"+resolvedPN, "resolved_lid:"+resolvedLID)
-	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg, senderIDs...)
-	if cfg.TypingBeforeReply {
-		m.sendTyping(ctx, evt.Info.Chat, false)
+
+	// built-in: sticker dari image (kirim/reply image dengan caption .s/.sticker)
+	if cmd == "s" || cmd == "sticker" {
+		maybeReact()
+		doTyping()
+		defer stopReact()
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		if !m.isFeatureAllowed("builtin:sticker", userKey) {
+			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+			return
+		}
+		_ = m.handleStickerCommand(ctx, evt, cfg)
+		return
 	}
+
+	// fitur JJ (lokal/plugin): pilih/hapus/reset/jj/jjgc
+	if m.isJJCommand(cmd) {
+		maybeReact()
+		doTyping()
+		defer stopReact()
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		m.handleJJFeatureCommand(ctx, evt, cmd, args, cfg)
+		return
+	}
+
+	// custom commands (lokal)
+	if m.customCmds != nil {
+		if cc, okc := m.customCmds.Find(cmd); okc {
+			maybeReact()
+			doTyping()
+			defer stopReact()
+			if cfg.TypingBeforeReply {
+				m.sendTyping(ctx, evt.Info.Chat, false)
+			}
+			if !m.isFeatureAllowed("custom:"+cc.ID, userKey) {
+				_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+				return
+			}
+			m.handleCustomCommand(ctx, evt, cc)
+			return
+		}
+	}
+
+	// group management commands (butuh konteks evt/chat)
+	if isGroupMgmtCommand(cmd) {
+		maybeReact()
+		doTyping()
+		defer stopReact()
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		if res, ok := m.handleGroupMgmtCommand(ctx, evt, cmd, args, userKey, cfg, senderIDs...); ok {
+			if strings.TrimSpace(res.Reply) != "" {
+				_ = m.sendReply(ctx, evt, res.Reply)
+			}
+			return
+		}
+	}
+
+	// resolve command (builtin/plugin) - react hanya jika dikenali
+	// cek cepat apakah command mungkin dikenal sebelum react?
+	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg, senderIDs...)
 	if !ok {
 		return
+	}
+	maybeReact()
+	doTyping()
+	defer stopReact()
+	if cfg.TypingBeforeReply {
+		m.sendTyping(ctx, evt.Info.Chat, false)
 	}
 	// catat indikasi kegagalan dari hasil plugin/command untuk debug (mis. gagal download tiktok)
 	if txt := strings.TrimSpace(res.Reply + " " + res.Caption); txt != "" && strings.Contains(strings.ToLower(txt), "gagal") {
@@ -1151,30 +1192,33 @@ func menuSmallCaps(s string) string {
 }
 
 func (m *Manager) buildMenu(cfg Config) string {
-	lines := []string{
-		"╭─〔 " + cfg.BotName + " 〕",
-		"│",
-		"├─ ᴜᴍᴜᴍ",
-		"│  • .ping",
-		"│  • .menu",
-		"│  • .owner",
-		"│  • .vip",
-		"│  • .stats",
-		"│",
-		"├─ ꜱᴛɪᴄᴋᴇʀ",
-		"│  • .sticker",
-		"�� " + menuSmallCaps("DOWNLOADER"),
-		"�  � .jj",
-		"│",
-		"│",
-		"�� " + menuSmallCaps("DOWNLOADER"),
-		"�  � .jj",
-		"│",
-		"├─ ᴏᴡɴᴇʀ",
-		"│  • .logs",
+	botName := strings.TrimSpace(cfg.BotName)
+	if botName == "" {
+		botName = "PuruBot"
 	}
+	var b strings.Builder
+	b.WriteString("╭─〔 " + botName + " 〕\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ᴜᴍᴜᴍ\n")
+	b.WriteString("│  • .ping\n")
+	b.WriteString("│  • .menu\n")
+	b.WriteString("│  • .owner\n")
+	b.WriteString("│  • .vip\n")
+	b.WriteString("│  • .stats\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ꜱᴛɪᴄᴋᴇʀ\n")
+	b.WriteString("│  • .sticker\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ᴊᴊ\n")
+	b.WriteString("│  • .jj\n")
+	b.WriteString("│  • .jjgc\n")
+	b.WriteString("│  • .pilih\n")
+	b.WriteString("│  • .reset\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ᴏᴡɴᴇʀ\n")
+	b.WriteString("│  • .logs\n")
 
-	// Kumpulkan custom commands (aktif) per kategori
+	// Custom commands (aktif) per kategori
 	if m.customCmds != nil {
 		catMap := map[string][]string{}
 		catLabel := map[string]string{}
@@ -1186,7 +1230,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 			cmdName := strings.ToLower(strings.TrimSpace(c.Command))
 			cat := strings.TrimSpace(c.Category)
 			if cat == "" {
-				cat = "CUSTOM"
+				cat = "Custom"
 			}
 			key := strings.ToUpper(cat)
 			if _, ok := catMap[key]; !ok {
@@ -1194,16 +1238,18 @@ func (m *Manager) buildMenu(cfg Config) string {
 				catMap[key] = []string{}
 				catLabel[key] = menuSmallCaps(cat)
 			}
-			// menu: 1 command utama per entri, tanpa alias & tanpa penjelasan
 			catMap[key] = append(catMap[key], "│  • ."+cmdName)
 		}
 		for _, key := range catOrder {
-			lines = append(lines, "│", "├─ "+catLabel[key])
-			lines = append(lines, catMap[key]...)
+			b.WriteString("│\n")
+			b.WriteString("├─ " + catLabel[key] + "\n")
+			for _, line := range catMap[key] {
+				b.WriteString(line + "\n")
+			}
 		}
 	}
 
-	// Kumpulkan plugin terpasang per kategori
+	// Plugin terpasang per kategori (kecuali JJ lokal agar tidak duplikat)
 	if m.plugins != nil {
 		catMap := map[string][]string{}
 		catLabel := map[string]string{}
@@ -1213,45 +1259,47 @@ func (m *Manager) buildMenu(cfg Config) string {
 				continue
 			}
 			cmdName := strings.ToLower(strings.TrimSpace(p.Command))
+			// JJ commands ditangani lokal dan sudah ditampilkan
+			if cmdName == "jj" || cmdName == "jjgc" {
+				continue
+			}
 			cat := strings.TrimSpace(p.Category)
 			if cat == "" {
 				cat = "Plugin"
 			}
-			// normalisasi tampilan: .play masuk kategori Downloader
 			if cmdName == "play" {
 				cat = "Downloader"
 			}
-			label := "." + cmdName
 			key := strings.ToUpper(cat)
+			label := "│  • ." + cmdName
 			if _, ok := catMap[key]; !ok {
 				catOrder = append(catOrder, key)
 				catMap[key] = []string{}
 				catLabel[key] = menuSmallCaps(cat)
 			}
-			catMap[key] = append(catMap[key], "│  • "+label)
+			catMap[key] = append(catMap[key], label)
 		}
 		for _, key := range catOrder {
-			lines = append(lines, "│", "├─ "+catLabel[key])
-			lines = append(lines, catMap[key]...)
+			b.WriteString("│\n")
+			b.WriteString("├─ " + catLabel[key] + "\n")
+			for _, line := range catMap[key] {
+				b.WriteString(line + "\n")
+			}
 		}
 	}
 
-	// Group management (submenu)
-	gmHeader := "├─ " + menuSmallCaps("GROUP MANAGEMENT")
-	lines = append(lines,
-		"│",
-		gmHeader,
-		"│  • .antilink on/off",
-		"│  • .welcome on/off",
-		"│  • .setwelcome <text>",
-		"│  • .goodbye on/off",
-		"│  • .setgoodbye <text>",
-		"│  • .tagall <text>",
-		"│  • .hidetag <text>",
-	)
-
-	lines = append(lines, "│", "╰────────")
-	return strings.Join(lines, "\n")
+	b.WriteString("│\n")
+	b.WriteString("├─ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ\n")
+	b.WriteString("│  • .antilink on/off\n")
+	b.WriteString("│  • .welcome on/off\n")
+	b.WriteString("│  • .setwelcome <text>\n")
+	b.WriteString("│  • .goodbye on/off\n")
+	b.WriteString("│  • .setgoodbye <text>\n")
+	b.WriteString("│  • .tagall <text>\n")
+	b.WriteString("│  • .hidetag <text>\n")
+	b.WriteString("│\n")
+	b.WriteString("╰────────")
+	return b.String()
 }
 
 type spamAction int
@@ -1262,8 +1310,6 @@ const (
 	spamBanned
 )
 
-// checkAntiSpam: deteksi pesan beruntun sangat cepat dari user yang sama.
-// Jika interval < 500ms -> trigger ban 10 detik (spamTriggered). Jika masih dibanned -> spamBanned.
 func (m *Manager) checkAntiSpam(user string, now time.Time) spamAction {
 	user = strings.TrimSpace(user)
 	if user == "" {
@@ -1780,102 +1826,258 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 	return ExecResult{}, false
 }
 
-type jjPhotoUpload struct {
-	name string
-	mime string
-	data []byte
+
+func (m *Manager) jjKey(chat, user string) string {
+	if strings.TrimSpace(user) == "" {
+		user = "unknown"
+	}
+	return chat + "|" + user
 }
 
-func (m *Manager) collectJJImages(evt *events.Message) []*waE2E.ImageMessage {
-	var imgs []*waE2E.ImageMessage
+func (m *Manager) jjTouchLocked(key string) {
+	m.jjExpiry[key] = time.Now().Add(5 * time.Minute)
+}
+
+func (m *Manager) jjCleanupLocked(key string) bool {
+	if exp, ok := m.jjExpiry[key]; ok && !exp.IsZero() && time.Now().After(exp) {
+		delete(m.jjUploads, key)
+		delete(m.jjSelected, key)
+		delete(m.jjExpiry, key)
+		return true
+	}
+	return false
+}
+
+func (m *Manager) jjCaptureUpload(ctx context.Context, evt *events.Message) {
 	msg := evt.Message
 	if msg == nil {
-		return imgs
+		return
 	}
-	if img := msg.GetImageMessage(); img != nil {
-		imgs = append(imgs, img)
+	img := msg.GetImageMessage()
+	if img == nil {
+		return
 	}
-	if ci := extractIncomingContextInfo(msg); ci != nil {
-		if q := ci.GetQuotedMessage(); q != nil {
-			if img := q.GetImageMessage(); img != nil {
-				// hindari duplikasi jika entah bagaimana sama
-				dup := false
-				for _, x := range imgs {
-					if x == img {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					imgs = append(imgs, img)
-				}
-			}
-		}
-	}
-	return imgs
-}
-
-func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg Config, args string) error {
-	_ = cfg
-	imgs := m.collectJJImages(evt)
-	if len(imgs) == 0 {
-		_ = m.sendReply(ctx, evt, "Kirim atau reply gambar dengan caption *.jj* untuk membuat video JJ.\n\nContoh: kirim 1-2 foto dengan caption *.jj*")
-		return nil
-	}
-
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
 	if c == nil {
-		return errors.New("client not ready")
+		return
 	}
-
-	// unduh semua gambar
-	photos := make([]jjPhotoUpload, 0, len(imgs))
-	for i, img := range imgs {
-		data, err := c.Download(ctx, img)
-		if err != nil {
-			_ = m.sendReply(ctx, evt, "Gagal mengunduh gambar: "+err.Error())
-			return nil
+	data, err := c.Download(ctx, img)
+	if err != nil || len(data) == 0 {
+		return
+	}
+	mime := strings.TrimSpace(img.GetMimetype())
+	if mime == "" {
+		mime = http.DetectContentType(data)
+	}
+	ext := ".jpg"
+	if strings.Contains(mime, "png") {
+		ext = ".png"
+	} else if strings.Contains(mime, "webp") {
+		ext = ".webp"
+	}
+	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
+	photo := jjStoredPhoto{Name: fmt.Sprintf("foto%s", ext), Mime: mime, Data: data}
+	m.jjMu.Lock()
+	defer m.jjMu.Unlock()
+	m.jjCleanupLocked(key)
+	list := append(m.jjUploads[key], photo)
+	// batasi maksimal 20 foto per user/chat
+	if len(list) > 20 {
+		list = list[len(list)-20:]
+		// reset seleksi jika indeks tidak valid lagi
+		m.jjSelected[key] = nil
+	}
+	// beri nama urut
+	for i := range list {
+		e := ".jpg"
+		if strings.Contains(list[i].Mime, "png") {
+			e = ".png"
+		} else if strings.Contains(list[i].Mime, "webp") {
+			e = ".webp"
 		}
-		if len(data) == 0 {
+		list[i].Name = fmt.Sprintf("foto%d%s", i+1, e)
+	}
+	m.jjUploads[key] = list
+	m.jjTouchLocked(key)
+}
+
+func (m *Manager) jjGetPool(key string) []jjStoredPhoto {
+	m.jjMu.Lock()
+	defer m.jjMu.Unlock()
+	m.jjCleanupLocked(key)
+	src := m.jjUploads[key]
+	out := make([]jjStoredPhoto, len(src))
+	copy(out, src)
+	return out
+}
+
+func (m *Manager) jjGetSelected(key string) []int {
+	m.jjMu.Lock()
+	defer m.jjMu.Unlock()
+	m.jjCleanupLocked(key)
+	src := m.jjSelected[key]
+	out := make([]int, len(src))
+	copy(out, src)
+	return out
+}
+
+func (m *Manager) jjReset(key string) {
+	m.jjMu.Lock()
+	defer m.jjMu.Unlock()
+	delete(m.jjUploads, key)
+	delete(m.jjSelected, key)
+	delete(m.jjExpiry, key)
+}
+
+func (m *Manager) jjSelect(key string, idxs []int) ([]int, error) {
+	m.jjMu.Lock()
+	defer m.jjMu.Unlock()
+	m.jjCleanupLocked(key)
+	pool := m.jjUploads[key]
+	if len(pool) == 0 {
+		return nil, errors.New("Belum ada foto yang diunggah. Kirim foto terlebih dahulu, lalu pilih dengan .pilih")
+	}
+	seen := map[int]bool{}
+	var sel []int
+	if len(idxs) == 0 {
+		// pilih semua
+		for i := 1; i <= len(pool); i++ {
+			sel = append(sel, i)
+		}
+	} else {
+		for _, n := range idxs {
+			if n < 1 || n > len(pool) {
+				return nil, fmt.Errorf("Nomor foto %d tidak valid. Tersedia 1-%d.", n, len(pool))
+			}
+			if !seen[n] {
+				seen[n] = true
+				sel = append(sel, n)
+			}
+		}
+	}
+	m.jjSelected[key] = sel
+	m.jjTouchLocked(key)
+	return sel, nil
+}
+
+func (m *Manager) jjHandlePilih(ctx context.Context, evt *events.Message, args string) {
+	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
+	pool := m.jjGetPool(key)
+	if len(pool) == 0 {
+		_ = m.sendReply(ctx, evt, "📸 Belum ada foto yang diunggah.\n\nKirim foto yang ingin dijadikan JJ, lalu gunakan *.pilih* untuk memilihnya.\nContoh: *.pilih* (pilih semua) atau *.pilih 1 3*")
+		return
+	}
+	nums := parseJJNumbers(args)
+	sel, err := m.jjSelect(key, nums)
+	if err != nil {
+		_ = m.sendReply(ctx, evt, "⚠️ "+err.Error())
+		return
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("✅ Berhasil memilih %d foto dari %d foto yang tersedia.\n\n", len(sel), len(pool)))
+	for i, n := range sel {
+		b.WriteString(fmt.Sprintf("• Foto ke-%d (upload #%d) dipilih\n", i+1, n))
+	}
+	b.WriteString("\nKetik *.jj* untuk membuat video, atau *.pilih 1 2* untuk mengubah pilihan. Ketik *.reset* untuk menghapus semua foto.")
+	_ = m.sendReply(ctx, evt, b.String())
+}
+
+func (m *Manager) jjHandleReset(ctx context.Context, evt *events.Message) {
+	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
+	m.jjReset(key)
+	_ = m.sendReply(ctx, evt, "🗑️ Daftar foto JJ sudah dikosongkan.\n\nKirim foto baru lalu pilih dengan *.pilih* jika ingin membuat video JJ.")
+}
+
+func parseJJNumbers(args string) []int {
+	args = strings.TrimSpace(args)
+	if args == "" || strings.EqualFold(args, "all") || strings.EqualFold(args, "semua") {
+		return nil // nil = pilih semua
+	}
+	// ganti koma dengan spasi
+	repl := strings.NewReplacer(",", " ", ";", " ")
+	args = repl.Replace(args)
+	parts := strings.Fields(args)
+	var nums []int
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
 			continue
 		}
-		mime := strings.TrimSpace(img.GetMimetype())
-		if mime == "" {
-			mime = http.DetectContentType(data)
+		var n int
+		for _, r := range p {
+			if r < '0' || r > '9' {
+				n = -1
+				break
+			}
+			n = n*10 + int(r-'0')
 		}
-		ext := ".jpg"
-		if strings.Contains(mime, "png") {
-			ext = ".png"
-		} else if strings.Contains(mime, "jpeg") || strings.Contains(mime, "jpg") {
-			ext = ".jpg"
+		if n > 0 {
+			nums = append(nums, n)
 		}
-		photos = append(photos, jjPhotoUpload{name: fmt.Sprintf("photo%d%s", i+1, ext), mime: mime, data: data})
 	}
-	if len(photos) == 0 {
-		_ = m.sendReply(ctx, evt, "Gambar tidak dapat diunduh.")
+	if len(nums) == 0 {
+		return nil
+	}
+	return nums
+}
+
+func (m *Manager) jjSelectedPhotos(key string) ([]jjStoredPhoto, error) {
+	m.jjMu.Lock()
+	m.jjCleanupLocked(key)
+	pool := append([]jjStoredPhoto(nil), m.jjUploads[key]...)
+	sel := append([]int(nil), m.jjSelected[key]...)
+	m.jjMu.Unlock()
+	if len(pool) == 0 {
+		return nil, errors.New("Belum ada foto yang diunggah. Kirim foto dulu, lalu pilih dengan *.pilih* dan jalankan *.jj*.")
+	}
+	if len(sel) == 0 {
+		return nil, errors.New("Belum ada foto yang dipilih. Gunakan *.pilih* (pilih semua) atau *.pilih 1 2* untuk memilih foto, lalu jalankan *.jj*.")
+	}
+	var out []jjStoredPhoto
+	for _, n := range sel {
+		if n >= 1 && n <= len(pool) {
+			p := pool[n-1]
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("Pilihan foto tidak valid. Silakan *.reset* lalu unggah dan pilih foto kembali.")
+	}
+	return out, nil
+}
+
+func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg Config, args string) error {
+	_ = cfg
+	_ = args
+	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
+	photos, err := m.jjSelectedPhotos(key)
+	if err != nil {
+		_ = m.sendReply(ctx, evt, "📸 "+err.Error())
 		return nil
 	}
 
-	_ = m.sendReply(ctx, evt, fmt.Sprintf("*? JJ CAPCUT ?*\n\nMemproses %d foto... mohon tunggu.", len(photos)))
+	_ = m.sendReply(ctx, evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)))
 
 	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
-	templateID := strings.TrimSpace(args)
-	jobID, tpl, err := m.jjCreateJob(ctx, base, photos, templateID)
+	ups := make([]jjPhotoUpload, 0, len(photos))
+	for _, p := range photos {
+		ups = append(ups, jjPhotoUpload{name: p.Name, mime: p.Mime, data: p.Data})
+	}
+	jobID, tpl, err := m.jjCreateJob(ctx, base, ups, "")
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nGagal membuat job: "+err.Error())
+		_ = m.sendReply(ctx, evt, "❌ Gagal memulai pembuatan video JJ.\n\n*Alasan:* "+err.Error())
 		return nil
 	}
 	_ = tpl
 
-	// poll status
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nTimeout menunggu hasil render.")
+			_ = m.sendReply(ctx, evt, "⏳ Proses JJ terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -1887,35 +2089,146 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 			case "selesai":
 				dl, _ := st["download_url"].(string)
 				if strings.TrimSpace(dl) == "" {
-					_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nSelesai tetapi tautan unduh tidak ditemukan.")
+					_ = m.sendReply(ctx, evt, "⚠️ Video JJ sudah jadi, tetapi tautan unduh tidak tersedia. Coba lagi ya.")
 					return nil
 				}
-				cap := "*? JJ CAPCUT ?*\n\nVideo selesai dibuat."
+				m.jjReset(key)
+				cap := "✅ Video JJ kamu sudah jadi!"
 				if t, ok := st["template"].(map[string]any); ok {
 					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
-						cap = "*? JJ CAPCUT ?*\n\n*Template:* " + title
+						cap = fmt.Sprintf("✅ Video JJ kamu sudah jadi!\n\n*Template:* %s\n*Foto:* %d", title, len(photos))
 					}
 				}
 				res := ExecResult{VideoURL: dl, Caption: cap}
 				if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
-					_ = m.sendReply(ctx, evt, cap+"\n\nGagal mengirim video: "+err.Error()+"\nLink: "+dl)
+					_ = m.sendReply(ctx, evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl)
 					return nil
 				}
 				return nil
 			case "gagal", "error", "timeout":
 				emsg, _ := st["error"].(string)
 				if emsg == "" {
-					emsg = status
+					emsg = "Terjadi kesalahan saat render."
 				}
-				_ = m.sendReply(ctx, evt, "*? JJ CAPCUT ?*\n\nGagal: "+emsg)
+				_ = m.sendReply(ctx, evt, "❌ Pembuatan video JJ gagal.\n\n*Alasan:* "+emsg)
 				return nil
-			case "processing", "queued", "":
-				// lanjut tunggu
-			default:
-				// status lain, lanjut
 			}
 		}
 	}
+}
+
+func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cfg Config) error {
+	_ = cfg
+	if !evt.Info.IsGroup {
+		_ = m.sendReply(ctx, evt, "Perintah *.jjgc* hanya bisa digunakan di dalam grup.")
+		return nil
+	}
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+	parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
+	if err != nil || len(parts) == 0 {
+		_ = m.sendReply(ctx, evt, "Gagal mengambil daftar anggota grup. Coba lagi nanti.")
+		return nil
+	}
+	// acak dan pilih hingga 3 anggota yang punya foto profil
+	cands := append([]types.JID(nil), parts...)
+	rand.Shuffle(len(cands), func(i, j int) { cands[i], cands[j] = cands[j], cands[i] })
+	var photos []jjPhotoUpload
+	for _, p := range cands {
+		if len(photos) >= 3 {
+			break
+		}
+		pp, err := c.GetProfilePictureInfo(ctx, p, &whatsmeow.GetProfilePictureParams{Preview: false})
+		if err != nil || pp == nil || strings.TrimSpace(pp.URL) == "" {
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, pp.URL, nil)
+		if err != nil {
+			continue
+		}
+		hc := &http.Client{Timeout: 30 * time.Second}
+		resp, err := hc.Do(req)
+		if err != nil {
+			continue
+		}
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
+		resp.Body.Close()
+		if resp.StatusCode >= 400 || len(data) == 0 {
+			continue
+		}
+		mime := strings.TrimSpace(resp.Header.Get("Content-Type"))
+		if mime == "" {
+			mime = http.DetectContentType(data)
+		}
+		ext := ".jpg"
+		if strings.Contains(mime, "png") {
+			ext = ".png"
+		}
+		photos = append(photos, jjPhotoUpload{name: fmt.Sprintf("pp%d%s", len(photos)+1, ext), mime: mime, data: data})
+	}
+	if len(photos) < 1 {
+		_ = m.sendReply(ctx, evt, "Tidak ditemukan foto profil anggota grup yang bisa digunakan. Coba lagi nanti.")
+		return nil
+	}
+	_ = m.sendReply(ctx, evt, fmt.Sprintf("🎲 Mengambil %d foto profil anggota grup secara acak...\nSedang memproses video JJ, mohon tunggu sebentar.", len(photos)))
+	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
+	jobID, _, err := m.jjCreateJob(ctx, base, photos, "")
+	if err != nil {
+		_ = m.sendReply(ctx, evt, "❌ Gagal memulai pembuatan video JJ grup.\n\n*Alasan:* "+err.Error())
+		return nil
+	}
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			_ = m.sendReply(ctx, evt, "⏳ Proses JJ grup terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
+			return ctx.Err()
+		case <-ticker.C:
+			st, err := m.jjGetJob(ctx, base, jobID)
+			if err != nil {
+				continue
+			}
+			status, _ := st["status"].(string)
+			switch status {
+			case "selesai":
+				dl, _ := st["download_url"].(string)
+				if strings.TrimSpace(dl) == "" {
+					_ = m.sendReply(ctx, evt, "⚠️ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.")
+					return nil
+				}
+				cap := fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Foto profil:* %d anggota (acak)", len(photos))
+				if t, ok := st["template"].(map[string]any); ok {
+					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
+						cap = fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Template:* %s\n*Foto profil:* %d anggota (acak)", title, len(photos))
+					}
+				}
+				res := ExecResult{VideoURL: dl, Caption: cap}
+				if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
+					_ = m.sendReply(ctx, evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl)
+					return nil
+				}
+				return nil
+			case "gagal", "error", "timeout":
+				emsg, _ := st["error"].(string)
+				if emsg == "" {
+					emsg = "Terjadi kesalahan saat render."
+				}
+				_ = m.sendReply(ctx, evt, "❌ Pembuatan video JJ grup gagal.\n\n*Alasan:* "+emsg)
+				return nil
+			}
+		}
+	}
+}
+
+type jjPhotoUpload struct {
+	name string
+	mime string
+	data []byte
 }
 
 func (m *Manager) jjCreateJob(ctx context.Context, base string, photos []jjPhotoUpload, templateID string) (string, map[string]any, error) {
@@ -1993,7 +2306,35 @@ func (m *Manager) jjGetJob(ctx context.Context, base, id string) (map[string]any
 }
 
 func urlQueryEscape(s string) string {
-	// minimal escape
 	r := strings.NewReplacer("%", "%25", " ", "%20", "&", "%26", "=", "%3D", "?", "%3F", "#", "%23", "+", "%2B")
 	return r.Replace(s)
+}
+
+func (m *Manager) isJJCommand(cmd string) bool {
+	switch normalizeCmd(cmd) {
+	case "jj", "jjgc", "pilih", "hapus", "reset":
+		return true
+	}
+	return false
+}
+
+func (m *Manager) handleJJFeatureCommand(ctx context.Context, evt *events.Message, cmd, args string, cfg Config) {
+	switch normalizeCmd(cmd) {
+	case "pilih":
+		m.jjHandlePilih(ctx, evt, args)
+	case "hapus", "reset":
+		m.jjHandleReset(ctx, evt)
+	case "jj":
+		jctx, jcancel := context.WithTimeout(context.Background(), 12*time.Minute)
+		defer jcancel()
+		if err := m.handleJJCommand(jctx, evt, cfg, args); err != nil {
+			m.logError("command.jj", err.Error())
+		}
+	case "jjgc":
+		jctx, jcancel := context.WithTimeout(context.Background(), 12*time.Minute)
+		defer jcancel()
+		if err := m.handleJJGCCommand(jctx, evt, cfg); err != nil {
+			m.logError("command.jjgc", err.Error())
+		}
+	}
 }
