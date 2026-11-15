@@ -848,14 +848,56 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 	return nil
 }
 
+func (m *Manager) jjReplyContext(evt *events.Message) *waE2E.ContextInfo {
+	if evt == nil || evt.Info.ID == "" {
+		return nil
+	}
+	participant := evt.Info.Sender.String()
+	return &waE2E.ContextInfo{
+		StanzaID:      proto.String(evt.Info.ID),
+		Participant:   proto.String(participant),
+		QuotedMessage: evt.Message,
+	}
+}
+
+func (m *Manager) jjNotify(evt *events.Message, text string, logTag string) {
+	if evt == nil || strings.TrimSpace(text) == "" {
+		return
+	}
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return
+	}
+	nctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text:        proto.String(text),
+			ContextInfo: m.jjReplyContext(evt),
+		},
+	}
+	if _, err := c.SendMessage(nctx, evt.Info.Chat, msg); err != nil {
+		if logTag == "" {
+			logTag = "jj.notify"
+		}
+		m.logError(logTag, "send notify: "+err.Error())
+	}
+}
+
 func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res ExecResult) error {
+	return m.sendJJVideoResult(ctx, evt, res)
+}
+
+func (m *Manager) sendJJVideoResult(workCtx context.Context, evt *events.Message, res ExecResult) error {
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
 	if c == nil {
 		return errors.New("client not ready")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, res.VideoURL, nil)
+	req, err := http.NewRequestWithContext(workCtx, http.MethodGet, res.VideoURL, nil)
 	if err != nil {
 		return err
 	}
@@ -908,8 +950,15 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 		caption = strings.TrimSpace(res.Reply)
 	}
 
+	newSendCtx := func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), 90*time.Second)
+	}
+	replyCtx := m.jjReplyContext(evt)
+
 	// coba kirim sebagai video
-	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
+	upCtx, cancel := newSendCtx()
+	uploaded, err := c.Upload(upCtx, data, whatsmeow.MediaVideo)
+	cancel()
 	if err == nil {
 		video := &waE2E.VideoMessage{
 			URL:           proto.String(uploaded.URL),
@@ -920,16 +969,21 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(data))),
 			Caption:       proto.String(caption),
-			ContextInfo:   buildReplyContext(evt),
+			ContextInfo:   replyCtx,
 		}
-		if _, sendErr := c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{VideoMessage: video}); sendErr == nil {
+		sCtx, cancel2 := newSendCtx()
+		_, sendErr := c.SendMessage(sCtx, evt.Info.Chat, &waE2E.Message{VideoMessage: video})
+		cancel2()
+		if sendErr == nil {
 			return nil
 		}
 		// jika send gagal, coba fallback dokumen di bawah
 	}
 
 	// fallback: kirim sebagai dokumen (lebih andal untuk beberapa format/ukuran)
-	upDoc, err2 := c.Upload(ctx, data, whatsmeow.MediaDocument)
+	upCtx2, cancel3 := newSendCtx()
+	upDoc, err2 := c.Upload(upCtx2, data, whatsmeow.MediaDocument)
+	cancel3()
 	if err2 != nil {
 		if err != nil {
 			return err
@@ -953,9 +1007,11 @@ func (m *Manager) sendVideoFromURL(ctx context.Context, evt *events.Message, res
 		FileLength:    proto.Uint64(uint64(len(data))),
 		FileName:      proto.String(fileName),
 		Caption:       proto.String(caption),
-		ContextInfo:   buildReplyContext(evt),
+		ContextInfo:   replyCtx,
 	}
-	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{DocumentMessage: doc})
+	sCtx2, cancel4 := newSendCtx()
+	_, err = c.SendMessage(sCtx2, evt.Info.Chat, &waE2E.Message{DocumentMessage: doc})
+	cancel4()
 	return err
 }
 
@@ -2102,11 +2158,11 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 	photos, err := m.jjSelectedPhotos(key)
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "📸 "+err.Error())
+		m.jjNotify(evt, "📸 "+err.Error(), "command.jj")
 		return nil
 	}
 
-	_ = m.sendReply(ctx, evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)))
+	m.jjNotify(evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)), "command.jj")
 
 	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
 	ups := make([]jjPhotoUpload, 0, len(photos))
@@ -2115,7 +2171,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	}
 	jobID, tpl, err := m.jjCreateJob(ctx, base, ups, "")
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "❌ Gagal memulai pembuatan video JJ.\n\n*Alasan:* "+err.Error())
+		m.jjNotify(evt, "❌ Gagal memulai pembuatan video JJ.\n\n*Alasan:* "+err.Error(), "command.jj")
 		return nil
 	}
 	_ = tpl
@@ -2125,7 +2181,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	for {
 		select {
 		case <-ctx.Done():
-			_ = m.sendReply(ctx, evt, "⏳ Proses JJ terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
+			m.jjNotify(evt, "⏳ Proses JJ terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.", "command.jj")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -2137,7 +2193,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 			case "selesai":
 				dl, _ := st["download_url"].(string)
 				if strings.TrimSpace(dl) == "" {
-					_ = m.sendReply(ctx, evt, "⚠️ Video JJ sudah jadi, tetapi tautan unduh tidak tersedia. Coba lagi ya.")
+					m.jjNotify(evt, "⚠️ Video JJ sudah jadi, tetapi tautan unduh tidak tersedia. Coba lagi ya.", "command.jj")
 					return nil
 				}
 				m.jjReset(key)
@@ -2148,8 +2204,9 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 					}
 				}
 				res := ExecResult{VideoURL: dl, Caption: cap}
-				if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
-					_ = m.sendReply(ctx, evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl)
+				if err := m.sendJJVideoResult(ctx, evt, res); err != nil {
+					m.logError("command.jj", "send video: "+err.Error())
+					m.jjNotify(evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl, "command.jj")
 					return nil
 				}
 				return nil
@@ -2158,7 +2215,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 				if emsg == "" {
 					emsg = "Terjadi kesalahan saat render."
 				}
-				_ = m.sendReply(ctx, evt, "❌ Pembuatan video JJ gagal.\n\n*Alasan:* "+emsg)
+				m.jjNotify(evt, "❌ Pembuatan video JJ gagal.\n\n*Alasan:* "+emsg, "command.jj")
 				return nil
 			}
 		}
@@ -2168,7 +2225,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cfg Config) error {
 	_ = cfg
 	if !evt.Info.IsGroup {
-		_ = m.sendReply(ctx, evt, "Perintah *.jjgc* hanya bisa digunakan di dalam grup.")
+		m.jjNotify(evt, "Perintah *.jjgc* hanya bisa digunakan di dalam grup.", "command.jjgc")
 		return nil
 	}
 	m.mu.RLock()
@@ -2179,7 +2236,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 	}
 	parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
 	if err != nil || len(parts) == 0 {
-		_ = m.sendReply(ctx, evt, "Gagal mengambil daftar anggota grup. Coba lagi nanti.")
+		m.jjNotify(evt, "Gagal mengambil daftar anggota grup. Coba lagi nanti.", "command.jjgc")
 		return nil
 	}
 	// acak dan pilih hingga 3 anggota yang punya foto profil
@@ -2219,14 +2276,14 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 		photos = append(photos, jjPhotoUpload{name: fmt.Sprintf("pp%d%s", len(photos)+1, ext), mime: mime, data: data})
 	}
 	if len(photos) < 1 {
-		_ = m.sendReply(ctx, evt, "Tidak ditemukan foto profil anggota grup yang bisa digunakan. Coba lagi nanti.")
+		m.jjNotify(evt, "Tidak ditemukan foto profil anggota grup yang bisa digunakan. Coba lagi nanti.", "command.jjgc")
 		return nil
 	}
-	_ = m.sendReply(ctx, evt, fmt.Sprintf("🎲 Mengambil %d foto profil anggota grup secara acak...\nSedang memproses video JJ, mohon tunggu sebentar.", len(photos)))
+	m.jjNotify(evt, fmt.Sprintf("🎲 Mengambil %d foto profil anggota grup secara acak...\nSedang memproses video JJ, mohon tunggu sebentar.", len(photos)), "command.jjgc")
 	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
 	jobID, _, err := m.jjCreateJob(ctx, base, photos, "")
 	if err != nil {
-		_ = m.sendReply(ctx, evt, "❌ Gagal memulai pembuatan video JJ grup.\n\n*Alasan:* "+err.Error())
+		m.jjNotify(evt, "❌ Gagal memulai pembuatan video JJ grup.\n\n*Alasan:* "+err.Error(), "command.jjgc")
 		return nil
 	}
 	ticker := time.NewTicker(5 * time.Second)
@@ -2234,7 +2291,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 	for {
 		select {
 		case <-ctx.Done():
-			_ = m.sendReply(ctx, evt, "⏳ Proses JJ grup terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.")
+			m.jjNotify(evt, "⏳ Proses JJ grup terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.", "command.jjgc")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -2246,7 +2303,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 			case "selesai":
 				dl, _ := st["download_url"].(string)
 				if strings.TrimSpace(dl) == "" {
-					_ = m.sendReply(ctx, evt, "⚠️ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.")
+					m.jjNotify(evt, "⚠️ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.", "command.jjgc")
 					return nil
 				}
 				cap := fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Foto profil:* %d anggota (acak)", len(photos))
@@ -2256,8 +2313,9 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 					}
 				}
 				res := ExecResult{VideoURL: dl, Caption: cap}
-				if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
-					_ = m.sendReply(ctx, evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl)
+				if err := m.sendJJVideoResult(ctx, evt, res); err != nil {
+					m.logError("command.jjgc", "send video: "+err.Error())
+					m.jjNotify(evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl, "command.jjgc")
 					return nil
 				}
 				return nil
@@ -2266,7 +2324,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 				if emsg == "" {
 					emsg = "Terjadi kesalahan saat render."
 				}
-				_ = m.sendReply(ctx, evt, "❌ Pembuatan video JJ grup gagal.\n\n*Alasan:* "+emsg)
+				m.jjNotify(evt, "❌ Pembuatan video JJ grup gagal.\n\n*Alasan:* "+emsg, "command.jjgc")
 				return nil
 			}
 		}
