@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,7 +16,10 @@ import (
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
-const bratCDPURL = "wss://light-panda-cdp.onrender.com/"
+const (
+	bratCDPURL  = "wss://light-panda-cdp.onrender.com/"
+	bratSiteURL = "https://www.bratgenerator.com/"
+)
 
 type bratCDP struct {
 	conn *websocket.Conn
@@ -108,108 +110,11 @@ func (c *bratCDP) waitFor(sessionID, jsExpr string, timeout time.Duration) error
 	return fmt.Errorf("timeout menunggu kondisi")
 }
 
-func bratHTML(text string) string {
-	// Escape text for safe embedding in JS string; render will set textContent.
-	escaped := strconv.QuoteToASCII(text) // returns quoted Go string literal
-	// Build a self-contained page mimicking brat "white background" style.
-	return fmt.Sprintf(`<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-@font-face {
-  font-family: 'arial_narrowregular';
-  src: url('https://www.bratgenerator.com/sites/g/files/g2000017981/files/2024-03/arial_narrow-webfont.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-}
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 512px;
-  height: 512px;
-  background: #ffffff;
-  overflow: hidden;
-}
-#wrap {
-  width: 512px;
-  height: 512px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #ffffff;
-  box-sizing: border-box;
-  padding: 28px;
-}
-#box {
-  width: 100%%;
-  height: 100%%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#text {
-  font-family: 'arial_narrowregular', 'Arial Narrow', Arial, sans-serif;
-  font-weight: 500;
-  color: #000000;
-  filter: blur(2px);
-  -webkit-filter: blur(2px);
-  text-align: justify;
-  text-align-last: justify;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.05;
-  width: 100%%;
-  display: block;
-}
-</style>
-</head>
-<body>
-<div id="wrap"><div id="box"><span id="text"></span></div></div>
-<script>
-(function(){
-  const txt = %s;
-  const el = document.getElementById('text');
-  el.textContent = txt;
-  function fits(size){
-    el.style.fontSize = size + 'px';
-    // allow layout
-    return el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.parentElement.clientHeight + 1;
-  }
-  function fit(){
-    const box = document.getElementById('box');
-    let lo = 8, hi = 420, best = 8;
-    for(let i=0;i<20;i++){
-      const mid = Math.floor((lo+hi)/2);
-      if(fits(mid)){ best = mid; lo = mid + 1; } else { hi = mid - 1; }
-    }
-    el.style.fontSize = best + 'px';
-    // if single short line, center looks better
-    if(!/\n/.test(txt) && txt.trim().length <= 12){
-      el.style.textAlign = 'center';
-      el.style.textAlignLast = 'center';
-    }
-  }
-  function ready(){
-    fit();
-    document.body.setAttribute('data-ready','1');
-  }
-  if(document.fonts && document.fonts.ready){
-    document.fonts.ready.then(function(){ setTimeout(ready, 60); });
-  } else {
-    setTimeout(ready, 300);
-  }
-})();
-</script>
-</body>
-</html>`, escaped)
-}
-
 func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("Parameter 'text' wajib diisi")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	conn, _, err := websocket.Dial(ctx, bratCDPURL, nil)
@@ -250,30 +155,106 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 		"width": 512, "height": 512, "deviceScaleFactor": 1, "mobile": false,
 	}, sid)
 
-	page := bratHTML(text)
-	// Load content. Prefer Page.setDocumentContent if available, else navigate to data URL.
-	encoded := base64.StdEncoding.EncodeToString([]byte(page))
-	dataURL := "data:text/html;base64," + encoded
-	if _, err := c.call("Page.navigate", map[string]any{"url": dataURL}, sid); err != nil {
+	if _, err := c.call("Page.navigate", map[string]any{"url": bratSiteURL}, sid); err != nil {
 		return nil, fmt.Errorf("navigate: %w", err)
 	}
-	// wait ready
-	_ = c.waitFor(sid, "document.body && document.body.getAttribute('data-ready')==='1'", 20*time.Second)
-	// extra settle for font/blur rasterization
+
+	// Wait for site scripts (setupTheme/textFit) to be ready.
+	if err := c.waitFor(sid, "typeof setupTheme==='function' && typeof textFit==='function'", 30*time.Second); err != nil {
+		return nil, fmt.Errorf("halaman brat tidak siap: %w", err)
+	}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(400 * time.Millisecond):
+	case <-time.After(800 * time.Millisecond):
+	}
+
+	textJS, _ := json.Marshal(text)
+	// Apply white theme using site's own logic, then set custom text and re-fit.
+	setupExpr := fmt.Sprintf(`(function(){
+  var txt = %s;
+  try{ if(typeof setupTheme==='function') setupTheme('white'); }catch(e){}
+  var inp = document.getElementById('textInput');
+  var overlay = document.getElementById('textOverlay');
+  // Set text through the site's own handler path for consistent fitting/structure
+  if(inp){
+    inp.value = txt;
+    try{ inp.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){
+      if(overlay){ overlay.innerText = txt; }
+      try{ if(typeof textFit==='function' && overlay) textFit(overlay, {maxFontSize: 75}); }catch(e2){}
+    }
+  } else if(overlay){
+    overlay.innerText = txt;
+    try{ if(typeof textFit==='function') textFit(overlay, {maxFontSize: 75}); }catch(e){}
+  }
+  // Keep white background clean; hide placeholder/strike images
+  var memeImage = document.getElementById('memeImage');
+  var memeStrike = document.getElementById('memeImageStrike');
+  if(memeImage){ memeImage.style.display = 'none'; }
+  if(memeStrike){ memeStrike.style.display = 'none'; }
+
+  // Isolate meme container for a clean 512x512 capture (white background)
+  var cont = document.getElementById('memeContainer');
+  if(cont){
+    cont.style.width = '512px';
+    cont.style.height = '512px';
+    cont.style.minHeight = '512px';
+    cont.style.maxHeight = '512px';
+    cont.style.margin = '0';
+    cont.style.background = '#ffffff';
+    cont.style.display = 'flex';
+    cont.style.alignItems = 'center';
+    cont.style.justifyContent = 'center';
+    cont.style.position = 'fixed';
+    cont.style.left = '0';
+    cont.style.top = '0';
+    cont.style.zIndex = '999999';
+  }
+  document.body.style.margin = '0';
+  document.body.style.background = '#ffffff';
+  document.body.style.overflow = 'hidden';
+  document.documentElement.style.background = '#ffffff';
+
+  // Hide everything else so capture is just the brat output
+  Array.from(document.body.children).forEach(function(c){
+    if(cont && (c === cont || c.contains(cont))) return;
+    c.style.display = 'none';
+  });
+  // Remove UI overlays/blurbs if any inside or near container
+  var blurb = document.getElementById('screenshot-blurb'); if(blurb) blurb.style.display='none';
+  return 'ok';
+})()`, string(textJS))
+	if _, err := c.eval(sid, setupExpr); err != nil {
+		return nil, fmt.Errorf("gagal menyiapkan render: %w", err)
+	}
+
+	// allow layout/fonts to settle
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(1200 * time.Millisecond):
+	}
+
+	// Determine clip from memeContainer
+	clipJSON, _ := c.eval(sid, `(function(){ var c=document.getElementById('memeContainer'); if(!c) return ''; var r=c.getBoundingClientRect(); return JSON.stringify({x:Math.max(0,r.x),y:Math.max(0,r.y),width:512,height:512}); })()`)
+	clip := map[string]any{"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1}
+	if strings.TrimSpace(clipJSON) != "" {
+		var r struct {
+			X      float64 `json:"x"`
+			Y      float64 `json:"y"`
+			Width  float64 `json:"width"`
+			Height float64 `json:"height"`
+		}
+		if err := json.Unmarshal([]byte(clipJSON), &r); err == nil && r.Width > 0 && r.Height > 0 {
+			clip = map[string]any{"x": r.X, "y": r.Y, "width": r.Width, "height": r.Height, "scale": 1}
+		}
 	}
 
 	shot, err := c.call("Page.captureScreenshot", map[string]any{
 		"format": "png",
-		"clip": map[string]any{
-			"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1,
-		},
+		"clip":   clip,
 	}, sid)
 	if err != nil {
-		// fallback: viewport screenshot
 		shot, err = c.call("Page.captureScreenshot", map[string]any{"format": "png"}, sid)
 		if err != nil {
 			return nil, fmt.Errorf("screenshot: %w", err)
@@ -295,7 +276,6 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 func (h *handlers) brat(w http.ResponseWriter, r *http.Request) {
 	text := strings.TrimSpace(r.URL.Query().Get("text"))
 	if text == "" && r.Method == http.MethodPost {
-		// accept JSON or form
 		if ct := r.Header.Get("Content-Type"); strings.Contains(strings.ToLower(ct), "application/json") {
 			if body, ok := decodeBody(w, r); ok {
 				if v, ok := stringValue(body, "text"); ok {
@@ -327,7 +307,3 @@ func (h *handlers) brat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(img)
 }
-
-// avoid unused import if html package not needed elsewhere in this file; keep simple.
-// (html package was not used; remove if compiler complains)
-var _ = html.EscapeString
