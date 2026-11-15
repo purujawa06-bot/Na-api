@@ -1,348 +1,20 @@
 package tools
 
 import (
+	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
-const bratSiteURL = "https://www.bratgenerator.com/"
-
-type bratCDP struct {
-	conn *websocket.Conn
-	ctx  context.Context
-	id   int
-}
-
-type bratCDPMsg struct {
-	ID     int             `json:"id,omitempty"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-}
-
-func (c *bratCDP) call(method string, params any, sessionID string) (json.RawMessage, error) {
-	c.id++
-	msg := map[string]any{"id": c.id, "method": method}
-	if params != nil {
-		msg["params"] = params
-	}
-	if sessionID != "" {
-		msg["sessionId"] = sessionID
-	}
-	if err := wsjson.Write(c.ctx, c.conn, msg); err != nil {
-		return nil, err
-	}
-	for {
-		var resp bratCDPMsg
-		if err := wsjson.Read(c.ctx, c.conn, &resp); err != nil {
-			return nil, err
-		}
-		if resp.ID == c.id {
-			if resp.Error != nil {
-				return nil, errors.New(resp.Error.Message)
-			}
-			return resp.Result, nil
-		}
-	}
-}
-
-func (c *bratCDP) eval(sessionID, expression string) (string, error) {
-	raw, err := c.call("Runtime.evaluate", map[string]any{
-		"expression":    expression,
-		"returnByValue": true,
-		"awaitPromise":  true,
-	}, sessionID)
-	if err != nil {
-		return "", err
-	}
-	var out struct {
-		Result struct {
-			Value any `json:"value"`
-		} `json:"result"`
-		ExceptionDetails any `json:"exceptionDetails"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", err
-	}
-	if out.ExceptionDetails != nil {
-		b, _ := json.Marshal(out.ExceptionDetails)
-		return "", fmt.Errorf("eval exception: %s", string(b))
-	}
-	switch v := out.Result.Value.(type) {
-	case string:
-		return v, nil
-	case nil:
-		return "", nil
-	default:
-		b, _ := json.Marshal(v)
-		return string(b), nil
-	}
-}
-
-func (c *bratCDP) waitFor(sessionID, jsExpr string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		v, err := c.eval(sessionID, jsExpr)
-		if err == nil && (v == "true" || v == "1") {
-			return nil
-		}
-		select {
-		case <-c.ctx.Done():
-			return c.ctx.Err()
-		case <-time.After(300 * time.Millisecond):
-		}
-	}
-	return fmt.Errorf("timeout menunggu kondisi")
-}
-
-func renderBratImage(ctx context.Context, text string) ([]byte, error) {
-	if strings.TrimSpace(text) == "" {
-		return nil, fmt.Errorf("Parameter 'text' wajib diisi")
-	}
-	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		img, err := renderBratImageOnce(ctx, text)
-		if err == nil {
-			return img, nil
-		}
-		lastErr = err
-		// retry on transient connection errors
-		if attempt == 0 {
-			select {
-			case <-ctx.Done():
-				// fall through to fallback
-			case <-time.After(1200 * time.Millisecond):
-			}
-		}
-	}
-	// Fallback: if live site/CDP rendering fails, return a local white-brat render.
-	if img, err := renderBratImageFallback(ctx, text); err == nil {
-		return img, nil
-	}
-	return nil, lastErr
-}
-
-func renderBratImageFallback(ctx context.Context, text string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	var conn *websocket.Conn
-	var err error
-	for _, ep := range bratCDPEndpoints() {
-		conn, _, err = websocket.Dial(ctx, ep, nil)
-		if err == nil {
-			break
-		}
-	}
-	if conn == nil {
-		if err != nil {
-			return nil, fmt.Errorf("cdp dial: %w", err)
-		}
-		return nil, fmt.Errorf("cdp dial: no endpoint available")
-	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
-	c := &bratCDP{conn: conn, ctx: ctx}
-
-	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
-	if err != nil {
-		return nil, err
-	}
-	var ct struct{ TargetID string `json:"targetId"` }
-	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
-		return nil, errors.New("targetId tidak ditemukan")
-	}
-	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": ct.TargetID}, "") }()
-	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": ct.TargetID, "flatten": true}, "")
-	if err != nil {
-		return nil, err
-	}
-	var att struct{ SessionID string `json:"sessionId"` }
-	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
-		return nil, errors.New("sessionId tidak ditemukan")
-	}
-	sid := att.SessionID
-	_, _ = c.call("Page.enable", map[string]any{}, sid)
-	_, _ = c.call("Runtime.enable", map[string]any{}, sid)
-	_, _ = c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": 512, "height": 512, "deviceScaleFactor": 1, "mobile": false}, sid)
-
-	textJS, _ := json.Marshal(text)
-	page := fmt.Sprintf(`data:text/html,<!doctype html><html><head><meta charset="utf-8"><style>
-@font-face{font-family:'arial_narrowregular';src:url('https://www.bratgenerator.com/sites/g/files/g2000017981/files/2024-03/arial_narrow-webfont.woff') format('woff');}
-html,body{margin:0;width:512px;height:512px;background:#fff;overflow:hidden}
-#wrap{width:512px;height:512px;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#fff}
-#text{font-family:'arial_narrowregular','Arial Narrow',Arial,sans-serif;font-weight:500;color:#000;filter:blur(2px);-webkit-filter:blur(2px);text-align:justify;text-align-last:justify;white-space:pre-wrap;word-break:break-word;line-height:1.05;width:100%%}
-</style></head><body><div id="wrap"><span id="text"></span></div><script>(function(){var t=%s;var el=document.getElementById('text');el.textContent=t;function fit(){var lo=8,hi=360,best=8;for(var i=0;i<18;i++){var m=(lo+hi)>>1;el.style.fontSize=m+'px';var w=document.getElementById('wrap');if(el.scrollWidth<=w.clientWidth-48+1 && el.scrollHeight<=w.clientHeight-48+1){best=m;lo=m+1;}else{hi=m-1;}}el.style.fontSize=best+'px';if(!/\n/.test(t)&&t.trim().length<=12){el.style.textAlign='center';el.style.textAlignLast='center';}document.body.setAttribute('data-ready','1');} if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(fit,80)});}else{setTimeout(fit,300);} })();</script></body></html>`, string(textJS))
-	if _, err := c.call("Page.navigate", map[string]any{"url": page}, sid); err != nil {
-		return nil, err
-	}
-	_ = c.waitFor(sid, "document.body && document.body.getAttribute('data-ready')==='1'", 15*time.Second)
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(500 * time.Millisecond):
-	}
-	shot, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}, sid)
-	if err != nil {
-		return nil, err
-	}
-	var sc struct{ Data string `json:"data"` }
-	if err := json.Unmarshal(shot, &sc); err != nil || sc.Data == "" {
-		return nil, errors.New("data screenshot kosong")
-	}
-	return base64.StdEncoding.DecodeString(sc.Data)
-}
-
-func bratCDPEndpoints() []string {
-	return []string{"wss://light-panda-cdp.onrender.com/"}
-}
-
-func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 110*time.Second)
-	defer cancel()
-
-	var lastDialErr error
-	var conn *websocket.Conn
-	for _, endpoint := range bratCDPEndpoints() {
-		cn, _, err := websocket.Dial(ctx, endpoint, nil)
-		if err == nil {
-			conn = cn
-			break
-		}
-		lastDialErr = err
-	}
-	if conn == nil {
-		if lastDialErr != nil {
-			return nil, fmt.Errorf("cdp dial: %w", lastDialErr)
-		}
-		return nil, fmt.Errorf("cdp dial: no endpoint available")
-	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
-	c := &bratCDP{conn: conn, ctx: ctx}
-
-	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
-	if err != nil {
-		return nil, fmt.Errorf("create target: %w", err)
-	}
-	var ct struct {
-		TargetID string `json:"targetId"`
-	}
-	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
-		return nil, errors.New("targetId tidak ditemukan")
-	}
-	targetID := ct.TargetID
-	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
-
-	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
-	if err != nil {
-		return nil, fmt.Errorf("attach: %w", err)
-	}
-	var att struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
-		return nil, errors.New("sessionId tidak ditemukan")
-	}
-	sid := att.SessionID
-
-	_, _ = c.call("Page.enable", map[string]any{}, sid)
-	_, _ = c.call("Runtime.enable", map[string]any{}, sid)
-	_, _ = c.call("Emulation.setDeviceMetricsOverride", map[string]any{
-		"width": 512, "height": 512, "deviceScaleFactor": 1, "mobile": false,
-	}, sid)
-
-	if _, err := c.call("Page.navigate", map[string]any{"url": bratSiteURL}, sid); err != nil {
-		return nil, fmt.Errorf("navigate: %w", err)
-	}
-
-	// Wait for page scripts/elements to be ready.
-	if err := c.waitFor(sid, "typeof setupTheme==='function' && document.getElementById('textInput') && document.getElementById('memeContainer')", 30*time.Second); err != nil {
-		return nil, fmt.Errorf("halaman brat tidak siap: %w", err)
-	}
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(800 * time.Millisecond):
-	}
-
-	textJS, _ := json.Marshal(text)
-	// Flow (tanpa modifikasi HTML/style halaman): 1) buka situs, 2) klik #toggleButtonWhite, 3) input #textInput, 4) screenshot #memeContainer.
-	actionExpr := fmt.Sprintf(`(function(){
-  var txt = %s;
-  // 2. click white theme toggle
-  var btn = document.getElementById('toggleButtonWhite');
-  if(btn && typeof btn.click === 'function'){ btn.click(); }
-  else { try{ setupTheme('white'); }catch(e){} }
-
-  // 3. input text
-  var inp = document.getElementById('textInput');
-  if(inp){
-    inp.focus && inp.focus();
-    inp.value = txt;
-    try{ inp.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){}
-    try{ inp.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}
-  }
-  return 'ok';
-})()`, string(textJS))
-	if _, err := c.eval(sid, actionExpr); err != nil {
-		return nil, fmt.Errorf("gagal menyiapkan render: %w", err)
-	}
-
-	// Tunggu teks terpasang/ter-fit dan tata letak stabil
-	_ = c.waitFor(sid, fmt.Sprintf(`(function(){var el=document.querySelector('#textOverlay .textFitted')||document.getElementById('textOverlay'); if(!el) return false; var t=(el.textContent||'').trim(); return t.length>0 && t===%s.trim();})()`, string(textJS)), 10*time.Second)
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(1200 * time.Millisecond):
-	}
-
-	// 4. Screenshot #memeContainer (sesuai elemen aslinya, tanpa modifikasi halaman)
-	rectJSON, err := c.eval(sid, `(function(){var el=document.getElementById('memeContainer'); if(!el) return ''; var r=el.getBoundingClientRect(); return JSON.stringify({x:r.x,y:r.y,width:r.width,height:r.height});})()`)
-	if err != nil || strings.TrimSpace(rectJSON) == "" {
-		return nil, fmt.Errorf("memeContainer tidak ditemukan")
-	}
-	var r struct {
-		X      float64 `json:"x"`
-		Y      float64 `json:"y"`
-		Width  float64 `json:"width"`
-		Height float64 `json:"height"`
-	}
-	if err := json.Unmarshal([]byte(rectJSON), &r); err != nil || r.Width <= 0 || r.Height <= 0 {
-		return nil, fmt.Errorf("ukuran memeContainer tidak valid")
-	}
-	scale := 512.0 / r.Width
-	if scale <= 0 {
-		scale = 1
-	}
-	shot, err := c.call("Page.captureScreenshot", map[string]any{
-		"format": "png",
-		"clip":   map[string]any{"x": r.X, "y": r.Y, "width": r.Width, "height": r.Height, "scale": scale},
-	}, sid)
-	if err != nil {
-		return nil, fmt.Errorf("screenshot: %w", err)
-	}
-	var sc struct {
-		Data string `json:"data"`
-	}
-	if err := json.Unmarshal(shot, &sc); err != nil || sc.Data == "" {
-		return nil, errors.New("data screenshot kosong")
-	}
-	img, err := base64.StdEncoding.DecodeString(sc.Data)
-	if err != nil {
-		return nil, fmt.Errorf("decode screenshot: %w", err)
-	}
-	return img, nil
-}
+const bratUpstreamURL = "https://api.siputzx.my.id/api/m/brat"
 
 func (h *handlers) brat(w http.ResponseWriter, r *http.Request) {
 	text := strings.TrimSpace(r.URL.Query().Get("text"))
@@ -350,7 +22,7 @@ func (h *handlers) brat(w http.ResponseWriter, r *http.Request) {
 		if ct := r.Header.Get("Content-Type"); strings.Contains(strings.ToLower(ct), "application/json") {
 			if body, ok := decodeBody(w, r); ok {
 				if v, ok := stringValue(body, "text"); ok {
-					text = v
+					text = strings.TrimSpace(v)
 				}
 			} else {
 				return
@@ -365,17 +37,72 @@ func (h *handlers) brat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Brat rendering via CDP can take longer than the default request timeout.
-	ctx, cancel := context.WithTimeout(r.Context(), 150*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	img, err := renderBratImage(ctx, text)
+
+	payload, err := json.Marshal(map[string]any{
+		"text":       text,
+		"isAnimated": false,
+		"delay":      500,
+	})
 	if err != nil {
-		httpx.UpstreamError(w, "Gagal membuat gambar brat: "+err.Error())
+		httpx.Error(w, http.StatusInternalServerError, "Gagal menyiapkan permintaan brat")
 		return
 	}
-	w.Header().Set("Content-Type", "image/png")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bratUpstreamURL, bytes.NewReader(payload))
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "Gagal membuat permintaan brat")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://tools.mirai-pedia.com/brat-generator/")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		httpx.UpstreamError(w, "Gagal menghubungi layanan brat: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+	if err != nil {
+		httpx.UpstreamError(w, "Gagal membaca respons brat: "+err.Error())
+		return
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			msg = fmt.Sprintf("upstream status %d", resp.StatusCode)
+		} else if len(msg) > 300 {
+			msg = msg[:300]
+		}
+		httpx.UpstreamError(w, "Gagal membuat gambar brat: "+msg)
+		return
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = http.DetectContentType(body)
+	}
+	if !strings.Contains(strings.ToLower(ct), "image/") {
+		// Upstream returned non-image; surface as upstream error.
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			msg = "respons upstream bukan gambar"
+		} else if len(msg) > 300 {
+			msg = msg[:300]
+		}
+		httpx.UpstreamError(w, "Gagal membuat gambar brat: "+msg)
+		return
+	}
+
+	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=300, s-maxage=300")
-	w.Header().Set("Content-Length", strconv.Itoa(len(img)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(img)
+	_, _ = w.Write(body)
 }
