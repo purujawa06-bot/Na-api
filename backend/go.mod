@@ -3,17 +3,15 @@ module github.com/purujawa06-bot/na-api/backend
 go 1.26.0
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/maarkN/cloudscraper-go v0.0.0-20260705143702-33f020765f82
-	github.com/mxschmitt/playwright-go v0.6401.0
 	golang.org/x/net v0.61.0
 )
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
-	github.com/deckarep/golang-set/v2 v2.8.0 // indirect
-	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/gofiber/schema v1.8.8 // indirect
 	github.com/gofiber/utils/v2 v2.6.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect

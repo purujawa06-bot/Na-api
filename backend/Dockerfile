@@ -38,8 +38,7 @@ COPY lib/easemate-web.js lib/easemate-wasm.js lib/quillbot-web.js /app/bridge/
 ENV PORT=8080 \
     TZ=Asia/Jakarta \
     EASEMATE_BRIDGE=/app/bridge/easemate-cli.mjs \
-    QUILLBOT_BRIDGE=/app/bridge/quillbot-cli.mjs \
-    PLAYWRIGHT_NODEJS_PATH=/usr/bin/node
+    QUILLBOT_BRIDGE=/app/bridge/quillbot-cli.mjs
 
 USER naapi
 EXPOSE 8080

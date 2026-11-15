@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -15,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mxschmitt/playwright-go"
+	"github.com/coder/websocket"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
@@ -500,55 +501,58 @@ func jjSleepJitter(ctx context.Context, base, jitter time.Duration) error {
 	return sleepCtx(ctx, d)
 }
 
-func jjHumanScroll(ctx context.Context, page playwright.Page) {
+func (c *cdpClient) jjHumanScroll(sessionID string) {
 	// Scroll down/up in small steps with pauses to mimic a real visitor.
 	steps := jjRandInt(2, 5)
 	for i := 0; i < steps; i++ {
 		dy := jjRandInt(120, 420)
-		_, _ = page.Evaluate(fmt.Sprintf(`() => window.scrollBy({top:%d,left:0,behavior:'smooth'})`, dy))
-		_ = jjSleepJitter(ctx, 180*time.Millisecond, 420*time.Millisecond)
+		_, _ = c.eval(sessionID, fmt.Sprintf("window.scrollBy({top:%d,left:0,behavior:'smooth'})", dy))
+		_ = jjSleepJitter(c.ctx, 180*time.Millisecond, 420*time.Millisecond)
 	}
-	_ = jjSleepJitter(ctx, 150*time.Millisecond, 350*time.Millisecond)
-	_, _ = page.Evaluate(`() => window.scrollBy({top:-120,left:0,behavior:'smooth'})`)
-	_ = jjSleepJitter(ctx, 120*time.Millisecond, 280*time.Millisecond)
+	_ = jjSleepJitter(c.ctx, 150*time.Millisecond, 350*time.Millisecond)
+	_, _ = c.eval(sessionID, "window.scrollBy({top:-120,left:0,behavior:'smooth'})")
+	_ = jjSleepJitter(c.ctx, 120*time.Millisecond, 280*time.Millisecond)
 }
 
-func jjClickSelector(ctx context.Context, page playwright.Page, selector string) error {
+func (c *cdpClient) jjClickSelector(sessionID, selector string) error {
 	// Try to scroll element into view, move mouse over its center and click.
 	// Falls back to a JS click. This aims to behave like a natural interaction.
-	jsGet := fmt.Sprintf(`() => {
+	jsGet := fmt.Sprintf(`(function(){
   const el = document.querySelector(%q);
   if(!el) return '';
   try{ el.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
   const r = el.getBoundingClientRect();
   return JSON.stringify({x: r.left + r.width/2, y: r.top + r.height/2, w: r.width, h: r.height, ok: r.width>0 && r.height>0});
-}`, selector)
-	posVal, err := page.Evaluate(jsGet)
+})()`, selector)
+	posStr, err := c.eval(sessionID, jsGet)
 	if err != nil {
 		return err
 	}
-	_ = jjSleepJitter(ctx, 250*time.Millisecond, 450*time.Millisecond)
-	if posStr, _ := posVal.(string); posStr != "" {
+	_ = jjSleepJitter(c.ctx, 250*time.Millisecond, 450*time.Millisecond)
+	if posStr != "" {
 		var pos struct {
 			X  float64 `json:"x"`
 			Y  float64 `json:"y"`
 			OK bool    `json:"ok"`
 		}
 		if err := json.Unmarshal([]byte(posStr), &pos); err == nil && pos.OK {
+			// small jitter around center
 			pos.X += float64(jjRandInt(-4, 4))
 			pos.Y += float64(jjRandInt(-3, 3))
-			if err := page.Mouse().Move(pos.X, pos.Y); err == nil {
-				_ = jjSleepJitter(ctx, 60*time.Millisecond, 140*time.Millisecond)
-				if err := page.Mouse().Down(); err == nil {
-					_ = jjSleepJitter(ctx, 40*time.Millisecond, 120*time.Millisecond)
-					_ = page.Mouse().Up()
-					return nil
-				}
+			paramsMove := map[string]any{"type": "mouseMoved", "x": pos.X, "y": pos.Y, "button": "none"}
+			paramsDown := map[string]any{"type": "mousePressed", "x": pos.X, "y": pos.Y, "button": "left", "clickCount": 1}
+			paramsUp := map[string]any{"type": "mouseReleased", "x": pos.X, "y": pos.Y, "button": "left", "clickCount": 1}
+			_, _ = c.call("Input.dispatchMouseEvent", paramsMove, sessionID)
+			_ = jjSleepJitter(c.ctx, 60*time.Millisecond, 140*time.Millisecond)
+			if _, err := c.call("Input.dispatchMouseEvent", paramsDown, sessionID); err == nil {
+				_ = jjSleepJitter(c.ctx, 40*time.Millisecond, 120*time.Millisecond)
+				_, _ = c.call("Input.dispatchMouseEvent", paramsUp, sessionID)
+				return nil
 			}
 		}
 	}
 	// fallback: JS click
-	_, err = page.Evaluate(fmt.Sprintf(`() => { const el=document.querySelector(%q); if(!el) return 'NO'; el.click(); return 'OK'; }`, selector))
+	_, err = c.eval(sessionID, fmt.Sprintf(`(function(){const el=document.querySelector(%q); if(!el) return 'NO'; el.click(); return 'OK';})()`, selector))
 	return err
 }
 
@@ -563,56 +567,25 @@ type jjGenerateResult struct {
 func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenerateResult, error) {
 	createURL := jjBaseURL + "/create/" + tpl.ID
 
-	pw, err := playwright.Run()
+	conn, _, err := websocket.Dial(ctx, jjCDPURL, nil)
 	if err != nil {
-		if strings.Contains(err.Error(), "please install the driver") || strings.Contains(err.Error(), "could not start driver") || strings.Contains(err.Error(), "no such file or directory") {
-			if instErr := playwright.Install(&playwright.RunOptions{SkipInstallBrowsers: true}); instErr != nil {
-				return jjGenerateResult{}, fmt.Errorf("playwright install: %w (run: %v)", instErr, err)
-			}
-			pw, err = playwright.Run()
-		}
+		return jjGenerateResult{}, fmt.Errorf("cdp dial: %w", err)
 	}
-	if err != nil {
-		return jjGenerateResult{}, fmt.Errorf("playwright run: %w", err)
-	}
-	defer func() { _ = pw.Stop() }()
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+	c := &cdpClient{conn: conn, ctx: ctx}
 
-	browser, err := pw.Chromium.ConnectOverCDP(jjCDPURL)
+	targetID, sid, err := jjNewPage(c, createURL)
 	if err != nil {
-		return jjGenerateResult{}, fmt.Errorf("cdp connect: %w", err)
+		return jjGenerateResult{}, err
 	}
-	defer func() { _ = browser.Close() }()
-
-	bctx, err := browser.NewContext()
-	if err != nil {
-		return jjGenerateResult{}, fmt.Errorf("new context: %w", err)
-	}
-	defer func() { _ = bctx.Close() }()
-
-	page, err := bctx.NewPage()
-	if err != nil {
-		return jjGenerateResult{}, fmt.Errorf("new page: %w", err)
-	}
-	defer func() { _ = page.Close() }()
-
-	page.SetDefaultTimeout(30000)
-	_ = jjSleepJitter(ctx, 300*time.Millisecond, 500*time.Millisecond)
-	if _, err := page.Goto(createURL, playwright.PageGotoOptions{
-		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
-		Timeout:   playwright.Float(45000),
-	}); err != nil {
-		return jjGenerateResult{}, fmt.Errorf("navigate: %w", err)
-	}
-	_ = jjSleepJitter(ctx, 1800*time.Millisecond, 1200*time.Millisecond)
-	_, _ = page.WaitForFunction(`() => document.readyState === 'complete' || document.readyState === 'interactive'`, nil, playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(20000)})
-	_ = jjSleepJitter(ctx, 700*time.Millisecond, 900*time.Millisecond)
+	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
 
 	// tunggu form upload siap
-	if _, err := page.WaitForFunction(`() => !!document.querySelector('input[type=file]')`, nil, playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(30000)}); err != nil {
+	if err := c.waitFor(ctx, sid, `!!document.querySelector('input[type=file]')`, 30*time.Second); err != nil {
 		return jjGenerateResult{}, fmt.Errorf("halaman create tidak siap: %w", err)
 	}
 	_ = jjSleepJitter(ctx, 900*time.Millisecond, 900*time.Millisecond)
-	jjHumanScroll(ctx, page)
+	c.jjHumanScroll(sid)
 
 	// inject file via DataTransfer (file ada di server, bukan FS browser remote)
 	payloads := make([]map[string]any, 0, len(photos))
@@ -624,7 +597,7 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
 		})
 	}
 	pb, _ := json.Marshal(payloads)
-	injectExpr := fmt.Sprintf(`() => {
+	injectExpr := fmt.Sprintf(`(function(){
   const items = %s;
   const input = document.querySelector('input[type=file]');
   if(!input) return 'NO_INPUT';
@@ -639,24 +612,23 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
   input.dispatchEvent(new Event('input',{bubbles:true}));
   input.dispatchEvent(new Event('change',{bubbles:true}));
   return 'FILES='+input.files.length;
-}`, string(pb))
-	injectVal, err := page.Evaluate(injectExpr)
+})()`, string(pb))
+	injectRes, err := c.eval(sid, injectExpr)
 	if err != nil {
 		return jjGenerateResult{}, fmt.Errorf("gagal inject foto: %w", err)
 	}
-	injectRes, _ := injectVal.(string)
 	if injectRes != fmt.Sprintf("FILES=%d", len(photos)) {
 		return jjGenerateResult{}, fmt.Errorf("gagal menyiapkan foto (%s)", injectRes)
 	}
 	_ = jjSleepJitter(ctx, 900*time.Millisecond, 1200*time.Millisecond)
-	jjHumanScroll(ctx, page)
+	c.jjHumanScroll(sid)
 	_ = jjSleepJitter(ctx, 300*time.Millisecond, 600*time.Millisecond)
 
 	// submit: scroll to button and click naturally
-	_ = jjClickSelector(ctx, page, "button")
+	_ = c.jjClickSelector(sid, "button")
 	// verify click had effect (button may disable or task area appear); if nothing, try JS click on submit-like button
 	_ = jjSleepJitter(ctx, 600*time.Millisecond, 700*time.Millisecond)
-	submitVal, _ := page.Evaluate(`() => {
+	submitRes, _ := c.eval(sid, `(function(){
   const b = Array.from(document.querySelectorAll('button')).find(x=>/submit|buat|generate|proses|render/i.test((x.innerText||x.textContent||'')));
   if(!b) return 'NO_SUBMIT';
   const t = (document.body&&document.body.innerText||'');
@@ -665,8 +637,7 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
   try{ b.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
   b.click();
   return 'CLICKED';
-}`)
-	submitRes, _ := submitVal.(string)
+})()`)
 	if submitRes == "NO_SUBMIT" {
 		return jjGenerateResult{}, fmt.Errorf("gagal submit: tombol submit tidak ditemukan")
 	}
@@ -678,7 +649,7 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
 		if err := sleepCtx(ctx, jjPollInterval); err != nil {
 			return last, err
 		}
-		st, err := jjReadState(page)
+		st, err := jjReadState(c, sid)
 		if err != nil {
 			continue
 		}
@@ -690,8 +661,8 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
 	return last, nil
 }
 
-func jjReadState(page playwright.Page) (jjGenerateResult, error) {
-	expr := `() => {
+func jjReadState(c *cdpClient, sid string) (jjGenerateResult, error) {
+	expr := `(function(){
   const text = (document.body && document.body.innerText || '').slice(0,8000);
   let task = '';
   const idx = text.indexOf('Task kamu');
@@ -709,12 +680,11 @@ func jjReadState(page playwright.Page) (jjGenerateResult, error) {
   const done = /selesai|berhasil/i.test(task) || (!!dl);
   const failed = /gagal|error|failed/i.test(task);
   return JSON.stringify({task:task, dl:dl, view:view, done:done, failed:failed});
-}`
-	val, err := page.Evaluate(expr)
+})()`
+	val, err := c.eval(sid, expr)
 	if err != nil {
 		return jjGenerateResult{}, err
 	}
-	s, _ := val.(string)
 	var st struct {
 		Task   string `json:"task"`
 		DL     string `json:"dl"`
@@ -722,7 +692,7 @@ func jjReadState(page playwright.Page) (jjGenerateResult, error) {
 		Done   bool   `json:"done"`
 		Failed bool   `json:"failed"`
 	}
-	if err := json.Unmarshal([]byte(s), &st); err != nil {
+	if err := json.Unmarshal([]byte(val), &st); err != nil {
 		return jjGenerateResult{}, err
 	}
 	return jjGenerateResult{
@@ -732,4 +702,46 @@ func jjReadState(page playwright.Page) (jjGenerateResult, error) {
 		ViewURL:     st.View,
 		TaskText:    st.Task,
 	}, nil
+}
+
+func jjNewPage(c *cdpClient, url string) (targetID, sessionID string, err error) {
+	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+	if err != nil {
+		return "", "", fmt.Errorf("create target: %w", err)
+	}
+	var ct struct {
+		TargetID string `json:"targetId"`
+	}
+	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
+		return "", "", errors.New("targetId tidak ditemukan")
+	}
+	targetID = ct.TargetID
+
+	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
+	if err != nil {
+		_, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
+		return "", "", fmt.Errorf("attach: %w", err)
+	}
+	var att struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
+		_, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
+		return "", "", errors.New("sessionId tidak ditemukan")
+	}
+	sessionID = att.SessionID
+
+	_, _ = c.call("Page.enable", map[string]any{}, sessionID)
+	_, _ = c.call("Runtime.enable", map[string]any{}, sessionID)
+	// small pause before navigating, as a real browser session would
+	_ = jjSleepJitter(c.ctx, 300*time.Millisecond, 500*time.Millisecond)
+	if _, err := c.call("Page.navigate", map[string]any{"url": url}, sessionID); err != nil {
+		_, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
+		return "", "", fmt.Errorf("navigate: %w", err)
+	}
+	// wait for load in a more natural, staged way
+	_ = jjSleepJitter(c.ctx, 1800*time.Millisecond, 1200*time.Millisecond)
+	_ = c.waitFor(c.ctx, sessionID, `document.readyState === 'complete' || document.readyState === 'interactive'`, 20*time.Second)
+	_ = jjSleepJitter(c.ctx, 700*time.Millisecond, 900*time.Millisecond)
+	return targetID, sessionID, nil
 }
