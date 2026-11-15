@@ -232,18 +232,20 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(1200 * time.Millisecond):
+	case <-time.After(1500 * time.Millisecond):
 	}
+	_ = c.waitFor(sid, "document.readyState === 'complete'", 5*time.Second)
 
-	// Capture fixed 512x512 area (container is positioned fixed at 0,0 with 512x512).
-	clip := map[string]any{"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1}
-
+	// Viewport is 512x512; capture full viewport for a stable 512x512 image.
 	shot, err := c.call("Page.captureScreenshot", map[string]any{
 		"format": "png",
-		"clip":   clip,
 	}, sid)
 	if err != nil {
-		shot, err = c.call("Page.captureScreenshot", map[string]any{"format": "png"}, sid)
+		// fallback: fixed clip
+		shot, err = c.call("Page.captureScreenshot", map[string]any{
+			"format": "png",
+			"clip":   map[string]any{"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1},
+		}, sid)
 		if err != nil {
 			return nil, fmt.Errorf("screenshot: %w", err)
 		}
