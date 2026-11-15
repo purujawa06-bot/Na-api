@@ -15,19 +15,6 @@
  *     .then(res => res.json())
  *     .then(console.log);
  */
-/**
- * @title SoundCloud Play (Direct)
- * @summary Cari dan dapatkan stream URL MP3 SoundCloud.
- * @description Mencari track di SoundCloud dan mengembalikan metadata beserta link stream MP3 128kbps.
- * @method GET
- * @path /api/play/soundcloud
- * @param {string} query.q - Kata kunci pencarian (Judul/Artis).
- * @response json
- * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/play/soundcloud?q=dj%20ya%20odna')
- *     .then(res => res.json())
- *     .then(console.log);
- */
 import { NextResponse } from 'next/server';
 import { searchSoundCloud, downloadSoundCloud } from '../../../../lib/soundcloud.js';
 import { cachedJson } from '../../../../lib/api-cache.js';

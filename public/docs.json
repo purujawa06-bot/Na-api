@@ -742,24 +742,6 @@
           "required": true
         }
       ]
-    },
-    {
-      "title": "SoundCloud Play (Direct)",
-      "summary": "Cari dan dapatkan stream URL MP3 SoundCloud.",
-      "description": "Mencari track di SoundCloud dan mengembalikan metadata beserta link stream MP3 128kbps.",
-      "method": "GET",
-      "path": "/api/play/soundcloud",
-      "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/play/soundcloud?q=dj%20ya%20odna')\n     .then(res => res.json())\n     .then(console.log);",
-      "params": [
-        {
-          "name": "q",
-          "in": "query",
-          "type": "string",
-          "description": "Kata kunci pencarian (Judul/Artis).",
-          "required": true
-        }
-      ]
     }
   ],
   "nonton/baca": [
