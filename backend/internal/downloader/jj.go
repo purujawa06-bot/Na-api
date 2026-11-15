@@ -408,8 +408,14 @@ func collectJJPhotos(r *http.Request) ([]jjPhoto, error) {
 				return nil, fmt.Errorf("file %s melebihi batas %dMB", fh.Filename, jjMaxPhotoBytes/(1<<20))
 			}
 			mime := strings.ToLower(strings.TrimSpace(fh.Header.Get("Content-Type")))
-			if mime == "" {
-				mime = http.DetectContentType(data)
+			detected := strings.ToLower(strings.TrimSpace(http.DetectContentType(data)))
+			if mime == "" || mime == "application/octet-stream" || mime == "binary/octet-stream" {
+				if detected != "" {
+					mime = detected
+				}
+			} else if !strings.HasPrefix(mime, "image/") && strings.HasPrefix(detected, "image/") {
+				// Header salah/tidak spesifik; percaya hasil deteksi magic bytes.
+				mime = detected
 			}
 			if !strings.HasPrefix(mime, "image/") {
 				return nil, fmt.Errorf("file %s bukan gambar (content-type: %s)", fh.Filename, mime)
