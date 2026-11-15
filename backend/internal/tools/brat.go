@@ -283,8 +283,8 @@ func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 		return nil, fmt.Errorf("navigate: %w", err)
 	}
 
-	// Wait for site scripts (setupTheme/textFit) to be ready.
-	if err := c.waitFor(sid, "typeof setupTheme==='function' && typeof textFit==='function'", 30*time.Second); err != nil {
+	// Wait for page scripts/elements to be ready.
+	if err := c.waitFor(sid, "typeof setupTheme==='function' && document.getElementById('textInput') && document.getElementById('memeContainer')", 30*time.Second); err != nil {
 		return nil, fmt.Errorf("halaman brat tidak siap: %w", err)
 	}
 	select {
@@ -294,30 +294,46 @@ func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 	}
 
 	textJS, _ := json.Marshal(text)
-	// Apply white theme using site's own logic, then set custom text and re-fit.
+	// Follow the exact user flow:
+	// 1) open site (done)
+	// 2) click #toggleButtonWhite
+	// 3) input text into #textInput
+	// 4) screenshot #memeContainer (512x512)
 	setupExpr := fmt.Sprintf(`(function(){
   var txt = %s;
-  try{ if(typeof setupTheme==='function') setupTheme('white'); }catch(e){}
-  var inp = document.getElementById('textInput');
-  var overlay = document.getElementById('textOverlay');
-  // Set text through the site's own handler path for consistent fitting/structure
-  if(inp){
-    inp.value = txt;
-    try{ inp.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){
-      if(overlay){ overlay.innerText = txt; }
-      try{ if(typeof textFit==='function' && overlay) textFit(overlay, {maxFontSize: 75}); }catch(e2){}
-    }
-  } else if(overlay){
-    overlay.innerText = txt;
-    try{ if(typeof textFit==='function') textFit(overlay, {maxFontSize: 75}); }catch(e){}
-  }
-  // Keep white background clean; hide placeholder/strike images
-  var memeImage = document.getElementById('memeImage');
-  var memeStrike = document.getElementById('memeImageStrike');
-  if(memeImage){ memeImage.style.display = 'none'; }
-  if(memeStrike){ memeStrike.style.display = 'none'; }
 
-  // Isolate meme container for a clean 512x512 capture (white background)
+  // 2. click white theme toggle
+  var btn = document.getElementById('toggleButtonWhite');
+  if(btn && typeof btn.click === 'function'){ btn.click(); }
+  else { try{ setupTheme('white'); }catch(e){} }
+
+  // 3. input text
+  var inp = document.getElementById('textInput');
+  if(inp){
+    inp.focus && inp.focus();
+    inp.value = txt;
+    try{ inp.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){}
+    try{ inp.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}
+  }
+
+  // Ensure white theme state/images are visible as in the site
+  var body = document.body;
+  if(body){
+    body.classList.remove('green','black','blue','strike','red');
+    body.classList.add('white');
+  }
+  var memeStrike = document.getElementById('memeImageStrike');
+  if(memeStrike){ memeStrike.style.display = 'none'; }
+  var memeImage = document.getElementById('memeImage');
+  if(memeImage){
+    // keep white theme background image visible (site input handler may hide it)
+    memeImage.style.display = 'block';
+    if(!memeImage.getAttribute('src')){
+      memeImage.src = '/sites/g/files/g2000017981/files/2024-06/WhitePNGImage.png';
+    }
+  }
+
+  // Prepare memeContainer for a clean 512x512 capture
   var cont = document.getElementById('memeContainer');
   if(cont){
     cont.style.width = '512px';
@@ -326,25 +342,22 @@ func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
     cont.style.maxHeight = '512px';
     cont.style.margin = '0';
     cont.style.background = '#ffffff';
-    cont.style.display = 'flex';
-    cont.style.alignItems = 'center';
-    cont.style.justifyContent = 'center';
     cont.style.position = 'fixed';
     cont.style.left = '0';
     cont.style.top = '0';
-    cont.style.zIndex = '999999';
+    cont.style.zIndex = '2147483647';
   }
+
   document.body.style.margin = '0';
   document.body.style.background = '#ffffff';
   document.body.style.overflow = 'hidden';
   document.documentElement.style.background = '#ffffff';
 
-  // Hide everything else so capture is just the brat output
+  // Hide other UI so screenshot shows only memeContainer
   Array.from(document.body.children).forEach(function(c){
     if(cont && (c === cont || c.contains(cont))) return;
     c.style.display = 'none';
   });
-  // Remove UI overlays/blurbs if any inside or near container
   var blurb = document.getElementById('screenshot-blurb'); if(blurb) blurb.style.display='none';
   return 'ok';
 })()`, string(textJS))
@@ -352,7 +365,8 @@ func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 		return nil, fmt.Errorf("gagal menyiapkan render: %w", err)
 	}
 
-	// allow layout/fonts to settle
+	// Wait for text to be applied/fitted and layout to settle
+	_ = c.waitFor(sid, fmt.Sprintf(`(function(){var el=document.querySelector('#textOverlay .textFitted')||document.getElementById('textOverlay'); if(!el) return false; var t=(el.textContent||'').trim(); return t.length>0 && t===%s.trim();})()`, string(textJS)), 10*time.Second)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -360,16 +374,13 @@ func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 	}
 	_ = c.waitFor(sid, "document.readyState === 'complete'", 5*time.Second)
 
-	// Viewport is 512x512; capture full viewport for a stable 512x512 image.
+	// 4. Screenshot #memeContainer as 512x512
 	shot, err := c.call("Page.captureScreenshot", map[string]any{
 		"format": "png",
+		"clip":   map[string]any{"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1},
 	}, sid)
 	if err != nil {
-		// fallback: fixed clip
-		shot, err = c.call("Page.captureScreenshot", map[string]any{
-			"format": "png",
-			"clip":   map[string]any{"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1},
-		}, sid)
+		shot, err = c.call("Page.captureScreenshot", map[string]any{"format": "png"}, sid)
 		if err != nil {
 			return nil, fmt.Errorf("screenshot: %w", err)
 		}
