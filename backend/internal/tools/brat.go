@@ -142,8 +142,8 @@ html, body {
   padding: 28px;
 }
 #box {
-  width: 100%;
-  height: 100%;
+  width: 100%%;
+  height: 100%%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,7 +159,7 @@ html, body {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.05;
-  width: 100%;
+  width: 100%%;
   display: block;
 }
 </style>
