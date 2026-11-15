@@ -235,20 +235,8 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 	case <-time.After(1200 * time.Millisecond):
 	}
 
-	// Determine clip from memeContainer
-	clipJSON, _ := c.eval(sid, `(function(){ var c=document.getElementById('memeContainer'); if(!c) return ''; var r=c.getBoundingClientRect(); return JSON.stringify({x:Math.max(0,r.x),y:Math.max(0,r.y),width:512,height:512}); })()`)
+	// Capture fixed 512x512 area (container is positioned fixed at 0,0 with 512x512).
 	clip := map[string]any{"x": 0, "y": 0, "width": 512, "height": 512, "scale": 1}
-	if strings.TrimSpace(clipJSON) != "" {
-		var r struct {
-			X      float64 `json:"x"`
-			Y      float64 `json:"y"`
-			Width  float64 `json:"width"`
-			Height float64 `json:"height"`
-		}
-		if err := json.Unmarshal([]byte(clipJSON), &r); err == nil && r.Width > 0 && r.Height > 0 {
-			clip = map[string]any{"x": r.X, "y": r.Y, "width": r.Width, "height": r.Height, "scale": 1}
-		}
-	}
 
 	shot, err := c.call("Page.captureScreenshot", map[string]any{
 		"format": "png",
