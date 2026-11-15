@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -16,10 +17,7 @@ import (
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
-const (
-	bratCDPURL  = "wss://light-panda-cdp.onrender.com/"
-	bratSiteURL = "https://www.bratgenerator.com/"
-)
+const bratSiteURL = "https://www.bratgenerator.com/"
 
 type bratCDP struct {
 	conn *websocket.Conn
@@ -133,11 +131,25 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 	return nil, lastErr
 }
 
+func bratCDPEndpoint() string {
+	if v := strings.TrimSpace(os.Getenv("BRAT_CDP_URL")); v != "" {
+		return v
+	}
+	// Prefer full browser for accurate rendering of bratgenerator.com (fonts/blur).
+	if v := strings.TrimSpace(os.Getenv("CDP_WS_URL")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("BING_CDP_URL")); v != "" {
+		return v
+	}
+	return "wss://browser-yq20.onrender.com/"
+}
+
 func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 110*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, bratCDPURL, nil)
+	conn, _, err := websocket.Dial(ctx, bratCDPEndpoint(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("cdp dial: %w", err)
 	}
