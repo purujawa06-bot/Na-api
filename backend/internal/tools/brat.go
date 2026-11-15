@@ -43,8 +43,10 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 	pw, err := playwright.Run()
 	if err != nil {
-		if strings.Contains(err.Error(), "please install the driver") || strings.Contains(err.Error(), "could not start driver") {
-			_ = playwright.Install(&playwright.RunOptions{SkipInstallBrowsers: true})
+		if strings.Contains(err.Error(), "please install the driver") || strings.Contains(err.Error(), "could not start driver") || strings.Contains(err.Error(), "no such file or directory") {
+			if instErr := playwright.Install(&playwright.RunOptions{SkipInstallBrowsers: true}); instErr != nil {
+				return nil, fmt.Errorf("playwright install: %w (run: %v)", instErr, err)
+			}
 			pw, err = playwright.Run()
 		}
 	}

@@ -565,8 +565,10 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
 
 	pw, err := playwright.Run()
 	if err != nil {
-		if strings.Contains(err.Error(), "please install the driver") || strings.Contains(err.Error(), "could not start driver") {
-			_ = playwright.Install(&playwright.RunOptions{SkipInstallBrowsers: true})
+		if strings.Contains(err.Error(), "please install the driver") || strings.Contains(err.Error(), "could not start driver") || strings.Contains(err.Error(), "no such file or directory") {
+			if instErr := playwright.Install(&playwright.RunOptions{SkipInstallBrowsers: true}); instErr != nil {
+				return jjGenerateResult{}, fmt.Errorf("playwright install: %w (run: %v)", instErr, err)
+			}
 			pw, err = playwright.Run()
 		}
 	}
