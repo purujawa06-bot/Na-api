@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
+	"github.com/mxschmitt/playwright-go"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
 )
@@ -264,79 +263,7 @@ func parseTikwmBody(status int, body string) (tiktokResult, error) {
 	return result, nil
 }
 
-// --- CDP (Lightpanda) fallback via ssstik.io browser interaction ---
-
-type cdpClient struct {
-	conn *websocket.Conn
-	ctx  context.Context
-	id   int
-}
-
-type cdpMsg struct {
-	ID        int             `json:"id,omitempty"`
-	SessionID string          `json:"sessionId,omitempty"`
-	Method    string          `json:"method,omitempty"`
-	Params    json.RawMessage `json:"params,omitempty"`
-	Result    json.RawMessage `json:"result,omitempty"`
-	Error     *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-}
-
-func (c *cdpClient) call(method string, params any, sessionID string) (json.RawMessage, error) {
-	c.id++
-	msg := map[string]any{"id": c.id, "method": method}
-	if params != nil {
-		msg["params"] = params
-	}
-	if sessionID != "" {
-		msg["sessionId"] = sessionID
-	}
-	if err := wsjson.Write(c.ctx, c.conn, msg); err != nil {
-		return nil, err
-	}
-	for {
-		var resp cdpMsg
-		if err := wsjson.Read(c.ctx, c.conn, &resp); err != nil {
-			return nil, err
-		}
-		if resp.ID == c.id {
-			if resp.Error != nil {
-				return nil, errors.New(resp.Error.Message)
-			}
-			return resp.Result, nil
-		}
-		// ignore events
-	}
-}
-
-func (c *cdpClient) eval(sessionID, expression string) (string, error) {
-	raw, err := c.call("Runtime.evaluate", map[string]any{
-		"expression":    expression,
-		"returnByValue": true,
-		"awaitPromise":  false,
-	}, sessionID)
-	if err != nil {
-		return "", err
-	}
-	var out struct {
-		Result struct {
-			Value any `json:"value"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", err
-	}
-	switch v := out.Result.Value.(type) {
-	case string:
-		return v, nil
-	case nil:
-		return "", nil
-	default:
-		b, _ := json.Marshal(v)
-		return string(b), nil
-	}
-}
+// --- Playwright-go (Lightpanda CDP) fallback via ssstik.io browser interaction ---
 
 type ssstikExtract struct {
 	VideoURL string `json:"video"`
@@ -351,65 +278,57 @@ func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tikto
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, lightpandaCDP, nil)
+	pw, err := playwright.Run()
 	if err != nil {
-		return tiktokResult{}, fmt.Errorf("cdp dial: %w", err)
+		return tiktokResult{}, fmt.Errorf("playwright run: %w", err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
-	c := &cdpClient{conn: conn, ctx: ctx}
+	defer func() { _ = pw.Stop() }()
 
-	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+	browser, err := pw.Chromium.ConnectOverCDP(lightpandaCDP)
 	if err != nil {
-		return tiktokResult{}, fmt.Errorf("create target: %w", err)
+		return tiktokResult{}, fmt.Errorf("cdp connect: %w", err)
 	}
-	var ct struct {
-		TargetID string `json:"targetId"`
-	}
-	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
-		return tiktokResult{}, errors.New("targetId tidak ditemukan")
-	}
-	targetID := ct.TargetID
-	// tutup hanya target milik request ini (jangan global-close semua page:
-	// endpoint lain, mis. generator JJ, bisa sedang memakai CDP yang sama).
-	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
+	defer func() { _ = browser.Close() }()
 
-	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
+	bctx, err := browser.NewContext()
 	if err != nil {
-		return tiktokResult{}, fmt.Errorf("attach: %w", err)
+		return tiktokResult{}, fmt.Errorf("new context: %w", err)
 	}
-	var att struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
-		return tiktokResult{}, errors.New("sessionId tidak ditemukan")
-	}
-	sid := att.SessionID
+	defer func() { _ = bctx.Close() }()
 
-	_, _ = c.call("Page.enable", map[string]any{}, sid)
-	_, _ = c.call("Runtime.enable", map[string]any{}, sid)
+	page, err := bctx.NewPage()
+	if err != nil {
+		return tiktokResult{}, fmt.Errorf("new page: %w", err)
+	}
+	defer func() { _ = page.Close() }()
 
-	if _, err := c.call("Page.navigate", map[string]any{"url": ssstikPageURL}, sid); err != nil {
+	page.SetDefaultTimeout(30000)
+	if _, err := page.Goto(ssstikPageURL, playwright.PageGotoOptions{
+		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
+		Timeout:   playwright.Float(30000),
+	}); err != nil {
 		return tiktokResult{}, fmt.Errorf("navigate: %w", err)
 	}
 
 	// wait page ready and input present
-	if err := c.waitFor(ctx, sid, `!!document.querySelector('#main_page_text')`, 15*time.Second); err != nil {
+	if _, err := page.WaitForFunction(`() => !!document.querySelector('#main_page_text')`, nil, playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(15000)}); err != nil {
 		return tiktokResult{}, fmt.Errorf("ssstik tidak siap: %w", err)
 	}
 
 	// fill input and submit
-	submitJS := fmt.Sprintf(`(()=>{const i=document.querySelector('#main_page_text'); if(!i) return 'noinput';
+	submitJS := fmt.Sprintf(`()=>{const i=document.querySelector('#main_page_text'); if(!i) return 'noinput';
 i.focus(); i.value=%q; i.dispatchEvent(new Event('input',{bubbles:true})); i.dispatchEvent(new Event('change',{bubbles:true}));
 const b=document.querySelector('#submit'); if(b){b.click(); return 'clicked';}
 const f=document.querySelector('form'); if(f){try{f.requestSubmit?f.requestSubmit():f.submit();}catch(e){f.submit();} return 'submitted';}
-return 'nobtn';})()`, rawURL)
-	act, _ := c.eval(sid, submitJS)
+return 'nobtn';}`, rawURL)
+	actVal, _ := page.Evaluate(submitJS)
+	act, _ := actVal.(string)
 	if act == "noinput" || act == "nobtn" || act == "" {
 		return tiktokResult{}, fmt.Errorf("gagal submit form ssstik (%s)", act)
 	}
 
 	// poll for result links
-	extractJS := `(()=>{const norm=s=>(s||'').replace(/\s+/g,' ').trim();
+	extractJS := `()=>{const norm=s=>(s||'').replace(/\s+/g,' ').trim();
 const as=Array.from(document.querySelectorAll('a')).map(a=>({t:norm(a.innerText||a.textContent),h:a.href||''}));
 let video='', mp3='';
 for(const a of as){
@@ -429,7 +348,7 @@ const txt = document.body ? document.body.innerText : '';
 const lines = txt.split('\n').map(norm).filter(Boolean);
 const wi = lines.findIndex(l=>/without watermark/i.test(l));
 if(wi>0){ caption = lines[wi-1]||''; if(wi-2>=0) author = lines[wi-2]||''; }
-return JSON.stringify({video, mp3, author, caption});})()`
+return JSON.stringify({video, mp3, author, caption});}`
 
 	var ex ssstikExtract
 	deadline := time.Now().Add(45 * time.Second)
@@ -437,11 +356,12 @@ return JSON.stringify({video, mp3, author, caption});})()`
 		if err := sleepCtx(ctx, 2500*time.Millisecond); err != nil {
 			return tiktokResult{}, err
 		}
-		val, err := c.eval(sid, extractJS)
+		val, err := page.Evaluate(extractJS)
 		if err != nil {
 			continue
 		}
-		_ = json.Unmarshal([]byte(val), &ex)
+		s, _ := val.(string)
+		_ = json.Unmarshal([]byte(s), &ex)
 		if strings.TrimSpace(ex.VideoURL) != "" || strings.TrimSpace(ex.MP3URL) != "" {
 			break
 		}
@@ -467,20 +387,6 @@ return JSON.stringify({video, mp3, author, caption});})()`
 		result.MP3URL = &m
 	}
 	return result, nil
-}
-
-func (c *cdpClient) waitFor(ctx context.Context, sessionID, jsExpr string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		v, err := c.eval(sessionID, jsExpr)
-		if err == nil && (v == "true" || v == "1") {
-			return nil
-		}
-		if err := sleepCtx(ctx, 500*time.Millisecond); err != nil {
-			return err
-		}
-	}
-	return fmt.Errorf("timeout menunggu kondisi")
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {
