@@ -114,7 +114,27 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("Parameter 'text' wajib diisi")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		img, err := renderBratImageOnce(ctx, text)
+		if err == nil {
+			return img, nil
+		}
+		lastErr = err
+		// retry on transient connection errors
+		if attempt == 0 {
+			select {
+			case <-ctx.Done():
+				return nil, lastErr
+			case <-time.After(1200 * time.Millisecond):
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 110*time.Second)
 	defer cancel()
 
 	conn, _, err := websocket.Dial(ctx, bratCDPURL, nil)
@@ -284,7 +304,8 @@ func (h *handlers) brat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := h.requestContext(r)
+	// Brat rendering via CDP can take longer than the default request timeout.
+	ctx, cancel := context.WithTimeout(r.Context(), 150*time.Second)
 	defer cancel()
 	img, err := renderBratImage(ctx, text)
 	if err != nil {
