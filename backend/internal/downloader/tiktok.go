@@ -280,6 +280,12 @@ func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tikto
 
 	pw, err := playwright.Run()
 	if err != nil {
+		if strings.Contains(err.Error(), "please install the driver") || strings.Contains(err.Error(), "could not start driver") {
+			_ = playwright.Install(&playwright.RunOptions{SkipInstallBrowsers: true})
+			pw, err = playwright.Run()
+		}
+	}
+	if err != nil {
 		return tiktokResult{}, fmt.Errorf("playwright run: %w", err)
 	}
 	defer func() { _ = pw.Stop() }()
