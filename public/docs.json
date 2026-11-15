@@ -1589,12 +1589,12 @@
     },
     {
       "title": "Brat Generator",
-      "summary": "Generate gambar teks gaya Brat (background putih, 512x512).",
-      "description": "Merender teks menjadi gambar PNG 512x512 bergaya Brat (background putih,\n              font Arial Narrow dengan blur halus, mendukung emoji) menggunakan renderer CDP.\n              Respons berupa gambar langsung (image/png).",
+      "summary": "Generate gambar teks gaya Brat (512x512).",
+      "description": "Merender teks menjadi gambar PNG 512x512 bergaya Brat menggunakan layanan upstream.\n              Mendukung GET (query `text`) dan POST (JSON `{\"text\":\"...\"}` atau form `text`).\n              Respons berupa gambar langsung (image/png).",
       "method": "GET",
       "path": "/api/tools/brat",
       "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools/brat?text=hello%20brat')\n     .then(res => res.blob())\n     .then(console.log);",
+      "example": "// GET\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools/brat?text=hello%20brat')\n     .then(res => res.blob())\n     .then(console.log);\n\n // POST (JSON)\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools/brat', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ text: 'hello brat' })\n }).then(res => res.blob()).then(console.log);",
       "params": [
         {
           "name": "text",
@@ -1602,23 +1602,12 @@
           "type": "string",
           "description": "Teks yang akan dirender menjadi gambar (wajib).",
           "required": true
-        }
-      ]
-    },
-    {
-      "title": "Brat Generator",
-      "summary": "Generate gambar teks gaya Brat (background putih, 512x512).",
-      "description": "Merender teks menjadi gambar PNG 512x512 bergaya Brat (background putih,\n              font Arial Narrow dengan blur halus, mendukung emoji). Body JSON: {\"text\":\"...\"}.\n              Respons berupa gambar langsung (image/png).",
-      "method": "POST",
-      "path": "/api/tools/brat",
-      "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools/brat', {\n   method: 'POST',\n   headers: { 'Content-Type': 'application/json' },\n   body: JSON.stringify({ text: 'hello brat' })\n }).then(res => res.blob()).then(console.log);",
-      "params": [
+        },
         {
           "name": "text",
           "in": "body",
           "type": "string",
-          "description": "Teks yang akan dirender menjadi gambar (wajib).",
+          "description": "Alternatif untuk POST: teks yang akan dirender menjadi gambar (wajib).",
           "required": true
         }
       ]
