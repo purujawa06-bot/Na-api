@@ -123,12 +123,85 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 		if attempt == 0 {
 			select {
 			case <-ctx.Done():
-				return nil, lastErr
+				// fall through to fallback
 			case <-time.After(1200 * time.Millisecond):
 			}
 		}
 	}
+	// Fallback: if live site/CDP rendering fails, return a local white-brat render.
+	if img, err := renderBratImageFallback(ctx, text); err == nil {
+		return img, nil
+	}
 	return nil, lastErr
+}
+
+func renderBratImageFallback(ctx context.Context, text string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	var conn *websocket.Conn
+	var err error
+	for _, ep := range bratCDPEndpoints() {
+		conn, _, err = websocket.Dial(ctx, ep, nil)
+		if err == nil {
+			break
+		}
+	}
+	if conn == nil {
+		if err != nil {
+			return nil, fmt.Errorf("cdp dial: %w", err)
+		}
+		return nil, fmt.Errorf("cdp dial: no endpoint available")
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+	c := &bratCDP{conn: conn, ctx: ctx}
+
+	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+	if err != nil {
+		return nil, err
+	}
+	var ct struct{ TargetID string `json:"targetId"` }
+	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
+		return nil, errors.New("targetId tidak ditemukan")
+	}
+	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": ct.TargetID}, "") }()
+	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": ct.TargetID, "flatten": true}, "")
+	if err != nil {
+		return nil, err
+	}
+	var att struct{ SessionID string `json:"sessionId"` }
+	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
+		return nil, errors.New("sessionId tidak ditemukan")
+	}
+	sid := att.SessionID
+	_, _ = c.call("Page.enable", map[string]any{}, sid)
+	_, _ = c.call("Runtime.enable", map[string]any{}, sid)
+	_, _ = c.call("Emulation.setDeviceMetricsOverride", map[string]any{"width": 512, "height": 512, "deviceScaleFactor": 1, "mobile": false}, sid)
+
+	textJS, _ := json.Marshal(text)
+	page := fmt.Sprintf(`data:text/html,<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:'arial_narrowregular';src:url('https://www.bratgenerator.com/sites/g/files/g2000017981/files/2024-03/arial_narrow-webfont.woff') format('woff');}
+html,body{margin:0;width:512px;height:512px;background:#fff;overflow:hidden}
+#wrap{width:512px;height:512px;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#fff}
+#text{font-family:'arial_narrowregular','Arial Narrow',Arial,sans-serif;font-weight:500;color:#000;filter:blur(2px);-webkit-filter:blur(2px);text-align:justify;text-align-last:justify;white-space:pre-wrap;word-break:break-word;line-height:1.05;width:100%%}
+</style></head><body><div id="wrap"><span id="text"></span></div><script>(function(){var t=%s;var el=document.getElementById('text');el.textContent=t;function fit(){var lo=8,hi=360,best=8;for(var i=0;i<18;i++){var m=(lo+hi)>>1;el.style.fontSize=m+'px';var w=document.getElementById('wrap');if(el.scrollWidth<=w.clientWidth-48+1 && el.scrollHeight<=w.clientHeight-48+1){best=m;lo=m+1;}else{hi=m-1;}}el.style.fontSize=best+'px';if(!/\n/.test(t)&&t.trim().length<=12){el.style.textAlign='center';el.style.textAlignLast='center';}document.body.setAttribute('data-ready','1');} if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(fit,80)});}else{setTimeout(fit,300);} })();</script></body></html>`, string(textJS))
+	if _, err := c.call("Page.navigate", map[string]any{"url": page}, sid); err != nil {
+		return nil, err
+	}
+	_ = c.waitFor(sid, "document.body && document.body.getAttribute('data-ready')==='1'", 15*time.Second)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(500 * time.Millisecond):
+	}
+	shot, err := c.call("Page.captureScreenshot", map[string]any{"format": "png"}, sid)
+	if err != nil {
+		return nil, err
+	}
+	var sc struct{ Data string `json:"data"` }
+	if err := json.Unmarshal(shot, &sc); err != nil || sc.Data == "" {
+		return nil, errors.New("data screenshot kosong")
+	}
+	return base64.StdEncoding.DecodeString(sc.Data)
 }
 
 func bratCDPEndpoints() []string {
