@@ -131,25 +131,47 @@ func renderBratImage(ctx context.Context, text string) ([]byte, error) {
 	return nil, lastErr
 }
 
-func bratCDPEndpoint() string {
+func bratCDPEndpoints() []string {
 	if v := strings.TrimSpace(os.Getenv("BRAT_CDP_URL")); v != "" {
-		return v
+		return []string{v}
 	}
-	// Prefer full browser for accurate rendering of bratgenerator.com (fonts/blur).
-	if v := strings.TrimSpace(os.Getenv("CDP_WS_URL")); v != "" {
-		return v
+	// Try full browser first (better fonts/blur), then Lightpanda as fallback.
+	seen := map[string]bool{}
+	var out []string
+	add := func(u string) {
+		u = strings.TrimSpace(u)
+		if u != "" && !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
 	}
-	if v := strings.TrimSpace(os.Getenv("BING_CDP_URL")); v != "" {
-		return v
-	}
-	return "wss://browser-yq20.onrender.com/"
+	add(os.Getenv("CDP_WS_URL"))
+	add(os.Getenv("BING_CDP_URL"))
+	add("wss://browser-yq20.onrender.com/")
+	add("wss://light-panda-cdp.onrender.com/")
+	return out
 }
 
 func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 110*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, bratCDPEndpoint(), nil)
+	var lastDialErr error
+	var conn *websocket.Conn
+	for _, endpoint := range bratCDPEndpoints() {
+		cn, _, err := websocket.Dial(ctx, endpoint, nil)
+		if err == nil {
+			conn = cn
+			break
+		}
+		lastDialErr = err
+	}
+	if conn == nil {
+		if lastDialErr != nil {
+			return nil, fmt.Errorf("cdp dial: %w", lastDialErr)
+		}
+		return nil, fmt.Errorf("cdp dial: no endpoint available")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cdp dial: %w", err)
 	}
