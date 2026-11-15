@@ -172,9 +172,6 @@ func renderBratImageOnce(ctx context.Context, text string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("cdp dial: no endpoint available")
 	}
-	if err != nil {
-		return nil, fmt.Errorf("cdp dial: %w", err)
-	}
 	defer conn.Close(websocket.StatusNormalClosure, "done")
 	c := &bratCDP{conn: conn, ctx: ctx}
 
