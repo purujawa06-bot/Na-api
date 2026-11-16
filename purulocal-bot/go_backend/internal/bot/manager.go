@@ -482,7 +482,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		return
 	}
 
-	// fitur JJ (lokal/plugin): pilih/hapus/reset/jj/jjgc
+	// fitur JJ (lokal/plugin): jj/jjgc
 	if m.isJJCommand(cmd) {
 		maybeReact()
 		doTyping()
@@ -1448,8 +1448,6 @@ func (m *Manager) buildMenu(cfg Config) string {
 	b.WriteString("├─ ᴊᴊ\n")
 	b.WriteString("│  • .jj\n")
 	b.WriteString("│  • .jjgc\n")
-	b.WriteString("│  • .pilih\n")
-	b.WriteString("│  • .reset\n")
 	b.WriteString("│\n")
 	b.WriteString("├─ ᴏᴡɴᴇʀ\n")
 	b.WriteString("│  • .logs\n")
@@ -2139,6 +2137,53 @@ func (m *Manager) jjCaptureUpload(ctx context.Context, evt *events.Message) {
 	m.jjTouchLocked(key)
 }
 
+func (m *Manager) jjCollectDirectPhotos(ctx context.Context, evt *events.Message) ([]jjStoredPhoto, error) {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return nil, errors.New("client not ready")
+	}
+	var imgs []*waE2E.ImageMessage
+	if evt.Message != nil {
+		if img := evt.Message.GetImageMessage(); img != nil {
+			imgs = append(imgs, img)
+		}
+		if ci := extractIncomingContextInfo(evt.Message); ci != nil {
+			if q := ci.GetQuotedMessage(); q != nil {
+				if img := q.GetImageMessage(); img != nil {
+					imgs = append(imgs, img)
+				}
+			}
+		}
+	}
+	if len(imgs) == 0 {
+		return nil, errors.New("no direct image")
+	}
+	var out []jjStoredPhoto
+	for i, img := range imgs {
+		data, err := c.Download(ctx, img)
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		mime := strings.TrimSpace(img.GetMimetype())
+		if mime == "" {
+			mime = http.DetectContentType(data)
+		}
+		ext := ".jpg"
+		if strings.Contains(mime, "png") {
+			ext = ".png"
+		} else if strings.Contains(mime, "webp") {
+			ext = ".webp"
+		}
+		out = append(out, jjStoredPhoto{Name: fmt.Sprintf("foto%d%s", i+1, ext), Mime: mime, Data: data})
+	}
+	if len(out) == 0 {
+		return nil, errors.New("failed to download image")
+	}
+	return out, nil
+}
+
 func (m *Manager) jjGetPool(key string) []jjStoredPhoto {
 	m.jjMu.Lock()
 	defer m.jjMu.Unlock()
@@ -2167,97 +2212,7 @@ func (m *Manager) jjReset(key string) {
 	delete(m.jjExpiry, key)
 }
 
-func (m *Manager) jjSelect(key string, idxs []int) ([]int, error) {
-	m.jjMu.Lock()
-	defer m.jjMu.Unlock()
-	m.jjCleanupLocked(key)
-	pool := m.jjUploads[key]
-	if len(pool) == 0 {
-		return nil, errors.New("Belum ada foto yang diunggah. Kirim foto terlebih dahulu, lalu pilih dengan .pilih")
-	}
-	seen := map[int]bool{}
-	var sel []int
-	if len(idxs) == 0 {
-		// pilih semua
-		for i := 1; i <= len(pool); i++ {
-			sel = append(sel, i)
-		}
-	} else {
-		for _, n := range idxs {
-			if n < 1 || n > len(pool) {
-				return nil, fmt.Errorf("Nomor foto %d tidak valid. Tersedia 1-%d.", n, len(pool))
-			}
-			if !seen[n] {
-				seen[n] = true
-				sel = append(sel, n)
-			}
-		}
-	}
-	m.jjSelected[key] = sel
-	m.jjTouchLocked(key)
-	return sel, nil
-}
-
-func (m *Manager) jjHandlePilih(ctx context.Context, evt *events.Message, args string) {
-	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
-	pool := m.jjGetPool(key)
-	if len(pool) == 0 {
-		_ = m.sendReply(ctx, evt, "📸 Belum ada foto yang diunggah.\n\nKirim foto yang ingin dijadikan JJ, lalu gunakan *.pilih* untuk memilihnya.\nContoh: *.pilih* (pilih semua) atau *.pilih 1 3*")
-		return
-	}
-	nums := parseJJNumbers(args)
-	sel, err := m.jjSelect(key, nums)
-	if err != nil {
-		_ = m.sendReply(ctx, evt, "⚠️ "+err.Error())
-		return
-	}
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("✅ Berhasil memilih %d foto dari %d foto yang tersedia.\n\n", len(sel), len(pool)))
-	for i, n := range sel {
-		b.WriteString(fmt.Sprintf("• Foto ke-%d (upload #%d) dipilih\n", i+1, n))
-	}
-	b.WriteString("\nKetik *.jj* untuk membuat video, atau *.pilih 1 2* untuk mengubah pilihan. Ketik *.reset* untuk menghapus semua foto.")
-	_ = m.sendReply(ctx, evt, b.String())
-}
-
-func (m *Manager) jjHandleReset(ctx context.Context, evt *events.Message) {
-	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
-	m.jjReset(key)
-	_ = m.sendReply(ctx, evt, "🗑️ Daftar foto JJ sudah dikosongkan.\n\nKirim foto baru lalu pilih dengan *.pilih* jika ingin membuat video JJ.")
-}
-
-func parseJJNumbers(args string) []int {
-	args = strings.TrimSpace(args)
-	if args == "" || strings.EqualFold(args, "all") || strings.EqualFold(args, "semua") {
-		return nil // nil = pilih semua
-	}
-	// ganti koma dengan spasi
-	repl := strings.NewReplacer(",", " ", ";", " ")
-	args = repl.Replace(args)
-	parts := strings.Fields(args)
-	var nums []int
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		var n int
-		for _, r := range p {
-			if r < '0' || r > '9' {
-				n = -1
-				break
-			}
-			n = n*10 + int(r-'0')
-		}
-		if n > 0 {
-			nums = append(nums, n)
-		}
-	}
-	if len(nums) == 0 {
-		return nil
-	}
-	return nums
-}
+// (pilih/reset dihapus: .jj langsung memakai foto yang dikirim/reply)
 
 func (m *Manager) jjSelectedPhotos(key string) ([]jjStoredPhoto, error) {
 	m.jjMu.Lock()
@@ -2266,10 +2221,13 @@ func (m *Manager) jjSelectedPhotos(key string) ([]jjStoredPhoto, error) {
 	sel := append([]int(nil), m.jjSelected[key]...)
 	m.jjMu.Unlock()
 	if len(pool) == 0 {
-		return nil, errors.New("Belum ada foto yang diunggah. Kirim foto dulu, lalu pilih dengan *.pilih* dan jalankan *.jj*.")
+		return nil, errors.New("Belum ada foto. Kirim foto atau reply foto dengan caption *.jj*.")
 	}
 	if len(sel) == 0 {
-		return nil, errors.New("Belum ada foto yang dipilih. Gunakan *.pilih* (pilih semua) atau *.pilih 1 2* untuk memilih foto, lalu jalankan *.jj*.")
+		// langsung pakai semua foto yang tersedia (tanpa .pilih)
+		for i := 1; i <= len(pool); i++ {
+			sel = append(sel, i)
+		}
 	}
 	var out []jjStoredPhoto
 	for _, n := range sel {
@@ -2279,7 +2237,7 @@ func (m *Manager) jjSelectedPhotos(key string) ([]jjStoredPhoto, error) {
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.New("Pilihan foto tidak valid. Silakan *.reset* lalu unggah dan pilih foto kembali.")
+		return nil, errors.New("Foto tidak valid. Kirim foto baru lalu jalankan *.jj*.")
 	}
 	return out, nil
 }
@@ -2290,7 +2248,14 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 	photos, err := m.jjSelectedPhotos(key)
 	if err != nil {
-		m.jjNotify(evt, "📸 "+err.Error(), "command.jj")
+		// fallback: coba ambil foto langsung dari pesan/reply saat .jj dikirim
+		if direct, derr := m.jjCollectDirectPhotos(ctx, evt); derr == nil && len(direct) > 0 {
+			photos = direct
+			err = nil
+		}
+	}
+	if err != nil || len(photos) == 0 {
+		m.jjNotify(evt, "📸 Kirim foto atau reply foto dengan caption *.jj* untuk membuat video JJ.", "command.jj")
 		return nil
 	}
 
@@ -2550,7 +2515,7 @@ func urlQueryEscape(s string) string {
 
 func (m *Manager) isJJCommand(cmd string) bool {
 	switch normalizeCmd(cmd) {
-	case "jj", "jjgc", "pilih", "hapus", "reset":
+	case "jj", "jjgc":
 		return true
 	}
 	return false
@@ -2558,10 +2523,6 @@ func (m *Manager) isJJCommand(cmd string) bool {
 
 func (m *Manager) handleJJFeatureCommand(ctx context.Context, evt *events.Message, cmd, args string, cfg Config) {
 	switch normalizeCmd(cmd) {
-	case "pilih":
-		m.jjHandlePilih(ctx, evt, args)
-	case "hapus", "reset":
-		m.jjHandleReset(ctx, evt)
 	case "jj":
 		jctx, jcancel := context.WithTimeout(context.Background(), 50*time.Minute)
 		defer jcancel()
