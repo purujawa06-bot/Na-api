@@ -34,6 +34,8 @@ var noStorePrefixes = []string{
 	// schedule must not be cached for a week and outlive the upstream fix.
 	"/api/purtv/player",
 	"/api/purtv/schedule",
+	// JJ video jobs are async/polling (status progresses processing->selesai/gagal).
+	"/api/downloader/jj",
 }
 
 type rateEntry struct {
