@@ -1453,6 +1453,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 	b.WriteString("│\n")
 	b.WriteString("├─ ᴏᴡɴᴇʀ\n")
 	b.WriteString("│  • .logs\n")
+	b.WriteString("│  • .upsw\n")
 
 	// Custom commands (aktif) per kategori
 	if m.customCmds != nil {
