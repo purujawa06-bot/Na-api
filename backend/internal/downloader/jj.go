@@ -591,6 +591,41 @@ type jjGenerateResult struct {
 	TaskText    string
 }
 
+// evalAwait evaluates a JS expression in the browser context and awaits a Promise result (CDP).
+func (c *cdpClient) evalAwait(sessionID, expression string) (string, error) {
+	raw, err := c.call("Runtime.evaluate", map[string]any{
+		"expression":    expression,
+		"returnByValue": true,
+		"awaitPromise":  true,
+	}, sessionID)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Result struct {
+			Value any `json:"value"`
+		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", err
+	}
+	if out.ExceptionDetails != nil && out.ExceptionDetails.Text != "" {
+		return "", fmt.Errorf("js: %s", out.ExceptionDetails.Text)
+	}
+	switch v := out.Result.Value.(type) {
+	case string:
+		return v, nil
+	case nil:
+		return "", nil
+	default:
+		b, _ := json.Marshal(v)
+		return string(b), nil
+	}
+}
+
 func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPhoto) (jjGenerateResult, error) {
 	createURL := jjBaseURL + "/create/" + tpl.ID
 
@@ -611,125 +646,198 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
 	}
 	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
 
-	// tunggu form upload siap
-	if err := c.waitFor(ctx, sid, `!!document.querySelector('input[type=file]')`, 30*time.Second); err != nil {
+	// Pastikan konteks same-origin (halaman create) siap; API ditembak via fetch di browser (CDP), tanpa klik UI.
+	if err := c.waitFor(ctx, sid, `document.readyState === 'complete' || document.readyState === 'interactive'`, 30*time.Second); err != nil {
 		return jjGenerateResult{}, fmt.Errorf("halaman create tidak siap: %w", err)
 	}
-	_ = jjSleepJitter(ctx, 900*time.Millisecond, 900*time.Millisecond)
-	c.jjHumanScroll(sid)
 
-	// inject file via DataTransfer (file ada di server, bukan FS browser remote)
+	// Submit langsung ke API internal site (/jj) lewat fetch di konteks browser (reverse-engineered), tanpa interaksi klik.
+	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Mengirim foto ke API render..." })
 	payloads := make([]map[string]any, 0, len(photos))
-	for _, p := range photos {
+	for i, p := range photos {
+		name := strings.TrimSpace(p.Name)
+		if name == "" {
+			name = fmt.Sprintf("foto%d.jpg", i+1)
+		}
+		mime := strings.TrimSpace(p.Mime)
+		if mime == "" {
+			mime = "image/jpeg"
+		}
 		payloads = append(payloads, map[string]any{
-			"name": p.Name,
-			"mime": p.Mime,
+			"name": name,
+			"mime": mime,
 			"b64":  base64.StdEncoding.EncodeToString(p.Data),
 		})
 	}
 	pb, _ := json.Marshal(payloads)
-	injectExpr := fmt.Sprintf(`(function(){
-  const items = %s;
-  const input = document.querySelector('input[type=file]');
-  if(!input) return 'NO_INPUT';
-  const dt = new DataTransfer();
-  for(const it of items){
-    const bin = atob(it.b64);
-    const bytes = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    dt.items.add(new File([bytes], it.name||'photo.jpg', {type: it.mime||'image/jpeg'}));
+	tplJSON, _ := json.Marshal(tpl.ID)
+	submitExpr := fmt.Sprintf(`(async()=>{ 
+  try {
+    const id = %s;
+    const items = %s;
+    const fd = new FormData();
+    fd.append('id', String(id));
+    for (const it of items) {
+      const bin = atob(it.b64 || '');
+      const bytes = new Uint8Array(bin.length);
+      for (let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      const file = new File([bytes], it.name || 'photo.jpg', {type: it.mime || 'image/jpeg'});
+      fd.append('files', file);
+    }
+    const res = await fetch('/jj', { method: 'POST', body: fd, credentials: 'include' });
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch(e) {}
+    return JSON.stringify({ ok: res.ok, status: res.status, data: data, text: (text||'').slice(0, 600) });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: String(e && e.message || e) });
   }
-  input.files = dt.files;
-  input.dispatchEvent(new Event('input',{bubbles:true}));
-  input.dispatchEvent(new Event('change',{bubbles:true}));
-  return 'FILES='+input.files.length;
-})()`, string(pb))
-	injectRes, err := c.eval(sid, injectExpr)
+})()`, string(tplJSON), string(pb))
+
+	submitRaw, err := c.evalAwait(sid, submitExpr)
 	if err != nil {
-		return jjGenerateResult{}, fmt.Errorf("gagal inject foto: %w", err)
+		return jjGenerateResult{}, fmt.Errorf("gagal submit API: %w", err)
 	}
-	if injectRes != fmt.Sprintf("FILES=%d", len(photos)) {
-		return jjGenerateResult{}, fmt.Errorf("gagal menyiapkan foto (%s)", injectRes)
+	var submitResp struct {
+		OK     bool           `json:"ok"`
+		Status int            `json:"status"`
+		Error  string         `json:"error"`
+		Text   string         `json:"text"`
+		Data   map[string]any `json:"data"`
 	}
-	_ = jjSleepJitter(ctx, 900*time.Millisecond, 1200*time.Millisecond)
-	c.jjHumanScroll(sid)
-	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Foto disiapkan, menunggu tombol submit aktif..." })
-	// wait for submit button to become enabled after file selection
-	_ = c.waitFor(ctx, sid, `(function(){
-  const b = document.querySelector('button[type="submit"], input[type="submit"]') || Array.from(document.querySelectorAll('button')).find(x=>/submit|buat|generate|proses|render|kirim|mulai|start|create/i.test((x.innerText||x.textContent||x.value||'')));
-  return !!b && !b.disabled;
-})()`, 12*time.Second)
-	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Foto disiapkan, mengirim permintaan render..." })
-	_ = jjSleepJitter(ctx, 300*time.Millisecond, 600*time.Millisecond)
+	if err := json.Unmarshal([]byte(submitRaw), &submitResp); err != nil {
+		return jjGenerateResult{}, fmt.Errorf("respons submit tidak valid: %w", err)
+	}
+	if !submitResp.OK {
+		msg := strings.TrimSpace(submitResp.Error)
+		if submitResp.Data != nil {
+			if e, _ := submitResp.Data["error"].(string); strings.TrimSpace(e) != "" {
+				msg = e
+			}
+		}
+		if msg == "" {
+			msg = strings.TrimSpace(submitResp.Text)
+		}
+		if msg == "" {
+			msg = "gagal mengirim task render"
+		}
+		return jjGenerateResult{}, fmt.Errorf("%s", msg)
+	}
+	taskID, _ := submitResp.Data["task_id"].(string)
+	if strings.TrimSpace(taskID) == "" {
+		// fallback beberapa kemungkinan nama field
+		if v, _ := submitResp.Data["taskId"].(string); strings.TrimSpace(v) != "" {
+			taskID = v
+		}
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return jjGenerateResult{}, fmt.Errorf("task_id tidak ditemukan pada respons API")
+	}
+	jjUpdateJob(jobID, func(j *jjJob) {
+		j.Note = "Task render dibuat, menunggu hasil..."
+		j.TaskText = "task_id=" + taskID
+	})
 
-	// submit: find and click the actual submit/generate button (avoid clicking random buttons).
-	submitRes, _ := c.eval(sid, `(function(){
-  const t0 = (document.body&&document.body.innerText||'');
-  if(/Task kamu.*(Diproses|Memproses|Menunggu|Antrian|Selesai|Gagal)/i.test(t0)) return 'CLICKED';
-  const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
-  const isVisible = (el)=>{ const r=el.getBoundingClientRect(); return r.width>0 && r.height>0; };
-  const score = (el)=>{
-    const txt=(el.innerText||el.textContent||el.value||'').trim();
-    const low=txt.toLowerCase();
-    let s=0;
-    if(/submit|buat|generate|proses|render|kirim|mulai|start|create/.test(low)) s+=5;
-    if(/batal|cancel|close|tutup|hapus|delete|reset|kembali|back/.test(low)) s-=5;
-    if(el.disabled) s-=4;
-    if(isVisible(el)) s+=1;
-    if(el.matches && el.matches('button[type="submit"],input[type="submit"]')) s+=2;
-    return s;
-  };
-  let best=null, bestS=-999;
-  for(const b of buttons){
-    const s=score(b);
-    if(s>bestS){ bestS=s; best=b; }
+	// Poll status task via API /task/<id> (lewat konteks browser/CDP), tanpa scraping DOM.
+	taskIDJSON, _ := json.Marshal(taskID)
+	pollExpr := fmt.Sprintf(`(async()=>{ 
+  try {
+    const id = %s;
+    const res = await fetch('/task/' + encodeURIComponent(id), { credentials: 'include' });
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch(e) {}
+    return JSON.stringify({ ok: res.ok, status: res.status, data: data, text: (text||'').slice(0, 800) });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: String(e && e.message || e) });
   }
-  if(!best || bestS < 1) return 'NO_SUBMIT';
-  try{ best.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
-  try{ best.disabled = false; }catch(e){}
-  try{ best.click(); }catch(e){}
-  try{ best.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window})); }catch(e){}
-  return 'CLICKED';
-})()`)
-	_ = jjSleepJitter(ctx, 900*time.Millisecond, 900*time.Millisecond)
-	// second attempt if task not started yet
-	_, _ = c.eval(sid, `(function(){
-  const t = (document.body&&document.body.innerText||'');
-  if(/Diproses|Memproses|Menunggu|Antrian|Selesai|Gagal/i.test(t)) return 'ALREADY';
-  const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
-  const b = buttons.find(x=>/submit|buat|generate|proses|render|kirim|mulai|start|create/i.test((x.innerText||x.textContent||x.value||'')) && !/batal|cancel|close|tutup|hapus|delete|reset/i.test((x.innerText||x.textContent||x.value||'')));
-  if(b){ try{ b.disabled=false; b.scrollIntoView({block:'center'});}catch(e){} try{b.click();}catch(e){} try{b.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));}catch(e){} return 'RETRY'; }
-  return 'NO';
-})()`)
-	if submitRes == "NO_SUBMIT" {
-		return jjGenerateResult{}, fmt.Errorf("gagal submit: tombol submit tidak ditemukan")
-	}
+})()`, string(taskIDJSON))
 
-	// poll status task
 	deadline := time.Now().Add(jjRenderTimeout)
 	var last jjGenerateResult
 	polls := 0
+	failStreak := 0
 	for time.Now().Before(deadline) {
 		if err := sleepCtx(ctx, jjPollInterval); err != nil {
 			return last, err
 		}
 		polls++
-		st, err := jjReadState(c, sid)
+		raw, err := c.evalAwait(sid, pollExpr)
 		if err != nil {
+			failStreak++
+			if failStreak >= 8 {
+				jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Menunggu status render (koneksi/browser tidak stabil)..." })
+			}
 			continue
 		}
-		last = st
-		if st.TaskText != "" || polls%3 == 0 {
-			tt := st.TaskText
+		failStreak = 0
+		var pr struct {
+			OK     bool           `json:"ok"`
+			Status int            `json:"status"`
+			Error  string         `json:"error"`
+			Text   string         `json:"text"`
+			Data   map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(raw), &pr); err != nil {
+			continue
+		}
+		if pr.Data == nil {
+			if polls%3 == 0 {
+				jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Render sedang diproses..." })
+			}
+			continue
+		}
+		st, _ := pr.Data["status"].(string)
+		st = strings.ToLower(strings.TrimSpace(st))
+		// progress text
+		if polls%3 == 0 || st != "" {
+			note := "Render sedang diproses..."
+			if st == "processing" || st == "queued" || st == "pending" || st == "diproses" || st == "antrian" {
+				note = "Render sedang diproses..."
+			}
 			jjUpdateJob(jobID, func(j *jjJob) {
-				if tt != "" {
-					j.TaskText = tt
-				}
-				j.Note = "Render sedang diproses..."
+				j.TaskText = "task_id=" + taskID + " status=" + st
+				j.Note = note
 			})
 		}
-		if st.Done || st.Failed {
-			return st, nil
+		switch st {
+		case "success", "selesai", "done", "completed":
+			dl := ""
+			if v, ok := pr.Data["video"].(map[string]any); ok {
+				if s, _ := v["videoUrl"].(string); strings.TrimSpace(s) != "" {
+					dl = strings.TrimSpace(s)
+				} else if s, _ := v["video_url"].(string); strings.TrimSpace(s) != "" {
+					dl = strings.TrimSpace(s)
+				} else if s, _ := v["url"].(string); strings.TrimSpace(s) != "" {
+					dl = strings.TrimSpace(s)
+				}
+			}
+			if dl == "" {
+				for _, k := range []string{"download_url", "downloadUrl", "videoUrl", "video_url", "url", "result", "output"} {
+					if s, _ := pr.Data[k].(string); strings.TrimSpace(s) != "" {
+						dl = strings.TrimSpace(s)
+						break
+					}
+				}
+			}
+			last = jjGenerateResult{Done: dl != "", DownloadURL: dl, TaskText: "task_id=" + taskID + " status=" + st}
+			if dl != "" {
+				return last, nil
+			}
+			// success tapi URL belum ada, lanjut polling sebentar
+		case "error", "failed", "gagal":
+			emsg := ""
+			if s, _ := pr.Data["error"].(string); strings.TrimSpace(s) != "" {
+				emsg = strings.TrimSpace(s)
+			} else if s, _ := pr.Data["message"].(string); strings.TrimSpace(s) != "" {
+				emsg = strings.TrimSpace(s)
+			} else {
+				emsg = "render gagal"
+			}
+			return jjGenerateResult{Failed: true, TaskText: "task_id=" + taskID + " status=" + st}, fmt.Errorf("%s", emsg)
+		default:
+			last = jjGenerateResult{TaskText: "task_id=" + taskID + " status=" + st}
 		}
 	}
 	return last, nil
