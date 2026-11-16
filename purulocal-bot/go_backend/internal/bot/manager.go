@@ -2246,18 +2246,20 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	_ = cfg
 	_ = args
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
-	photos, err := m.jjSelectedPhotos(key)
-	if err != nil {
-		// fallback: coba ambil foto langsung dari pesan/reply saat .jj dikirim
-		if direct, derr := m.jjCollectDirectPhotos(ctx, evt); derr == nil && len(direct) > 0 {
-			photos = direct
-			err = nil
+
+	// Prioritas: foto yang dikirim/reply langsung bersama perintah .jj (pakai foto itu saja),
+	// agar tidak tercampur foto lama di galeri sementara.
+	photos, derr := m.jjCollectDirectPhotos(ctx, evt)
+	if derr != nil || len(photos) == 0 {
+		var err error
+		photos, err = m.jjSelectedPhotos(key) // fallback: semua foto di galeri sementara
+		if err != nil || len(photos) == 0 {
+			m.jjNotify(evt, "📸 Kirim foto atau reply foto dengan caption *.jj* untuk membuat video JJ.", "command.jj")
+			return nil
 		}
 	}
-	if err != nil || len(photos) == 0 {
-		m.jjNotify(evt, "📸 Kirim foto atau reply foto dengan caption *.jj* untuk membuat video JJ.", "command.jj")
-		return nil
-	}
+	// Konsumsi/reset galeri setelah foto dipilih untuk job ini agar tidak tercampur ke render berikutnya.
+	m.jjReset(key)
 
 	m.jjNotify(evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)), "command.jj")
 
@@ -2293,7 +2295,6 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 					m.jjNotify(evt, "⚠️ Video JJ sudah jadi, tetapi tautan unduh tidak tersedia. Coba lagi ya.", "command.jj")
 					return nil
 				}
-				m.jjReset(key)
 				cap := "✅ Video JJ kamu sudah jadi!"
 				if t, ok := st["template"].(map[string]any); ok {
 					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
