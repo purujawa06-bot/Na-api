@@ -653,21 +653,45 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
 	}
 	_ = jjSleepJitter(ctx, 900*time.Millisecond, 1200*time.Millisecond)
 	c.jjHumanScroll(sid)
-	_ = jjSleepJitter(ctx, 300*time.Millisecond, 600*time.Millisecond)
+	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Foto disiapkan, mengirim permintaan render..." })
+	_ = jjSleepJitter(ctx, 400*time.Millisecond, 700*time.Millisecond)
 
-	// submit: scroll to button and click naturally
-	_ = c.jjClickSelector(sid, "button")
-	// verify click had effect (button may disable or task area appear); if nothing, try JS click on submit-like button
-	_ = jjSleepJitter(ctx, 600*time.Millisecond, 700*time.Millisecond)
+	// submit: find and click the actual submit/generate button (avoid clicking random buttons).
 	submitRes, _ := c.eval(sid, `(function(){
-  const b = Array.from(document.querySelectorAll('button')).find(x=>/submit|buat|generate|proses|render/i.test((x.innerText||x.textContent||'')));
-  if(!b) return 'NO_SUBMIT';
-  const t = (document.body&&document.body.innerText||'');
-  if(/Task kamu|Memproses|Menunggu|Antrian|Selesai|Gagal/i.test(t)) return 'CLICKED';
-  if(b.disabled) return 'DISABLED';
-  try{ b.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
-  b.click();
+  const t0 = (document.body&&document.body.innerText||'');
+  if(/Task kamu.*(Diproses|Memproses|Menunggu|Antrian|Selesai|Gagal)/i.test(t0)) return 'CLICKED';
+  const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+  const isVisible = (el)=>{ const r=el.getBoundingClientRect(); return r.width>0 && r.height>0; };
+  const score = (el)=>{
+    const txt=(el.innerText||el.textContent||el.value||'').trim();
+    const low=txt.toLowerCase();
+    let s=0;
+    if(/submit|buat|generate|proses|render|kirim|mulai|start|create/.test(low)) s+=5;
+    if(/batal|cancel|close|tutup|hapus|delete|reset|kembali|back/.test(low)) s-=5;
+    if(el.disabled) s-=3;
+    if(isVisible(el)) s+=1;
+    return {s, txt, low};
+  };
+  let best=null, bestS=-999;
+  for(const b of buttons){
+    const sc=score(b);
+    if(sc.s>bestS){ bestS=sc.s; best=b; }
+  }
+  if(!best || bestS < 1) return 'NO_SUBMIT';
+  try{ best.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
+  try{ best.click(); }catch(e){}
+  try{ best.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window})); }catch(e){}
   return 'CLICKED';
+})()`)
+	_ = jjSleepJitter(ctx, 800*time.Millisecond, 900*time.Millisecond)
+	// second attempt if task not started yet
+	_, _ = c.eval(sid, `(function(){
+  const t = (document.body&&document.body.innerText||'');
+  if(/Diproses|Memproses|Menunggu|Antrian|Selesai|Gagal/i.test(t)) return 'ALREADY';
+  const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+  const b = buttons.find(x=>/submit|buat|generate|proses|render|kirim|mulai|start|create/i.test((x.innerText||x.textContent||x.value||'')) && !/batal|cancel|close|tutup|hapus|delete|reset/i.test((x.innerText||x.textContent||x.value||'')));
+  if(b){ try{b.scrollIntoView({block:'center'});}catch(e){} b.click(); return 'RETRY'; }
+  return 'NO';
 })()`)
 	if submitRes == "NO_SUBMIT" {
 		return jjGenerateResult{}, fmt.Errorf("gagal submit: tombol submit tidak ditemukan")
