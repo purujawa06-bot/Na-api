@@ -653,8 +653,14 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
 	}
 	_ = jjSleepJitter(ctx, 900*time.Millisecond, 1200*time.Millisecond)
 	c.jjHumanScroll(sid)
+	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Foto disiapkan, menunggu tombol submit aktif..." })
+	// wait for submit button to become enabled after file selection
+	_ = c.waitFor(ctx, sid, `(function(){
+  const b = document.querySelector('button[type="submit"], input[type="submit"]') || Array.from(document.querySelectorAll('button')).find(x=>/submit|buat|generate|proses|render|kirim|mulai|start|create/i.test((x.innerText||x.textContent||x.value||'')));
+  return !!b && !b.disabled;
+})()`, 12*time.Second)
 	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Foto disiapkan, mengirim permintaan render..." })
-	_ = jjSleepJitter(ctx, 400*time.Millisecond, 700*time.Millisecond)
+	_ = jjSleepJitter(ctx, 300*time.Millisecond, 600*time.Millisecond)
 
 	// submit: find and click the actual submit/generate button (avoid clicking random buttons).
 	submitRes, _ := c.eval(sid, `(function(){
@@ -668,29 +674,31 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
     let s=0;
     if(/submit|buat|generate|proses|render|kirim|mulai|start|create/.test(low)) s+=5;
     if(/batal|cancel|close|tutup|hapus|delete|reset|kembali|back/.test(low)) s-=5;
-    if(el.disabled) s-=3;
+    if(el.disabled) s-=4;
     if(isVisible(el)) s+=1;
-    return {s, txt, low};
+    if(el.matches && el.matches('button[type="submit"],input[type="submit"]')) s+=2;
+    return s;
   };
   let best=null, bestS=-999;
   for(const b of buttons){
-    const sc=score(b);
-    if(sc.s>bestS){ bestS=sc.s; best=b; }
+    const s=score(b);
+    if(s>bestS){ bestS=s; best=b; }
   }
   if(!best || bestS < 1) return 'NO_SUBMIT';
   try{ best.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
+  try{ best.disabled = false; }catch(e){}
   try{ best.click(); }catch(e){}
   try{ best.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window})); }catch(e){}
   return 'CLICKED';
 })()`)
-	_ = jjSleepJitter(ctx, 800*time.Millisecond, 900*time.Millisecond)
+	_ = jjSleepJitter(ctx, 900*time.Millisecond, 900*time.Millisecond)
 	// second attempt if task not started yet
 	_, _ = c.eval(sid, `(function(){
   const t = (document.body&&document.body.innerText||'');
   if(/Diproses|Memproses|Menunggu|Antrian|Selesai|Gagal/i.test(t)) return 'ALREADY';
   const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
   const b = buttons.find(x=>/submit|buat|generate|proses|render|kirim|mulai|start|create/i.test((x.innerText||x.textContent||x.value||'')) && !/batal|cancel|close|tutup|hapus|delete|reset/i.test((x.innerText||x.textContent||x.value||'')));
-  if(b){ try{b.scrollIntoView({block:'center'});}catch(e){} b.click(); return 'RETRY'; }
+  if(b){ try{ b.disabled=false; b.scrollIntoView({block:'center'});}catch(e){} try{b.click();}catch(e){} try{b.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));}catch(e){} return 'RETRY'; }
   return 'NO';
 })()`)
 	if submitRes == "NO_SUBMIT" {
@@ -730,44 +738,65 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
 func jjReadState(c *cdpClient, sid string) (jjGenerateResult, error) {
 	expr := `(function(){
   const text = (document.body && document.body.innerText || '').slice(0,8000);
-  let task = '';
-  const idx = text.indexOf('Task kamu');
-  if(idx >= 0) task = text.slice(idx, idx+1200);
-  const taskLower = (task||'').toLowerCase();
-  const vids = Array.from(document.querySelectorAll('video,source')).map(v=>v.src||v.currentSrc||v.getAttribute('src')||'').filter(Boolean);
-  const anchors = Array.from(document.querySelectorAll('a,button,[role="button"],[data-href],[data-url],[download]'));
-  const links = anchors.map(a=>({
-    href: a.href || a.getAttribute('href') || a.getAttribute('data-href') || a.getAttribute('data-url') || '',
-    text: (a.innerText||a.textContent||a.getAttribute('aria-label')||a.getAttribute('title')||'').trim(),
-    download: a.getAttribute('download') || ''
-  }));
-  let dl = '';
-  let view = '';
   const isHttp = (h)=>/^https?:/i.test(h||'');
   const isVideoLike = (h)=>/\.mp4|evercloud|capcut|media|cdn|video|storage|download|result|output/i.test(h||'');
-  for(const l of links){
-    const h=l.href||''; const t=(l.text||'').toLowerCase();
-    if(!isHttp(h)) continue;
-    const looksDL = /unduh|download|simpan|save|hasil|result|video|mp4/.test(t) || l.download !== '' || isVideoLike(h);
-    if(!dl && looksDL) dl=h;
-    if(!view && /lihat|view|buka|open|preview/.test(t)) view=h;
-  }
-  if(!dl){
-    for(const l of links){
-      const h=l.href||''; const t=(l.text||'').toLowerCase();
-      if(isHttp(h) && isVideoLike(h) && !/lihat|view|preview/.test(t)) { dl=h; break; }
+
+  // Prefer the newest task card (top of list) to avoid picking an older task's result.
+  const cards = Array.from(document.querySelectorAll('.task-card, .task-list > *'));
+  let task = '';
+  let dl = '';
+  let view = '';
+  let cardDone = false;
+  let cardFailed = false;
+  let cardProcessing = false;
+  if(cards.length){
+    const card = cards[0];
+    task = (card.innerText || card.textContent || '').trim();
+    const low = task.toLowerCase();
+    cardDone = /selesai|berhasil/.test(low) || !!card.querySelector('.badge--success');
+    cardFailed = /gagal|error|failed/.test(low) || !!card.querySelector('.badge--failed,.badge--error');
+    cardProcessing = /diproses|memproses|menunggu|antrian/.test(low) || !!card.querySelector('.badge--processing,.badge--queue,.badge--waiting');
+    const anchors = Array.from(card.querySelectorAll('a,button,[role="button"],[data-href],[data-url],[download]'));
+    for(const a of anchors){
+      const h = a.href || a.getAttribute('href') || a.getAttribute('data-href') || a.getAttribute('data-url') || '';
+      const t = (a.innerText||a.textContent||a.getAttribute('aria-label')||a.getAttribute('title')||'').trim().toLowerCase();
+      if(!isHttp(h)) continue;
+      const looksDL = /unduh|download|simpan|save|hasil|result|video|mp4/.test(t) || a.hasAttribute('download') || isVideoLike(h);
+      if(!dl && looksDL) dl = h;
+      if(!view && /lihat|view|buka|open|preview/.test(t)) view = h;
+    }
+    if(!dl){
+      const vids = Array.from(card.querySelectorAll('video,source')).map(v=>v.src||v.currentSrc||v.getAttribute('src')||'').filter(Boolean);
+      for(const v of vids){ if(isHttp(v)) { dl=v; break; } }
     }
   }
-  if(!dl){ for(const v of vids){ if(isHttp(v)) { dl=v; break; } } }
-  if(!dl){
-    const m = text.match(/https?:\/\/[^\s"'<>]+/g) || [];
-    for(const u of m){ if(isVideoLike(u)) { dl=u; break; } }
+  if(!task){
+    const idx = text.indexOf('Task kamu');
+    if(idx >= 0) task = text.slice(idx, idx+1200);
   }
-  const textDone = /selesai|berhasil/.test(taskLower) || /selesai|berhasil/.test(text.toLowerCase());
+  // Fallback: global scan (only if no card-specific download found)
+  if(!dl){
+    const anchors = Array.from(document.querySelectorAll('a,button,[role="button"],[data-href],[data-url],[download]'));
+    for(const a of anchors){
+      const h = a.href || a.getAttribute('href') || a.getAttribute('data-href') || a.getAttribute('data-url') || '';
+      const t = (a.innerText||a.textContent||a.getAttribute('aria-label')||a.getAttribute('title')||'').trim().toLowerCase();
+      if(!isHttp(h)) continue;
+      const looksDL = /unduh|download|simpan|save|hasil|result|video|mp4/.test(t) || a.hasAttribute('download') || isVideoLike(h);
+      if(!dl && looksDL) dl = h;
+      if(!view && /lihat|view|buka|open|preview/.test(t)) view = h;
+    }
+  }
+  if(!dl){
+    const vids = Array.from(document.querySelectorAll('video,source')).map(v=>v.src||v.currentSrc||v.getAttribute('src')||'').filter(Boolean);
+    for(const v of vids){ if(isHttp(v)) { dl=v; break; } }
+  }
+  const taskLower = (task||'').toLowerCase();
+  const textDone = cardDone || /selesai|berhasil/.test(taskLower);
+  const failed = cardFailed || /gagal|error|failed/.test(taskLower);
   const done = textDone || (!!dl);
-  const failed = /gagal|error|failed/.test(taskLower);
-  return JSON.stringify({task:task, dl:dl, view:view, done:done, failed:failed, textDone:textDone});
+  return JSON.stringify({task:task, dl:dl, view:view, done:done, failed:failed, textDone:textDone, processing:cardProcessing});
 })()`
+
 	val, err := c.eval(sid, expr)
 	if err != nil {
 		return jjGenerateResult{}, err
