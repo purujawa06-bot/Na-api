@@ -359,10 +359,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 	}
 
 	text := extractText(evt)
-	// simpan foto yang diupload ke galeri sementara JJ (tanpa react/command)
-	if evt.Message != nil && evt.Message.GetImageMessage() != nil {
-		m.jjCaptureUpload(ctx, evt)
-	}
+	// (JJ: tidak menyimpan foto ke galeri; gunakan foto yang dikirim/reply langsung dengan .jj)
 	if text == "" {
 		return
 	}
@@ -2137,6 +2134,32 @@ func (m *Manager) jjCaptureUpload(ctx context.Context, evt *events.Message) {
 	m.jjTouchLocked(key)
 }
 
+func extractImageFromWA(msg *waE2E.Message) *waE2E.ImageMessage {
+	if msg == nil {
+		return nil
+	}
+	// unwrap wrappers umum (view-once/ephemeral/caption) agar reply foto bisa terbaca
+	if vm := msg.GetViewOnceMessage(); vm != nil && vm.GetMessage() != nil {
+		if img := extractImageFromWA(vm.GetMessage()); img != nil { return img }
+	}
+	if vm := msg.GetViewOnceMessageV2(); vm != nil && vm.GetMessage() != nil {
+		if img := extractImageFromWA(vm.GetMessage()); img != nil { return img }
+	}
+	if vm := msg.GetViewOnceMessageV2Extension(); vm != nil && vm.GetMessage() != nil {
+		if img := extractImageFromWA(vm.GetMessage()); img != nil { return img }
+	}
+	if em := msg.GetEphemeralMessage(); em != nil && em.GetMessage() != nil {
+		if img := extractImageFromWA(em.GetMessage()); img != nil { return img }
+	}
+	if dm := msg.GetDocumentWithCaptionMessage(); dm != nil && dm.GetMessage() != nil {
+		if img := extractImageFromWA(dm.GetMessage()); img != nil { return img }
+	}
+	if img := msg.GetImageMessage(); img != nil {
+		return img
+	}
+	return nil
+}
+
 func (m *Manager) jjCollectDirectPhotos(ctx context.Context, evt *events.Message) ([]jjStoredPhoto, error) {
 	m.mu.RLock()
 	c := m.client
@@ -2146,12 +2169,14 @@ func (m *Manager) jjCollectDirectPhotos(ctx context.Context, evt *events.Message
 	}
 	var imgs []*waE2E.ImageMessage
 	if evt.Message != nil {
-		if img := evt.Message.GetImageMessage(); img != nil {
+		// foto langsung pada pesan .jj (caption)
+		if img := extractImageFromWA(evt.Message); img != nil {
 			imgs = append(imgs, img)
 		}
+		// foto yang di-reply dengan .jj
 		if ci := extractIncomingContextInfo(evt.Message); ci != nil {
 			if q := ci.GetQuotedMessage(); q != nil {
-				if img := q.GetImageMessage(); img != nil {
+				if img := extractImageFromWA(q); img != nil {
 					imgs = append(imgs, img)
 				}
 			}
@@ -2160,9 +2185,27 @@ func (m *Manager) jjCollectDirectPhotos(ctx context.Context, evt *events.Message
 	if len(imgs) == 0 {
 		return nil, errors.New("no direct image")
 	}
+	// dedupe (hindari ganda jika foto sama terdeteksi dua kali)
+	seen := map[string]bool{}
+	var uniq []*waE2E.ImageMessage
+	for _, img := range imgs {
+		k := string(img.GetFileSHA256())
+		if k == "" {
+			k = img.GetURL() + "|" + img.GetDirectPath()
+		}
+		if k != "" {
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+		}
+		uniq = append(uniq, img)
+	}
+	imgs = uniq
+
 	var out []jjStoredPhoto
 	for i, img := range imgs {
-		data, err := c.Download(ctx, img)
+		data, err := c.Download(ctx, img) // download penuh (bukan stream manual)
 		if err != nil || len(data) == 0 {
 			continue
 		}
@@ -2247,18 +2290,14 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	_ = args
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 
-	// Prioritas: foto yang dikirim/reply langsung bersama perintah .jj (pakai foto itu saja),
-	// agar tidak tercampur foto lama di galeri sementara.
+	// Gunakan foto langsung pada perintah .jj (kirim foto dengan caption .jj atau reply foto dengan .jj).
+	// Tidak menyimpan/menumpuk foto di galeri.
 	photos, derr := m.jjCollectDirectPhotos(ctx, evt)
 	if derr != nil || len(photos) == 0 {
-		var err error
-		photos, err = m.jjSelectedPhotos(key) // fallback: semua foto di galeri sementara
-		if err != nil || len(photos) == 0 {
-			m.jjNotify(evt, "📸 Kirim foto atau reply foto dengan caption *.jj* untuk membuat video JJ.", "command.jj")
-			return nil
-		}
+		m.jjNotify(evt, "📸 Kirim foto dengan caption *.jj* atau reply foto dengan *.jj* untuk membuat video JJ.", "command.jj")
+		return nil
 	}
-	// Konsumsi/reset galeri setelah foto dipilih untuk job ini agar tidak tercampur ke render berikutnya.
+	// Pastikan tidak ada sisa galeri lama (logika lama) yang tertinggal.
 	m.jjReset(key)
 
 	m.jjNotify(evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)), "command.jj")
