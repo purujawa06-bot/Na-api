@@ -556,6 +556,23 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 		return
 	}
+	// kirim sticker dari URL gambar (mis. plugin .brat)
+	if strings.TrimSpace(res.StickerURL) != "" {
+		if err := m.sendStickerFromURL(ctx, evt, res, cfg); err != nil {
+			m.logError("send.sticker", "cmd="+cmd+" err="+err.Error())
+			fb := strings.TrimSpace(res.Caption)
+			if fb == "" {
+				fb = strings.TrimSpace(res.Reply)
+			}
+			if fb == "" {
+				fb = "Gagal mengirim sticker."
+			} else {
+				fb = fb + "\n\n(Gagal mengirim sticker)"
+			}
+			_ = m.sendReply(ctx, evt, fb)
+		}
+		return
+	}
 	if strings.TrimSpace(res.ContactVCard) != "" {
 		_ = m.sendContact(ctx, evt, res)
 		return
@@ -786,6 +803,78 @@ func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error
 		return errors.New("client not ready")
 	}
 	_, err := c.SendMessage(ctx, to, &waE2E.Message{Conversation: proto.String(text)})
+	return err
+}
+
+func (m *Manager) sendStickerFromURL(ctx context.Context, evt *events.Message, res ExecResult, cfg Config) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(res.StickerURL), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
+	hc := &http.Client{Timeout: 60 * time.Second}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("download sticker image: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("gambar sticker kosong")
+	}
+
+	pack := strings.TrimSpace(cfg.StickerPack)
+	author := strings.TrimSpace(cfg.StickerAuthor)
+	if pack == "" {
+		pack = strings.TrimSpace(cfg.BotName)
+		if pack == "" {
+			pack = "puruLocal"
+		}
+	}
+	if author == "" {
+		author = strings.TrimSpace(cfg.OwnerName)
+		if author == "" {
+			author = "puruLocal Bot"
+		}
+	}
+
+	webpData, err := makeStickerWebP(data, pack, author)
+	if err != nil {
+		return err
+	}
+	uploaded, err := c.Upload(ctx, webpData, whatsmeow.MediaImage)
+	if err != nil {
+		return err
+	}
+	sticker := &waE2E.StickerMessage{
+		URL:           proto.String(uploaded.URL),
+		DirectPath:    proto.String(uploaded.DirectPath),
+		MediaKey:      uploaded.MediaKey,
+		Mimetype:      proto.String("image/webp"),
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    proto.Uint64(uint64(len(webpData))),
+		IsAnimated:    proto.Bool(false),
+		StickerSentTS: proto.Int64(evt.Info.Timestamp.UnixMilli()),
+		Height:        proto.Uint32(512),
+		Width:         proto.Uint32(512),
+		ContextInfo:   buildReplyContext(evt),
+	}
+	_, err = c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{StickerMessage: sticker})
 	return err
 }
 

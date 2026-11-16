@@ -105,6 +105,17 @@ func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
 			Version:     "1.0.0",
 			Enabled:     true,
 		},
+		{
+			ID:          "brat-sticker",
+			Name:        "Brat Sticker",
+			Command:     "brat",
+			Category:    "Sticker",
+			Description: "Buat sticker brat dari teks (.brat <teks>)",
+			ExecURL:     exec,
+			Server:      base,
+			Version:     "1.0.0",
+			Enabled:     true,
+		},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "plugins": plugins})
@@ -146,6 +157,13 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(res)
 	case "tt", "tiktok", "tiktok-downloader":
 		res, err := runTikTok(r, args)
+		if err != nil {
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(res)
+	case "brat", "brat-sticker":
+		res, err := runBrat(r, args)
 		if err != nil {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -432,6 +450,22 @@ func runTikTok(r *http.Request, rawURL string) (map[string]any, error) {
 		"video_url": videoURL,
 		"caption":   caption,
 		"mimetype":  "video/mp4",
+	}, nil
+}
+
+func runBrat(r *http.Request, text string) (map[string]any, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return map[string]any{"ok": true, "reply": "Gunakan: .brat <teks>"}, nil
+	}
+	base := strings.TrimRight(baseURL(r), "/")
+	if strings.Contains(base, "127.0.0.1") || strings.Contains(base, "localhost") {
+		base = "https://na-api-nue-api-e7bfd3f4.koyeb.app"
+	}
+	stickerURL := base + "/api/tools/brat?text=" + url.QueryEscape(text)
+	return map[string]any{
+		"ok":          true,
+		"sticker_url": stickerURL,
 	}, nil
 }
 

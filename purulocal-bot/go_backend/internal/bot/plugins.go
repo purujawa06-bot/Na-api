@@ -183,6 +183,7 @@ type ExecResult struct {
 	Notice       string `json:"notice,omitempty"`
 	AudioURL     string `json:"audio_url,omitempty"`
 	VideoURL     string `json:"video_url,omitempty"`
+	StickerURL   string `json:"sticker_url,omitempty"`
 	Title        string `json:"title,omitempty"`
 	PermalinkURL string `json:"permalink_url,omitempty"`
 	Mimetype     string `json:"mimetype,omitempty"`
@@ -279,6 +280,9 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 			if v, ok := j["video_url"].(string); ok {
 				out.VideoURL = v
 			}
+			if v, ok := j["sticker_url"].(string); ok {
+				out.StickerURL = v
+			}
 			if v, ok := j["title"].(string); ok {
 				out.Title = v
 			}
@@ -302,7 +306,7 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 					out.DurationSec = uint32(v)
 				}
 			}
-			if out.Reply != "" || out.Caption != "" || out.AudioURL != "" || out.VideoURL != "" || out.Notice != "" {
+			if out.Reply != "" || out.Caption != "" || out.AudioURL != "" || out.VideoURL != "" || out.StickerURL != "" || out.Notice != "" {
 				return out, nil
 			}
 			if errStr, ok := j["error"].(string); ok && errStr != "" {
