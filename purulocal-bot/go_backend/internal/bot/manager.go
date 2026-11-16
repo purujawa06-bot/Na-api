@@ -243,6 +243,7 @@ func (m *Manager) ListAllFeatures() []FeatureItem {
 		{"builtin:menu", "Menu", "menu"},
 		{"builtin:owner", "Owner", "owner"},
 		{"builtin:sticker", "Sticker", "sticker"},
+		{"builtin:upsw", "Upload Status", "upsw"},
 		{"builtin:vip", "VIP Redeem", "vip"},
 		{"builtin:stats", "Stats", "stats"},
 		{"builtin:logs", "Logs", "logs"},
@@ -454,6 +455,30 @@ func (m *Manager) onMessage(evt *events.Message) {
 			return
 		}
 		_ = m.handleStickerCommand(ctx, evt, cfg)
+		return
+	}
+
+	// built-in: upsw (owner-only) - kirim/reply foto/video dengan .upsw <text> untuk post status/story
+	if cmd == "upsw" || cmd == "upstatus" || cmd == "sw" {
+		maybeReact()
+		doTyping()
+		defer stopReact()
+		if cfg.TypingBeforeReply {
+			m.sendTyping(ctx, evt.Info.Chat, false)
+		}
+		if !m.isFeatureAllowed("builtin:upsw", userKey) {
+			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+			return
+		}
+		ids := senderIDs
+		if len(ids) == 0 {
+			ids = []string{userKey}
+		}
+		if !isOwnerAny(cfg.OwnerNumber, ids...) {
+			_ = m.sendReply(ctx, evt, "Perintah ini khusus owner.")
+			return
+		}
+		_ = m.handleUpswCommand(ctx, evt, strings.TrimSpace(args))
 		return
 	}
 
@@ -739,51 +764,68 @@ func isOwner(userKey, ownerNumber string) bool {
 }
 
 func isOwnerAny(ownerNumber string, userKeys ...string) bool {
-	ownerDigits := ""
-	for _, r := range ownerNumber {
-		if r >= '0' && r <= '9' {
-			ownerDigits += string(r)
+	normalizeDigits := func(s string) string {
+		out := make([]rune, 0, len(s))
+		for _, r := range s {
+			if r >= '0' && r <= '9' {
+				out = append(out, r)
+			}
 		}
+		return string(out)
 	}
+	trimCore := func(d string) string {
+		d = strings.TrimLeft(d, "0")
+		d = strings.TrimPrefix(d, "62")
+		d = strings.TrimLeft(d, "0")
+		return d
+	}
+	ownerDigits := normalizeDigits(ownerNumber)
 	if ownerDigits == "" {
 		return false
 	}
-	trim := func(s string) string {
-		s = strings.TrimLeft(s, "0")
-		s = strings.TrimPrefix(s, "62")
-		s = strings.TrimLeft(s, "0")
-		return s
+	oCore := trimCore(ownerDigits)
+
+	extractUserDigits := func(raw string) string {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			return ""
+		}
+		// strip known prefixes added in senderIDs/debug
+		for _, p := range []string{"resolved_pn:", "resolved_lid:", "pn:"} {
+			if strings.HasPrefix(s, p) {
+				s = strings.TrimPrefix(s, p)
+			}
+		}
+		// for JID-like values take user part before @ and drop device suffix :n
+		if i := strings.Index(s, "@"); i >= 0 {
+			s = s[:i]
+		}
+		if i := strings.Index(s, ":"); i >= 0 {
+			s = s[:i]
+		}
+		// if it looks like a plain number, normalize directly; otherwise collect digits
+		d := normalizeDigits(s)
+		return d
 	}
-	oCore := trim(ownerDigits)
+
 	for _, userKey := range userKeys {
 		if strings.TrimSpace(userKey) == "" {
 			continue
 		}
-		// ambil bagian user dari JID (sebelum @) dan buang suffix device (:n)
-		uk := userKey
-		if i := strings.Index(uk, "@"); i >= 0 {
-			uk = uk[:i]
-		}
-		if i := strings.Index(uk, ":"); i >= 0 {
-			uk = uk[:i]
-		}
-		userDigits := ""
-		for _, r := range uk {
-			if r >= '0' && r <= '9' {
-				userDigits += string(r)
-			}
-		}
+		userDigits := extractUserDigits(userKey)
 		if userDigits == "" {
-			for _, r := range userKey {
-				if r >= '0' && r <= '9' {
-					userDigits += string(r)
+			// last resort: try parsing as JID string (handles odd forms)
+			if j, err := types.ParseJID(userKey); err == nil && !j.IsEmpty() {
+				userDigits = normalizeDigits(j.User)
+				if i := strings.Index(userDigits, ":"); i >= 0 { // unlikely but safe
+					userDigits = userDigits[:i]
 				}
 			}
 		}
 		if userDigits == "" {
 			continue
 		}
-		uCore := trim(userDigits)
+		uCore := trimCore(userDigits)
 		if uCore != "" && oCore != "" && uCore == oCore {
 			return true
 		}
@@ -2532,4 +2574,125 @@ func (m *Manager) handleJJFeatureCommand(ctx context.Context, evt *events.Messag
 			m.logError("command.jjgc", err.Error())
 		}
 	}
+}
+
+
+func (m *Manager) handleUpswCommand(ctx context.Context, evt *events.Message, caption string) error {
+	imgMsg, vidMsg := findMediaForUpsw(evt)
+	if imgMsg == nil && vidMsg == nil {
+		_ = m.sendReply(ctx, evt, "Kirim atau reply foto/video dengan caption .upsw <teks>")
+		return nil
+	}
+
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+
+	if imgMsg != nil {
+		data, err := c.Download(ctx, imgMsg)
+		if err != nil {
+			_ = m.sendReply(ctx, evt, "Gagal mengunduh gambar: "+err.Error())
+			return nil
+		}
+		if len(data) == 0 {
+			_ = m.sendReply(ctx, evt, "Gambar kosong atau tidak dapat diunduh.")
+			return nil
+		}
+		uploaded, err := c.Upload(ctx, data, whatsmeow.MediaImage)
+		if err != nil {
+			_ = m.sendReply(ctx, evt, "Gagal upload gambar status: "+err.Error())
+			return nil
+		}
+		mime := strings.TrimSpace(imgMsg.GetMimetype())
+		if mime == "" {
+			mime = "image/jpeg"
+		}
+		msg := &waE2E.Message{
+			ImageMessage: &waE2E.ImageMessage{
+				URL:           proto.String(uploaded.URL),
+				DirectPath:    proto.String(uploaded.DirectPath),
+				MediaKey:      uploaded.MediaKey,
+				Mimetype:      proto.String(mime),
+				FileEncSHA256: uploaded.FileEncSHA256,
+				FileSHA256:    uploaded.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+				Caption:       proto.String(caption),
+			},
+		}
+		if _, err := c.SendMessage(ctx, types.StatusBroadcastJID, msg); err != nil {
+			_ = m.sendReply(ctx, evt, "Gagal mengirim status: "+err.Error())
+			return nil
+		}
+		_ = m.sendReply(ctx, evt, "Status foto berhasil dikirim.")
+		return nil
+	}
+
+	// video
+	data, err := c.Download(ctx, vidMsg)
+	if err != nil {
+		_ = m.sendReply(ctx, evt, "Gagal mengunduh video: "+err.Error())
+		return nil
+	}
+	if len(data) == 0 {
+		_ = m.sendReply(ctx, evt, "Video kosong atau tidak dapat diunduh.")
+		return nil
+	}
+	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
+	if err != nil {
+		_ = m.sendReply(ctx, evt, "Gagal upload video status: "+err.Error())
+		return nil
+	}
+	mime := strings.TrimSpace(vidMsg.GetMimetype())
+	if mime == "" {
+		mime = "video/mp4"
+	}
+	msg := &waE2E.Message{
+		VideoMessage: &waE2E.VideoMessage{
+			URL:           proto.String(uploaded.URL),
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String(mime),
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
+			FileLength:    proto.Uint64(uint64(len(data))),
+			Caption:       proto.String(caption),
+			Seconds:       proto.Uint32(vidMsg.GetSeconds()),
+			GifPlayback:   proto.Bool(vidMsg.GetGifPlayback()),
+		},
+	}
+	if _, err := c.SendMessage(ctx, types.StatusBroadcastJID, msg); err != nil {
+		_ = m.sendReply(ctx, evt, "Gagal mengirim status: "+err.Error())
+		return nil
+	}
+	_ = m.sendReply(ctx, evt, "Status video berhasil dikirim.")
+	return nil
+}
+
+func findMediaForUpsw(evt *events.Message) (*waE2E.ImageMessage, *waE2E.VideoMessage) {
+	msg := evt.Message
+	if msg == nil {
+		return nil, nil
+	}
+	// 1) media langsung pada pesan dengan caption command
+	if img := msg.GetImageMessage(); img != nil {
+		return img, nil
+	}
+	if vid := msg.GetVideoMessage(); vid != nil {
+		return nil, vid
+	}
+	// 2) reply/quote ke media
+	if ci := extractIncomingContextInfo(msg); ci != nil {
+		if q := ci.GetQuotedMessage(); q != nil {
+			if img := q.GetImageMessage(); img != nil {
+				return img, nil
+			}
+			if vid := q.GetVideoMessage(); vid != nil {
+				return nil, vid
+			}
+		}
+	}
+	return nil, nil
 }
