@@ -359,7 +359,10 @@ func (m *Manager) onMessage(evt *events.Message) {
 	}
 
 	text := extractText(evt)
-	// (JJ: tidak menyimpan foto ke galeri; gunakan foto yang dikirim/reply langsung dengan .jj)
+	// simpan foto ke galeri sementara JJ (untuk mendukung album/kirim beberapa foto sekaligus dengan .jj)
+	if evt.Message != nil && evt.Message.GetImageMessage() != nil {
+		m.jjCaptureUpload(ctx, evt)
+	}
 	if text == "" {
 		return
 	}
@@ -2290,14 +2293,42 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	_ = args
 	key := m.jjKey(evt.Info.Chat.String(), evt.Info.Sender.String())
 
-	// Gunakan foto langsung pada perintah .jj (kirim foto dengan caption .jj atau reply foto dengan .jj).
-	// Tidak menyimpan/menumpuk foto di galeri.
-	photos, derr := m.jjCollectDirectPhotos(ctx, evt)
-	if derr != nil || len(photos) == 0 {
+	// Kumpulkan foto: langsung dari pesan/reply .jj + foto album/batch di galeri sementara.
+	// Untuk album (beberapa foto sekaligus, caption .jj di salah satu foto), beri jeda singkat
+	// agar foto lain yang datang bersamaan sempat tertangkap oleh handler paralel.
+	var photos []jjStoredPhoto
+	if direct, _ := m.jjCollectDirectPhotos(ctx, evt); len(direct) > 0 {
+		photos = append(photos, direct...)
+	}
+	// tunggu sebentar untuk foto album lain yang mungkin masih diproses paralel
+	for i := 0; i < 6; i++ {
+		time.Sleep(350 * time.Millisecond)
+	}
+	if pool, err := m.jjSelectedPhotos(key); err == nil && len(pool) > 0 {
+		photos = append(photos, pool...)
+	}
+	// dedupe (foto caption .jj bisa ada di direct sekaligus tertangkap ke pool)
+	uniq := make([]jjStoredPhoto, 0, len(photos))
+	seen := map[string]bool{}
+	for _, ph := range photos {
+		sig := fmt.Sprintf("%d", len(ph.Data))
+		if len(ph.Data) >= 16 {
+			sig = fmt.Sprintf("%x|%d", ph.Data[:16], len(ph.Data))
+		}
+		if seen[sig] {
+			continue
+		}
+		seen[sig] = true
+		uniq = append(uniq, ph)
+	}
+	photos = uniq
+
+	if len(photos) == 0 {
+		m.jjReset(key)
 		m.jjNotify(evt, "📸 Kirim foto dengan caption *.jj* atau reply foto dengan *.jj* untuk membuat video JJ.", "command.jj")
 		return nil
 	}
-	// Pastikan tidak ada sisa galeri lama (logika lama) yang tertinggal.
+	// Reset galeri setelah foto dikumpulkan untuk job ini (hindari tercampur ke render berikutnya).
 	m.jjReset(key)
 
 	m.jjNotify(evt, fmt.Sprintf("🎬 Sedang memproses %d foto menjadi video JJ...\nMohon tunggu sebentar, proses render bisa memakan waktu beberapa menit.", len(photos)), "command.jj")
