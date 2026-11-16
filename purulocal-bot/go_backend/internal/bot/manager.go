@@ -2270,7 +2270,7 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	for {
 		select {
 		case <-ctx.Done():
-			m.jjNotify(evt, "⏳ Proses JJ terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.", "command.jj")
+			m.jjNotify(evt, "❌ Proses JJ terlalu lama (melebihi batas tunggu bot). Coba cek status/ulangi nanti ya.", "command.jj")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -2380,7 +2380,7 @@ func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cf
 	for {
 		select {
 		case <-ctx.Done():
-			m.jjNotify(evt, "⏳ Proses JJ grup terlalu lama dan melebihi batas waktu. Coba lagi nanti ya.", "command.jjgc")
+			m.jjNotify(evt, "❌ Proses JJ grup terlalu lama (melebihi batas tunggu bot). Coba cek status/ulangi nanti ya.", "command.jjgc")
 			return ctx.Err()
 		case <-ticker.C:
 			st, err := m.jjGetJob(ctx, base, jobID)
@@ -2520,13 +2520,13 @@ func (m *Manager) handleJJFeatureCommand(ctx context.Context, evt *events.Messag
 	case "hapus", "reset":
 		m.jjHandleReset(ctx, evt)
 	case "jj":
-		jctx, jcancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		jctx, jcancel := context.WithTimeout(context.Background(), 50*time.Minute)
 		defer jcancel()
 		if err := m.handleJJCommand(jctx, evt, cfg, args); err != nil {
 			m.logError("command.jj", err.Error())
 		}
 	case "jjgc":
-		jctx, jcancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		jctx, jcancel := context.WithTimeout(context.Background(), 50*time.Minute)
 		defer jcancel()
 		if err := m.handleJJGCCommand(jctx, evt, cfg); err != nil {
 			m.logError("command.jjgc", err.Error())

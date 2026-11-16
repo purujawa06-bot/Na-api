@@ -24,9 +24,9 @@ const (
 	jjBaseURL       = "https://cc.fgsi.dpdns.org"
 	jjCDPURL        = "wss://light-panda-cdp.onrender.com/"
 	jjMaxPhotoBytes = 15 << 20 // 15 MB, selaras batas situs
-	jjRenderTimeout = 15 * time.Minute
+	jjRenderTimeout = 45 * time.Minute
 	jjPollInterval  = 5 * time.Second
-	jjJobTTL        = 30 * time.Minute
+	jjJobTTL        = 90 * time.Minute
 )
 
 // jjTemplate describes one CapCut template from the JJ site.
