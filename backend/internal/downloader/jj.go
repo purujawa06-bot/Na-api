@@ -673,36 +673,61 @@ func jjReadState(c *cdpClient, sid string) (jjGenerateResult, error) {
   let task = '';
   const idx = text.indexOf('Task kamu');
   if(idx >= 0) task = text.slice(idx, idx+1200);
-  const vids = Array.from(document.querySelectorAll('video,source')).map(v=>v.src||v.currentSrc||'').filter(Boolean);
-  const links = Array.from(document.querySelectorAll('a')).map(a=>({href:a.href||'', text:(a.innerText||'').trim()}));
+  const taskLower = (task||'').toLowerCase();
+  const vids = Array.from(document.querySelectorAll('video,source')).map(v=>v.src||v.currentSrc||v.getAttribute('src')||'').filter(Boolean);
+  const anchors = Array.from(document.querySelectorAll('a,button,[role="button"],[data-href],[data-url],[download]'));
+  const links = anchors.map(a=>({
+    href: a.href || a.getAttribute('href') || a.getAttribute('data-href') || a.getAttribute('data-url') || '',
+    text: (a.innerText||a.textContent||a.getAttribute('aria-label')||a.getAttribute('title')||'').trim(),
+    download: a.getAttribute('download') || ''
+  }));
   let dl = '';
   let view = '';
+  const isHttp = (h)=>/^https?:/i.test(h||'');
+  const isVideoLike = (h)=>/\.mp4|evercloud|capcut|media|cdn|video|storage|download|result|output/i.test(h||'');
   for(const l of links){
     const h=l.href||''; const t=(l.text||'').toLowerCase();
-    if(!dl && (/unduh|download/i.test(t) || /mp4|evercloud|capcut|media/i.test(h)) && /^https?:/i.test(h)) dl=h;
-    if(!view && /lihat|view/i.test(t) && /^https?:/i.test(h)) view=h;
+    if(!isHttp(h)) continue;
+    const looksDL = /unduh|download|simpan|save|hasil|result|video|mp4/.test(t) || l.download !== '' || isVideoLike(h);
+    if(!dl && looksDL) dl=h;
+    if(!view && /lihat|view|buka|open|preview/.test(t)) view=h;
   }
-  if(!dl){ for(const v of vids){ if(/^https?:/i.test(v)) { dl=v; break; } } }
-  const done = /selesai|berhasil/i.test(task) || (!!dl);
-  const failed = /gagal|error|failed/i.test(task);
-  return JSON.stringify({task:task, dl:dl, view:view, done:done, failed:failed});
+  if(!dl){
+    for(const l of links){
+      const h=l.href||''; const t=(l.text||'').toLowerCase();
+      if(isHttp(h) && isVideoLike(h) && !/lihat|view|preview/.test(t)) { dl=h; break; }
+    }
+  }
+  if(!dl){ for(const v of vids){ if(isHttp(v)) { dl=v; break; } } }
+  if(!dl){
+    const m = text.match(/https?:\/\/[^\s"'<>]+/g) || [];
+    for(const u of m){ if(isVideoLike(u)) { dl=u; break; } }
+  }
+  const textDone = /selesai|berhasil/.test(taskLower) || /selesai|berhasil/.test(text.toLowerCase());
+  const done = textDone || (!!dl);
+  const failed = /gagal|error|failed/.test(taskLower);
+  return JSON.stringify({task:task, dl:dl, view:view, done:done, failed:failed, textDone:textDone});
 })()`
 	val, err := c.eval(sid, expr)
 	if err != nil {
 		return jjGenerateResult{}, err
 	}
 	var st struct {
-		Task   string `json:"task"`
-		DL     string `json:"dl"`
-		View   string `json:"view"`
-		Done   bool   `json:"done"`
-		Failed bool   `json:"failed"`
+		Task     string `json:"task"`
+		DL       string `json:"dl"`
+		View     string `json:"view"`
+		Done     bool   `json:"done"`
+		Failed   bool   `json:"failed"`
+		TextDone bool   `json:"textDone"`
 	}
 	if err := json.Unmarshal([]byte(val), &st); err != nil {
 		return jjGenerateResult{}, err
 	}
+	// Consider done only when we have a concrete download URL. If page says "Selesai"
+	// but link not found yet, keep polling (caller) while still surfacing task text.
+	doneWithURL := (st.Done || st.TextDone) && st.DL != ""
 	return jjGenerateResult{
-		Done:        st.Done && st.DL != "",
+		Done:        doneWithURL,
 		Failed:      st.Failed,
 		DownloadURL: st.DL,
 		ViewURL:     st.View,
