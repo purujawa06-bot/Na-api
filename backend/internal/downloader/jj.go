@@ -349,12 +349,33 @@ func jjRunJob(id string, tpl jjTemplate, photos []jjPhoto) {
 	ctx, cancel := context.WithTimeout(context.Background(), jjRenderTimeout+2*time.Minute)
 	defer cancel()
 
-	result, genErr := jjGenerate(ctx, tpl, photos)
+	defer func() {
+		if r := recover(); r != nil {
+			jjUpdateJob(id, func(j *jjJob) {
+				j.Status = "error"
+				j.Success = false
+				j.Error = fmt.Sprintf("panic render JJ: %v", r)
+			})
+		}
+	}()
+
+	result, genErr := jjGenerate(ctx, id, tpl, photos)
 	jjUpdateJob(id, func(j *jjJob) {
 		if genErr != nil {
-			j.Status = "error"
-			j.Success = false
-			j.Error = genErr.Error()
+			if errors.Is(genErr, context.DeadlineExceeded) || errors.Is(genErr, context.Canceled) || strings.Contains(strings.ToLower(genErr.Error()), "context deadline") {
+				j.Status = "timeout"
+				j.Success = false
+				if j.Error == "" {
+					j.Error = "Render JJ melewati batas waktu"
+				}
+			} else {
+				j.Status = "error"
+				j.Success = false
+				j.Error = genErr.Error()
+			}
+			if result.TaskText != "" {
+				j.TaskText = result.TaskText
+			}
 			return
 		}
 		j.TaskText = result.TaskText
@@ -570,15 +591,19 @@ type jjGenerateResult struct {
 	TaskText    string
 }
 
-func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenerateResult, error) {
+func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPhoto) (jjGenerateResult, error) {
 	createURL := jjBaseURL + "/create/" + tpl.ID
 
-	conn, _, err := websocket.Dial(ctx, jjCDPURL, nil)
+	dialCtx, dialCancel := context.WithTimeout(ctx, 45*time.Second)
+	defer dialCancel()
+	conn, _, err := websocket.Dial(dialCtx, jjCDPURL, nil)
 	if err != nil {
 		return jjGenerateResult{}, fmt.Errorf("cdp dial: %w", err)
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "done")
 	c := &cdpClient{conn: conn, ctx: ctx}
+
+	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Terhubung ke renderer, menyiapkan halaman..." })
 
 	targetID, sid, err := jjNewPage(c, createURL)
 	if err != nil {
@@ -651,15 +676,26 @@ func jjGenerate(ctx context.Context, tpl jjTemplate, photos []jjPhoto) (jjGenera
 	// poll status task
 	deadline := time.Now().Add(jjRenderTimeout)
 	var last jjGenerateResult
+	polls := 0
 	for time.Now().Before(deadline) {
 		if err := sleepCtx(ctx, jjPollInterval); err != nil {
 			return last, err
 		}
+		polls++
 		st, err := jjReadState(c, sid)
 		if err != nil {
 			continue
 		}
 		last = st
+		if st.TaskText != "" || polls%3 == 0 {
+			tt := st.TaskText
+			jjUpdateJob(jobID, func(j *jjJob) {
+				if tt != "" {
+					j.TaskText = tt
+				}
+				j.Note = "Render sedang diproses..."
+			})
+		}
 		if st.Done || st.Failed {
 			return st, nil
 		}
