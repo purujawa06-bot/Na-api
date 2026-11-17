@@ -1604,6 +1604,24 @@
           "required": true
         }
       ]
+    },
+    {
+      "title": "Web Check",
+      "summary": "Cek status/uptime sebuah website.",
+      "description": "Mengecek apakah sebuah website dapat diakses (up/down) berdasarkan URL yang diberikan.\n              Endpoint mengirim permintaan HTTP ke URL target dan mengembalikan status, waktu respons,\n              serta informasi dasar konektivitas.",
+      "method": "GET",
+      "path": "/api/tools/check-web",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools/check-web?url=https://google.com')\n     .then(res => res.json())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL website yang akan dicek (wajib, http/https).",
+          "required": true
+        }
+      ]
     }
   ],
   "uploader": [

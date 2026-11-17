@@ -33,6 +33,7 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("POST /api/tools-image/html-to-image", h.htmlToImage)
 	mux.HandleFunc("GET /api/tools/brat", h.brat)
 	mux.HandleFunc("POST /api/tools/brat", h.brat)
+	mux.HandleFunc("GET /api/tools/check-web", h.checkWeb)
 	mux.HandleFunc("POST /api/text2image", h.textToImage)
 	mux.HandleFunc("POST /api/text2video", h.requestVideoTicket)
 	mux.HandleFunc("GET /api/text2video/status", h.videoStatus)
