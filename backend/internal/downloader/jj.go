@@ -16,13 +16,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/websocket"
+	"github.com/purujawa06-bot/na-api/backend/internal/cdp"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
 const (
 	jjBaseURL       = "https://cc.fgsi.dpdns.org"
-	jjCDPURL        = "wss://light-panda-cdp.onrender.com/"
 	jjMaxPhotoBytes = 15 << 20 // 15 MB, selaras batas situs
 	jjRenderTimeout = 45 * time.Minute
 	jjPollInterval  = 5 * time.Second
@@ -77,8 +76,8 @@ var jjStaticTemplates = []jjTemplate{
 	{ID: "7348779539301977352", Title: "DJ KANE NIGHT", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7348779539301977352"},
 	{ID: "7434697031710444817", Title: "DJ TOT TOT", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7434697031710444817"},
 	{ID: "7423373312283151632", Title: "DJ SEREM", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7423373312283151632"},
-	{ID: "7438072867821997313", Title: "🗿", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7438072867821997313"},
-	{ID: "7322807375067434258", Title: "Dj Seram #2 🗿", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7322807375067434258"},
+	{ID: "7438072867821997313", Title: "dY-�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7438072867821997313"},
+	{ID: "7322807375067434258", Title: "Dj Seram #2 dY-�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7322807375067434258"},
 	{ID: "7431150197352222008", Title: "SOUNDNYA KANE BGT", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7431150197352222008"},
 	{ID: "7345836624850308354", Title: "SOUNDNYA SEREM", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7345836624850308354"},
 	{ID: "7348035625435647233", Title: "JJ Kane", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7348035625435647233"},
@@ -103,7 +102,7 @@ var jjStaticTemplates = []jjTemplate{
 	{ID: "7421126835024579896", Title: "Iri Bilang bOss", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7421126835024579896"},
 	{ID: "7422986945934003464", Title: "JJ-KANE-CUY", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7422986945934003464"},
 	{ID: "7418157844849036561", Title: "JJ-CAPCUT-VERSI-AM", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7418157844849036561"},
-	{ID: "7420380949247986960", Title: "JJ-CAPCUT-VERSI-AM-☠️", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7420380949247986960"},
+	{ID: "7420380949247986960", Title: "JJ-CAPCUT-VERSI-AM-�~��,?", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7420380949247986960"},
 	{ID: "7394014832195816705", Title: "JJ Sweet Love", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7394014832195816705"},
 	{ID: "7374017712399371528", Title: "SHAKE-AM", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7374017712399371528"},
 	{ID: "7405909526802615570", Title: "SOUND-KANE-GINI", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7405909526802615570"},
@@ -117,30 +116,30 @@ var jjStaticTemplates = []jjTemplate{
 	{ID: "7312083605558267137", Title: "Loop kece amat [ AlightMotion ]", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7312083605558267137"},
 	{ID: "7459768171373907253", Title: "kece/kane [ AlightMotion ]", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7459768171373907253"},
 	{ID: "7442650055275810109", Title: "JJ VERSI 3:4", Slots: 3, Ratio: "3:4", ViewURL: "https://cc.fgsi.dpdns.org/view/7442650055275810109"},
-	{ID: "7363445564756823303", Title: "ganti ktp guys🗿", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7363445564756823303"},
+	{ID: "7363445564756823303", Title: "ganti ktp guysdY-�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7363445564756823303"},
 	{ID: "7445213389737020733", Title: "Dj give you love", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7445213389737020733"},
-	{ID: "7169857076133465345", Title: "CapCut juga keren kok 😎", Slots: 5, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7169857076133465345"},
-	{ID: "7344352078552157447", Title: "Sound Ilmuan🗿", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7344352078552157447"},
-	{ID: "7411302294647573776", Title: "masa ga dicobain🥵", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7411302294647573776"},
-	{ID: "7410024595463425288", Title: "Sekane ini guys 👽", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7410024595463425288"},
-	{ID: "7403288328155745554", Title: "🗿🗿HARI2 SEPI MLU", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7403288328155745554"},
+	{ID: "7169857076133465345", Title: "CapCut juga keren kok dY~Z", Slots: 5, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7169857076133465345"},
+	{ID: "7344352078552157447", Title: "Sound IlmuandY-�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7344352078552157447"},
+	{ID: "7411302294647573776", Title: "masa ga dicobaindY��", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7411302294647573776"},
+	{ID: "7410024595463425288", Title: "Sekane ini guys dY`�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7410024595463425288"},
+	{ID: "7403288328155745554", Title: "dY-�dY-�HARI2 SEPI MLU", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7403288328155745554"},
 	{ID: "7441568696587324725", Title: ". ( Rekomendasi Untuk Kane )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7441568696587324725"},
 	{ID: "7440808939366665525", Title: ". Dj Ayuk Syng Culik aku dong ( Rekomendasi Untuk Collab )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7440808939366665525"},
-	{ID: "7392574284004183303", Title: "konsep Atur sendiri🗿 ( Aaaaaaaaaaaaaaaaa )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7392574284004183303"},
-	{ID: "7381067467881286919", Title: "gas cobain🗿☕ Dj Geri Sang geee", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7381067467881286919"},
+	{ID: "7392574284004183303", Title: "konsep Atur sendiridY-� ( Aaaaaaaaaaaaaaaaa )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7392574284004183303"},
+	{ID: "7381067467881286919", Title: "gas cobaindY-��~ Dj Geri Sang geee", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7381067467881286919"},
 	{ID: "7438954440826031413", Title: ". ( Tipis Saja )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7438954440826031413"},
 	{ID: "7387380603722796296", Title: "Dj Aku Cuma cuma dgn mu...", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7387380603722796296"},
 	{ID: "7410738697160740114", Title: "#fyp#trend#uyekece#mastertobe ( Rekomendasi Untuk Kece )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7410738697160740114"},
 	{ID: "7423777183128194312", Title: "jj kece", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7423777183128194312"},
 	{ID: "7308175448251337986", Title: "GABISA KECE", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7308175448251337986"},
-	{ID: "7417334485378780434", Title: "jj smooth capcut nih😝👊🏻 KANE BGT INI WOI", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7417334485378780434"},
-	{ID: "7399242683727842615", Title: "Lupa nama DJ nya tapi ini viral kok pada zamannya 🤫", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7399242683727842615"},
+	{ID: "7417334485378780434", Title: "jj smooth capcut nihdY~?dY`SdY?� KANE BGT INI WOI", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7417334485378780434"},
+	{ID: "7399242683727842615", Title: "Lupa nama DJ nya tapi ini viral kok pada zamannya dY�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7399242683727842615"},
 	{ID: "7413725674562653457", Title: "tangkisdang ( Rekomendasi Untuk Cool )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7413725674562653457"},
 	{ID: "7306823497748172033", Title: "Trend Lag Jadi HD ( Rekomendasi Untuk Prank Lag )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7306823497748172033"},
 	{ID: "7416871527536217399", Title: "SAFONAMIX OLD ( Rekomendasi Untuk Anime )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7416871527536217399"},
 	{ID: "7424770329026874625", Title: "Trend 60Fps!!?", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7424770329026874625"},
 	{ID: "7327729978529926407", Title: "DJ CLEAN BANDIT BABY", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7327729978529926407"},
-	{ID: "7435112288979406097", Title: "nyoba style doctor kece nggk 😹🗿", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7435112288979406097"},
+	{ID: "7435112288979406097", Title: "nyoba style doctor kece nggk dY~1dY-�", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7435112288979406097"},
 	{ID: "7447107605618609469", Title: "JJ MENINA DO JOBS ( Rekomendasi Untuk Spill )", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7447107605618609469"},
 	{ID: "7358081619162418450", Title: "JJ LONCAT LONCAT ( Rekomendasi Untuk Ep Ep )", Slots: 4, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7358081619162418450"},
 	{ID: "7344916176683814152", Title: "JJ BERJALAN AM V2", Slots: 3, Ratio: "", ViewURL: "https://cc.fgsi.dpdns.org/view/7344916176683814152"},
@@ -525,23 +524,23 @@ func jjSleepJitter(ctx context.Context, base, jitter time.Duration) error {
 	if jitter > 0 {
 		d += time.Duration(jjRandInt(0, int(jitter/time.Millisecond))) * time.Millisecond
 	}
-	return sleepCtx(ctx, d)
+	return cdp.SleepCtx(ctx, d)
 }
 
-func (c *cdpClient) jjHumanScroll(sessionID string) {
+func jjHumanScroll(c *cdp.Client, sessionID string) {
 	// Scroll down/up in small steps with pauses to mimic a real visitor.
 	steps := jjRandInt(2, 5)
 	for i := 0; i < steps; i++ {
 		dy := jjRandInt(120, 420)
-		_, _ = c.eval(sessionID, fmt.Sprintf("window.scrollBy({top:%d,left:0,behavior:'smooth'})", dy))
-		_ = jjSleepJitter(c.ctx, 180*time.Millisecond, 420*time.Millisecond)
+		_, _ = c.Eval(sessionID, fmt.Sprintf("window.scrollBy({top:%d,left:0,behavior:'smooth'})", dy))
+		_ = jjSleepJitter(c.Ctx, 180*time.Millisecond, 420*time.Millisecond)
 	}
-	_ = jjSleepJitter(c.ctx, 150*time.Millisecond, 350*time.Millisecond)
-	_, _ = c.eval(sessionID, "window.scrollBy({top:-120,left:0,behavior:'smooth'})")
-	_ = jjSleepJitter(c.ctx, 120*time.Millisecond, 280*time.Millisecond)
+	_ = jjSleepJitter(c.Ctx, 150*time.Millisecond, 350*time.Millisecond)
+	_, _ = c.Eval(sessionID, "window.scrollBy({top:-120,left:0,behavior:'smooth'})")
+	_ = jjSleepJitter(c.Ctx, 120*time.Millisecond, 280*time.Millisecond)
 }
 
-func (c *cdpClient) jjClickSelector(sessionID, selector string) error {
+func jjClickSelector(c *cdp.Client, sessionID, selector string) error {
 	// Try to scroll element into view, move mouse over its center and click.
 	// Falls back to a JS click. This aims to behave like a natural interaction.
 	jsGet := fmt.Sprintf(`(function(){
@@ -551,11 +550,11 @@ func (c *cdpClient) jjClickSelector(sessionID, selector string) error {
   const r = el.getBoundingClientRect();
   return JSON.stringify({x: r.left + r.width/2, y: r.top + r.height/2, w: r.width, h: r.height, ok: r.width>0 && r.height>0});
 })()`, selector)
-	posStr, err := c.eval(sessionID, jsGet)
+	posStr, err := c.Eval(sessionID, jsGet)
 	if err != nil {
 		return err
 	}
-	_ = jjSleepJitter(c.ctx, 250*time.Millisecond, 450*time.Millisecond)
+	_ = jjSleepJitter(c.Ctx, 250*time.Millisecond, 450*time.Millisecond)
 	if posStr != "" {
 		var pos struct {
 			X  float64 `json:"x"`
@@ -569,17 +568,17 @@ func (c *cdpClient) jjClickSelector(sessionID, selector string) error {
 			paramsMove := map[string]any{"type": "mouseMoved", "x": pos.X, "y": pos.Y, "button": "none"}
 			paramsDown := map[string]any{"type": "mousePressed", "x": pos.X, "y": pos.Y, "button": "left", "clickCount": 1}
 			paramsUp := map[string]any{"type": "mouseReleased", "x": pos.X, "y": pos.Y, "button": "left", "clickCount": 1}
-			_, _ = c.call("Input.dispatchMouseEvent", paramsMove, sessionID)
-			_ = jjSleepJitter(c.ctx, 60*time.Millisecond, 140*time.Millisecond)
-			if _, err := c.call("Input.dispatchMouseEvent", paramsDown, sessionID); err == nil {
-				_ = jjSleepJitter(c.ctx, 40*time.Millisecond, 120*time.Millisecond)
-				_, _ = c.call("Input.dispatchMouseEvent", paramsUp, sessionID)
+			_, _ = c.Call("Input.dispatchMouseEvent", paramsMove, sessionID)
+			_ = jjSleepJitter(c.Ctx, 60*time.Millisecond, 140*time.Millisecond)
+			if _, err := c.Call("Input.dispatchMouseEvent", paramsDown, sessionID); err == nil {
+				_ = jjSleepJitter(c.Ctx, 40*time.Millisecond, 120*time.Millisecond)
+				_, _ = c.Call("Input.dispatchMouseEvent", paramsUp, sessionID)
 				return nil
 			}
 		}
 	}
 	// fallback: JS click
-	_, err = c.eval(sessionID, fmt.Sprintf(`(function(){const el=document.querySelector(%q); if(!el) return 'NO'; el.click(); return 'OK';})()`, selector))
+	_, err = c.Eval(sessionID, fmt.Sprintf(`(function(){const el=document.querySelector(%q); if(!el) return 'NO'; el.click(); return 'OK';})()`, selector))
 	return err
 }
 
@@ -591,63 +590,25 @@ type jjGenerateResult struct {
 	TaskText    string
 }
 
-// evalAwait evaluates a JS expression in the browser context and awaits a Promise result (CDP).
-func (c *cdpClient) evalAwait(sessionID, expression string) (string, error) {
-	raw, err := c.call("Runtime.evaluate", map[string]any{
-		"expression":    expression,
-		"returnByValue": true,
-		"awaitPromise":  true,
-	}, sessionID)
-	if err != nil {
-		return "", err
-	}
-	var out struct {
-		Result struct {
-			Value any `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", err
-	}
-	if out.ExceptionDetails != nil && out.ExceptionDetails.Text != "" {
-		return "", fmt.Errorf("js: %s", out.ExceptionDetails.Text)
-	}
-	switch v := out.Result.Value.(type) {
-	case string:
-		return v, nil
-	case nil:
-		return "", nil
-	default:
-		b, _ := json.Marshal(v)
-		return string(b), nil
-	}
-}
-
 func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPhoto) (jjGenerateResult, error) {
 	createURL := jjBaseURL + "/create/" + tpl.ID
 
-	dialCtx, dialCancel := context.WithTimeout(ctx, 45*time.Second)
-	defer dialCancel()
-	conn, _, err := websocket.Dial(dialCtx, jjCDPURL, nil)
-	if err != nil {
-		return jjGenerateResult{}, fmt.Errorf("cdp dial: %w", err)
-	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
-	c := &cdpClient{conn: conn, ctx: ctx}
-
-	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Terhubung ke renderer, menyiapkan halaman..." })
-
-	targetID, sid, err := jjNewPage(c, createURL)
+	client, err := cdp.Dial(ctx, cdp.DefaultEndpoint)
 	if err != nil {
 		return jjGenerateResult{}, err
 	}
-	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
+	defer client.Close()
+
+	jjUpdateJob(jobID, func(j *jjJob) { j.Note = "Terhubung ke renderer, menyiapkan halaman..." })
+
+	targetID, sid, err := jjNewPage(client, createURL)
+	if err != nil {
+		return jjGenerateResult{}, err
+	}
+	defer func() { _, _ = client.Call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
 
 	// Pastikan konteks same-origin (halaman create) siap; API ditembak via fetch di browser (CDP), tanpa klik UI.
-	if err := c.waitFor(ctx, sid, `document.readyState === 'complete' || document.readyState === 'interactive'`, 30*time.Second); err != nil {
+	if err := client.WaitFor(ctx, sid, `document.readyState === 'complete' || document.readyState === 'interactive'`, 30*time.Second); err != nil {
 		return jjGenerateResult{}, fmt.Errorf("halaman create tidak siap: %w", err)
 	}
 
@@ -694,7 +655,7 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
   }
 })()`, string(tplJSON), string(pb))
 
-	submitRaw, err := c.evalAwait(sid, submitExpr)
+	submitRaw, err := client.EvalAwait(sid, submitExpr)
 	if err != nil {
 		return jjGenerateResult{}, fmt.Errorf("gagal submit API: %w", err)
 	}
@@ -759,11 +720,11 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
 	polls := 0
 	failStreak := 0
 	for time.Now().Before(deadline) {
-		if err := sleepCtx(ctx, jjPollInterval); err != nil {
+		if err := cdp.SleepCtx(ctx, jjPollInterval); err != nil {
 			return last, err
 		}
 		polls++
-		raw, err := c.evalAwait(sid, pollExpr)
+		raw, err := client.EvalAwait(sid, pollExpr)
 		if err != nil {
 			failStreak++
 			if failStreak >= 8 {
@@ -843,7 +804,7 @@ func jjGenerate(ctx context.Context, jobID string, tpl jjTemplate, photos []jjPh
 	return last, nil
 }
 
-func jjReadState(c *cdpClient, sid string) (jjGenerateResult, error) {
+func jjReadState(c *cdp.Client, sid string) (jjGenerateResult, error) {
 	expr := `(function(){
   const text = (document.body && document.body.innerText || '').slice(0,8000);
   const isHttp = (h)=>/^https?:/i.test(h||'');
@@ -905,7 +866,7 @@ func jjReadState(c *cdpClient, sid string) (jjGenerateResult, error) {
   return JSON.stringify({task:task, dl:dl, view:view, done:done, failed:failed, textDone:textDone, processing:cardProcessing});
 })()`
 
-	val, err := c.eval(sid, expr)
+	val, err := c.Eval(sid, expr)
 	if err != nil {
 		return jjGenerateResult{}, err
 	}
@@ -932,8 +893,8 @@ func jjReadState(c *cdpClient, sid string) (jjGenerateResult, error) {
 	}, nil
 }
 
-func jjNewPage(c *cdpClient, url string) (targetID, sessionID string, err error) {
-	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+func jjNewPage(c *cdp.Client, url string) (targetID, sessionID string, err error) {
+	raw, err := c.Call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
 	if err != nil {
 		return "", "", fmt.Errorf("create target: %w", err)
 	}
@@ -945,31 +906,31 @@ func jjNewPage(c *cdpClient, url string) (targetID, sessionID string, err error)
 	}
 	targetID = ct.TargetID
 
-	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
+	raw, err = c.Call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
 	if err != nil {
-		_, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
+		_, _ = c.Call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
 		return "", "", fmt.Errorf("attach: %w", err)
 	}
 	var att struct {
 		SessionID string `json:"sessionId"`
 	}
 	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
-		_, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
+		_, _ = c.Call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
 		return "", "", errors.New("sessionId tidak ditemukan")
 	}
 	sessionID = att.SessionID
 
-	_, _ = c.call("Page.enable", map[string]any{}, sessionID)
-	_, _ = c.call("Runtime.enable", map[string]any{}, sessionID)
+	_, _ = c.Call("Page.enable", map[string]any{}, sessionID)
+	_, _ = c.Call("Runtime.enable", map[string]any{}, sessionID)
 	// small pause before navigating, as a real browser session would
-	_ = jjSleepJitter(c.ctx, 300*time.Millisecond, 500*time.Millisecond)
-	if _, err := c.call("Page.navigate", map[string]any{"url": url}, sessionID); err != nil {
-		_, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
+	_ = jjSleepJitter(c.Ctx, 300*time.Millisecond, 500*time.Millisecond)
+	if _, err := c.Call("Page.navigate", map[string]any{"url": url}, sessionID); err != nil {
+		_, _ = c.Call("Target.closeTarget", map[string]any{"targetId": targetID}, "")
 		return "", "", fmt.Errorf("navigate: %w", err)
 	}
 	// wait for load in a more natural, staged way
-	_ = jjSleepJitter(c.ctx, 1800*time.Millisecond, 1200*time.Millisecond)
-	_ = c.waitFor(c.ctx, sessionID, `document.readyState === 'complete' || document.readyState === 'interactive'`, 20*time.Second)
-	_ = jjSleepJitter(c.ctx, 700*time.Millisecond, 900*time.Millisecond)
+	_ = jjSleepJitter(c.Ctx, 1800*time.Millisecond, 1200*time.Millisecond)
+	_ = c.WaitFor(c.Ctx, sessionID, `document.readyState === 'complete' || document.readyState === 'interactive'`, 20*time.Second)
+	_ = jjSleepJitter(c.Ctx, 700*time.Millisecond, 900*time.Millisecond)
 	return targetID, sessionID, nil
 }

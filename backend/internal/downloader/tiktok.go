@@ -11,16 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
+	"github.com/purujawa06-bot/na-api/backend/internal/cdp"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
 )
 
 const (
-	tikwmBase      = "https://tikwm.com"
-	lightpandaCDP  = "wss://light-panda-cdp.onrender.com/"
-	ssstikPageURL  = "https://ssstik.io/en-1"
+	tikwmBase     = "https://tikwm.com"
+	ssstikPageURL = "https://ssstik.io/en-1"
 )
 
 // tiktokResult keeps the normalized fields returned by the provider.
@@ -121,7 +119,7 @@ func tiktokHostAllowed(host string) bool {
 }
 
 // downloadTiktok tries tikwm.com first, then falls back to browser automation
-// (Lightpanda CDP + ssstik.io) when direct upstream access is blocked.
+// (remote CDP + ssstik.io) when direct upstream access is blocked.
 func (h *handler) downloadTiktok(ctx context.Context, rawURL string) (tiktokResult, string, error) {
 	if result, err := h.viaTikwm(ctx, rawURL); err == nil {
 		return result, tikwmBase, nil
@@ -264,79 +262,7 @@ func parseTikwmBody(status int, body string) (tiktokResult, error) {
 	return result, nil
 }
 
-// --- CDP (Lightpanda) fallback via ssstik.io browser interaction ---
-
-type cdpClient struct {
-	conn *websocket.Conn
-	ctx  context.Context
-	id   int
-}
-
-type cdpMsg struct {
-	ID        int             `json:"id,omitempty"`
-	SessionID string          `json:"sessionId,omitempty"`
-	Method    string          `json:"method,omitempty"`
-	Params    json.RawMessage `json:"params,omitempty"`
-	Result    json.RawMessage `json:"result,omitempty"`
-	Error     *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-}
-
-func (c *cdpClient) call(method string, params any, sessionID string) (json.RawMessage, error) {
-	c.id++
-	msg := map[string]any{"id": c.id, "method": method}
-	if params != nil {
-		msg["params"] = params
-	}
-	if sessionID != "" {
-		msg["sessionId"] = sessionID
-	}
-	if err := wsjson.Write(c.ctx, c.conn, msg); err != nil {
-		return nil, err
-	}
-	for {
-		var resp cdpMsg
-		if err := wsjson.Read(c.ctx, c.conn, &resp); err != nil {
-			return nil, err
-		}
-		if resp.ID == c.id {
-			if resp.Error != nil {
-				return nil, errors.New(resp.Error.Message)
-			}
-			return resp.Result, nil
-		}
-		// ignore events
-	}
-}
-
-func (c *cdpClient) eval(sessionID, expression string) (string, error) {
-	raw, err := c.call("Runtime.evaluate", map[string]any{
-		"expression":    expression,
-		"returnByValue": true,
-		"awaitPromise":  false,
-	}, sessionID)
-	if err != nil {
-		return "", err
-	}
-	var out struct {
-		Result struct {
-			Value any `json:"value"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", err
-	}
-	switch v := out.Result.Value.(type) {
-	case string:
-		return v, nil
-	case nil:
-		return "", nil
-	default:
-		b, _ := json.Marshal(v)
-		return string(b), nil
-	}
-}
+// --- CDP fallback via ssstik.io browser interaction ---
 
 type ssstikExtract struct {
 	VideoURL string `json:"video"`
@@ -348,17 +274,16 @@ type ssstikExtract struct {
 var reCaptionClean = regexp.MustCompile(`\s+`)
 
 func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tiktokResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, lightpandaCDP, nil)
+	client, err := cdp.Dial(ctx, cdp.DefaultEndpoint)
 	if err != nil {
-		return tiktokResult{}, fmt.Errorf("cdp dial: %w", err)
+		return tiktokResult{}, err
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "done")
-	c := &cdpClient{conn: conn, ctx: ctx}
+	defer client.Close()
 
-	raw, err := c.call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+	raw, err := client.Call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
 	if err != nil {
 		return tiktokResult{}, fmt.Errorf("create target: %w", err)
 	}
@@ -371,9 +296,9 @@ func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tikto
 	targetID := ct.TargetID
 	// tutup hanya target milik request ini (jangan global-close semua page:
 	// endpoint lain, mis. generator JJ, bisa sedang memakai CDP yang sama).
-	defer func() { _, _ = c.call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
+	defer func() { _, _ = client.Call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
 
-	raw, err = c.call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
+	raw, err = client.Call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
 	if err != nil {
 		return tiktokResult{}, fmt.Errorf("attach: %w", err)
 	}
@@ -385,15 +310,15 @@ func (h *handler) viaLightpandaSsstik(ctx context.Context, rawURL string) (tikto
 	}
 	sid := att.SessionID
 
-	_, _ = c.call("Page.enable", map[string]any{}, sid)
-	_, _ = c.call("Runtime.enable", map[string]any{}, sid)
+	_, _ = client.Call("Page.enable", map[string]any{}, sid)
+	_, _ = client.Call("Runtime.enable", map[string]any{}, sid)
 
-	if _, err := c.call("Page.navigate", map[string]any{"url": ssstikPageURL}, sid); err != nil {
+	if _, err := client.Call("Page.navigate", map[string]any{"url": ssstikPageURL}, sid); err != nil {
 		return tiktokResult{}, fmt.Errorf("navigate: %w", err)
 	}
 
 	// wait page ready and input present
-	if err := c.waitFor(ctx, sid, `!!document.querySelector('#main_page_text')`, 15*time.Second); err != nil {
+	if err := client.WaitFor(ctx, sid, `!!document.querySelector('#main_page_text')`, 15*time.Second); err != nil {
 		return tiktokResult{}, fmt.Errorf("ssstik tidak siap: %w", err)
 	}
 
@@ -403,7 +328,7 @@ i.focus(); i.value=%q; i.dispatchEvent(new Event('input',{bubbles:true})); i.dis
 const b=document.querySelector('#submit'); if(b){b.click(); return 'clicked';}
 const f=document.querySelector('form'); if(f){try{f.requestSubmit?f.requestSubmit():f.submit();}catch(e){f.submit();} return 'submitted';}
 return 'nobtn';})()`, rawURL)
-	act, _ := c.eval(sid, submitJS)
+	act, _ := client.Eval(sid, submitJS)
 	if act == "noinput" || act == "nobtn" || act == "" {
 		return tiktokResult{}, fmt.Errorf("gagal submit form ssstik (%s)", act)
 	}
@@ -434,10 +359,10 @@ return JSON.stringify({video, mp3, author, caption});})()`
 	var ex ssstikExtract
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := sleepCtx(ctx, 2500*time.Millisecond); err != nil {
+		if err := cdp.SleepCtx(ctx, 2500*time.Millisecond); err != nil {
 			return tiktokResult{}, err
 		}
-		val, err := c.eval(sid, extractJS)
+		val, err := client.Eval(sid, extractJS)
 		if err != nil {
 			continue
 		}
@@ -467,29 +392,4 @@ return JSON.stringify({video, mp3, author, caption});})()`
 		result.MP3URL = &m
 	}
 	return result, nil
-}
-
-func (c *cdpClient) waitFor(ctx context.Context, sessionID, jsExpr string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		v, err := c.eval(sessionID, jsExpr)
-		if err == nil && (v == "true" || v == "1") {
-			return nil
-		}
-		if err := sleepCtx(ctx, 500*time.Millisecond); err != nil {
-			return err
-		}
-	}
-	return fmt.Errorf("timeout menunggu kondisi")
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
 }
