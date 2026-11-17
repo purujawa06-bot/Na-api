@@ -7,7 +7,10 @@ package reader
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -47,6 +50,7 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("GET /api/komiku/genre", h.komikuGenre)
 	mux.HandleFunc("GET /api/komiku/pustaka", h.komikuPustaka)
 	mux.HandleFunc("GET /api/komiku/search", h.komikuSearch)
+	mux.HandleFunc("GET /api/komiku/image", h.komikuImage)
 	mux.HandleFunc("GET /api/dramabox/home", h.dramaboxHome)
 	mux.HandleFunc("GET /api/dramabox/category", h.dramaboxCategory)
 	mux.HandleFunc("GET /api/dramabox/detail", h.dramaboxDetail)
@@ -337,6 +341,85 @@ func (h *handler) komikuSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.OK(w, data)
+}
+
+
+func isPrivateProxyHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" || host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+	}
+	return false
+}
+
+// komikuImage handles GET /api/komiku/image?url=
+// Proxies a comic image from Komiku/CDN to the client to avoid browser CORS issues.
+func (h *handler) komikuImage(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if raw == "" {
+		writeBadRequest(w, "Parameter url wajib diisi")
+		return
+	}
+	if len(raw) > 2000 {
+		writeBadRequest(w, "url terlalu panjang")
+		return
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		writeBadRequest(w, "url tidak valid (harus http/https)")
+		return
+	}
+	if isPrivateProxyHost(parsed.Hostname()) {
+		writeBadRequest(w, "url tidak diizinkan")
+		return
+	}
+
+	ctx, cancel := h.requestContext(r)
+	defer cancel()
+
+	headers := map[string]string{
+		"User-Agent": webclient.UserAgentChrome,
+		"Accept":     "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+		"Referer":    komikuHost + "/",
+		"Origin":     komikuHost,
+	}
+	resp, err := webclient.Get(ctx, raw, headers)
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		writeUpstreamError(w, errors.New("gagal mengambil gambar (HTTP "+strconv.Itoa(resp.StatusCode)+")"))
+		return
+	}
+
+	ct := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if i := strings.Index(ct, ";"); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	lct := strings.ToLower(ct)
+	if ct == "" || !strings.HasPrefix(lct, "image/") {
+		if ct == "" || lct == "application/octet-stream" || lct == "binary/octet-stream" {
+			ct = "image/jpeg"
+		} else if !strings.HasPrefix(lct, "image/") {
+			writeUpstreamError(w, errors.New("respons bukan gambar"))
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", ct)
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		w.Header().Set("Content-Length", cl)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, io.LimitReader(resp.Body, 20<<20))
 }
 
 // dramaboxHome handles GET /api/dramabox/home?locale=.

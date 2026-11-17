@@ -744,6 +744,26 @@
       ]
     }
   ],
+  "komiku": [
+    {
+      "title": "Komiku Image Proxy",
+      "summary": "Proxy gambar komik Komiku untuk ditampilkan di browser tanpa CORS.",
+      "description": "Mengambil (fetch) gambar komik dari URL sumber (mis. URL dari\n              hasil endpoint /api/komiku/chapter) dan meneruskannya ke klien\n              sebagai respons gambar. Berguna sebagai proxy agar gambar dapat\n              dimuat di web/app tanpa terhalang CORS.",
+      "method": "GET",
+      "path": "/api/komiku/image",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=' + encodeURIComponent('https://cdn.komiku.org/example.jpg'))\n     .then(res => res.blob())\n     .then(console.log);",
+      "params": [
+        {
+          "name": "url",
+          "in": "query",
+          "type": "string",
+          "description": "URL gambar komik (wajib, http/https).",
+          "required": true
+        }
+      ]
+    }
+  ],
   "nonton/baca": [
     {
       "title": "DramaBox Category",
