@@ -1,16 +1,17 @@
 /**
  * @title Komiku Image Proxy
  * @summary Proxy gambar komik Komiku untuk ditampilkan di browser tanpa CORS.
- * @description Mengambil (fetch) gambar komik dari URL sumber (mis. URL dari
- *              hasil endpoint /api/komiku/chapter) dan meneruskannya ke klien
- *              sebagai respons gambar. Berguna sebagai proxy agar gambar dapat
- *              dimuat di web/app tanpa terhalang CORS.
+ * @description Mengambil (fetch) gambar panel komik dari URL sumber (mis. URL
+ *              gambar asli dari hasil endpoint /api/komiku/chapter) dan
+ *              meneruskannya ke klien sebagai respons gambar. Berguna sebagai
+ *              proxy agar gambar panel dapat dimuat di web/app tanpa terhalang
+ *              CORS.
  * @method GET
  * @path /api/komiku/image
- * @param {string} query.url - URL gambar komik (wajib, http/https).
+ * @param {string} query.url - URL gambar panel chapter asli (wajib, http/https).
  * @response binary
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=' + encodeURIComponent('https://cdn.komiku.org/example.jpg'))
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=' + encodeURIComponent('https://img.komiku.org/wp-content/uploads/787279-1.jpg'))
  *     .then(res => res.blob())
  *     .then(console.log);
  */

@@ -482,7 +482,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		return
 	}
 
-	// fitur JJ (lokal/plugin): jj/jjgc
+	// fitur JJ (lokal/plugin): jj
 	if m.isJJCommand(cmd) {
 		maybeReact()
 		doTyping()
@@ -1447,7 +1447,6 @@ func (m *Manager) buildMenu(cfg Config) string {
 	b.WriteString("│\n")
 	b.WriteString("├─ ᴊᴊ\n")
 	b.WriteString("│  • .jj\n")
-	b.WriteString("│  • .jjgc\n")
 	b.WriteString("│\n")
 	b.WriteString("├─ ᴏᴡɴᴇʀ\n")
 	b.WriteString("│  • .logs\n")
@@ -1494,7 +1493,7 @@ func (m *Manager) buildMenu(cfg Config) string {
 				continue
 			}
 			cmdName := strings.ToLower(strings.TrimSpace(p.Command))
-			if cmdName == "jj" || cmdName == "jjgc" {
+			if cmdName == "jj" {
 				continue
 			}
 			cat := strings.TrimSpace(p.Category)
@@ -2390,114 +2389,6 @@ func (m *Manager) handleJJCommand(ctx context.Context, evt *events.Message, cfg 
 	}
 }
 
-func (m *Manager) handleJJGCCommand(ctx context.Context, evt *events.Message, cfg Config) error {
-	_ = cfg
-	if !evt.Info.IsGroup {
-		m.jjNotify(evt, "Perintah *.jjgc* hanya bisa digunakan di dalam grup.", "command.jjgc")
-		return nil
-	}
-	m.mu.RLock()
-	c := m.client
-	m.mu.RUnlock()
-	if c == nil {
-		return errors.New("client not ready")
-	}
-	parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
-	if err != nil || len(parts) == 0 {
-		m.jjNotify(evt, "Gagal mengambil daftar anggota grup. Coba lagi nanti.", "command.jjgc")
-		return nil
-	}
-	// acak dan pilih hingga 3 anggota yang punya foto profil
-	cands := append([]types.JID(nil), parts...)
-	rand.Shuffle(len(cands), func(i, j int) { cands[i], cands[j] = cands[j], cands[i] })
-	var photos []jjPhotoUpload
-	for _, p := range cands {
-		if len(photos) >= 3 {
-			break
-		}
-		pp, err := c.GetProfilePictureInfo(ctx, p, &whatsmeow.GetProfilePictureParams{Preview: false})
-		if err != nil || pp == nil || strings.TrimSpace(pp.URL) == "" {
-			continue
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, pp.URL, nil)
-		if err != nil {
-			continue
-		}
-		hc := &http.Client{Timeout: 30 * time.Second}
-		resp, err := hc.Do(req)
-		if err != nil {
-			continue
-		}
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
-		resp.Body.Close()
-		if resp.StatusCode >= 400 || len(data) == 0 {
-			continue
-		}
-		mime := strings.TrimSpace(resp.Header.Get("Content-Type"))
-		if mime == "" {
-			mime = http.DetectContentType(data)
-		}
-		ext := ".jpg"
-		if strings.Contains(mime, "png") {
-			ext = ".png"
-		}
-		photos = append(photos, jjPhotoUpload{name: fmt.Sprintf("pp%d%s", len(photos)+1, ext), mime: mime, data: data})
-	}
-	if len(photos) < 1 {
-		m.jjNotify(evt, "Tidak ditemukan foto profil anggota grup yang bisa digunakan. Coba lagi nanti.", "command.jjgc")
-		return nil
-	}
-	m.jjNotify(evt, fmt.Sprintf("🎲 Mengambil %d foto profil anggota grup secara acak...\nSedang memproses video JJ, mohon tunggu sebentar.", len(photos)), "command.jjgc")
-	base := "https://na-api-nue-api-e7bfd3f4.koyeb.app"
-	jobID, _, err := m.jjCreateJob(ctx, base, photos, "")
-	if err != nil {
-		m.jjNotify(evt, "❌ Gagal memulai pembuatan video JJ grup.\n\n*Alasan:* "+err.Error(), "command.jjgc")
-		return nil
-	}
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			m.jjNotify(evt, "❌ Proses JJ grup terlalu lama (melebihi batas tunggu bot). Coba cek status/ulangi nanti ya.", "command.jjgc")
-			return ctx.Err()
-		case <-ticker.C:
-			st, err := m.jjGetJob(ctx, base, jobID)
-			if err != nil {
-				continue
-			}
-			status, _ := st["status"].(string)
-			switch status {
-			case "selesai":
-				dl, _ := st["download_url"].(string)
-				if strings.TrimSpace(dl) == "" {
-					m.jjNotify(evt, "⚠️ Video JJ grup sudah jadi, tetapi tautan unduh tidak tersedia.", "command.jjgc")
-					return nil
-				}
-				cap := fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Foto profil:* %d anggota (acak)", len(photos))
-				if t, ok := st["template"].(map[string]any); ok {
-					if title, _ := t["title"].(string); strings.TrimSpace(title) != "" {
-						cap = fmt.Sprintf("✅ Video JJ grup sudah jadi!\n\n*Template:* %s\n*Foto profil:* %d anggota (acak)", title, len(photos))
-					}
-				}
-				res := ExecResult{VideoURL: dl, Caption: cap}
-				if err := m.sendJJVideoResult(ctx, evt, res); err != nil {
-					m.logError("command.jjgc", "send video: "+err.Error())
-					m.jjNotify(evt, cap+"\n\nMaaf, video gagal dikirim. Tautan sementara: "+dl, "command.jjgc")
-					return nil
-				}
-				return nil
-			case "gagal", "error", "timeout":
-				emsg, _ := st["error"].(string)
-				if emsg == "" {
-					emsg = "Terjadi kesalahan saat render."
-				}
-				m.jjNotify(evt, "❌ Pembuatan video JJ grup gagal.\n\n*Alasan:* "+emsg, "command.jjgc")
-				return nil
-			}
-		}
-	}
-}
 
 type jjPhotoUpload struct {
 	name string
@@ -2585,27 +2476,17 @@ func urlQueryEscape(s string) string {
 }
 
 func (m *Manager) isJJCommand(cmd string) bool {
-	switch normalizeCmd(cmd) {
-	case "jj", "jjgc":
-		return true
-	}
-	return false
+	return normalizeCmd(cmd) == "jj"
 }
 
 func (m *Manager) handleJJFeatureCommand(ctx context.Context, evt *events.Message, cmd, args string, cfg Config) {
-	switch normalizeCmd(cmd) {
-	case "jj":
-		jctx, jcancel := context.WithTimeout(context.Background(), 50*time.Minute)
-		defer jcancel()
-		if err := m.handleJJCommand(jctx, evt, cfg, args); err != nil {
-			m.logError("command.jj", err.Error())
-		}
-	case "jjgc":
-		jctx, jcancel := context.WithTimeout(context.Background(), 50*time.Minute)
-		defer jcancel()
-		if err := m.handleJJGCCommand(jctx, evt, cfg); err != nil {
-			m.logError("command.jjgc", err.Error())
-		}
+	if normalizeCmd(cmd) != "jj" {
+		return
+	}
+	jctx, jcancel := context.WithTimeout(context.Background(), 50*time.Minute)
+	defer jcancel()
+	if err := m.handleJJCommand(jctx, evt, cfg, args); err != nil {
+		m.logError("command.jj", err.Error())
 	}
 }
 
