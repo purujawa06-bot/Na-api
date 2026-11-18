@@ -207,6 +207,10 @@ func (s *Server) handlePluginsAvailable(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	// bersihkan otomatis plugin terpasang yang sudah dihapus dari server (termasuk JJ/jjgc usang)
+	if s.mgr.Plugins() != nil {
+		_, _ = s.mgr.Plugins().PruneMissingFromServer(server, list)
+	}
 	writeJSON(w, 200, map[string]any{"ok": true, "plugins": list, "server": server})
 }
 

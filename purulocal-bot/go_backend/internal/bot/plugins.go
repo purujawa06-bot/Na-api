@@ -56,7 +56,34 @@ func (s *PluginStore) Load() error {
 		list[i].Command = normalizeCmd(list[i].Command)
 	}
 	s.list = list
+	// migrasi: hapus plugin JJ/jjgc yang sudah tidak didukung
+	if s.removeObsoleteLocked() {
+		_ = s.saveLocked()
+	}
 	return nil
+}
+
+// removeObsoleteLocked menghapus plugin usang yang sudah tidak didukung server/fitur.
+// Mengembalikan true jika ada yang dihapus. Harus dipanggil dengan lock terpegang.
+func (s *PluginStore) removeObsoleteLocked() bool {
+	n := make([]Plugin, 0, len(s.list))
+	changed := false
+	for _, p := range s.list {
+		id := strings.ToLower(strings.TrimSpace(p.ID))
+		cmd := normalizeCmd(p.Command)
+		cat := strings.ToLower(strings.TrimSpace(p.Category))
+		if cmd == "jj" || cmd == "jjgc" ||
+			id == "jj-generator" || id == "jj-group" ||
+			cat == "jj" {
+			changed = true
+			continue
+		}
+		n = append(n, p)
+	}
+	if changed {
+		s.list = n
+	}
+	return changed
 }
 
 func (s *PluginStore) saveLocked() error {
@@ -322,6 +349,55 @@ func execPlugin(ctx context.Context, p Plugin, args, user string, cfg Config, me
 		return ExecResult{}, fmt.Errorf("%s", txt)
 	}
 	return ExecResult{Reply: txt}, nil
+}
+
+// PruneMissingFromServer menghapus plugin terpasang yang bersumber dari server
+// yang sama namun sudah tidak ada di daftar plugin tersedia (mis. fitur dihapus).
+// Juga membersihkan plugin JJ/jjgc usang. Mengembalikan jumlah plugin yang dihapus.
+func (s *PluginStore) PruneMissingFromServer(serverBase string, available []Plugin) (int, error) {
+	serverBase = strings.TrimRight(strings.TrimSpace(serverBase), "/")
+	avail := map[string]bool{}
+	for _, p := range available {
+		if id := strings.TrimSpace(p.ID); id != "" {
+			avail["id:"+id] = true
+		}
+		if cmd := normalizeCmd(p.Command); cmd != "" {
+			avail["cmd:"+cmd] = true
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := make([]Plugin, 0, len(s.list))
+	removed := 0
+	for _, p := range s.list {
+		// bersihkan plugin usang (JJ/jjgc) di semua kondisi
+		idl := strings.ToLower(strings.TrimSpace(p.ID))
+		cmd := normalizeCmd(p.Command)
+		catl := strings.ToLower(strings.TrimSpace(p.Category))
+		if cmd == "jj" || cmd == "jjgc" || idl == "jj-generator" || idl == "jj-group" || catl == "jj" {
+			removed++
+			continue
+		}
+		ps := strings.TrimRight(strings.TrimSpace(p.Server), "/")
+		// prune plugin milik server ini yang sudah tidak tersedia
+		if serverBase != "" && (ps == serverBase || ps == "") {
+			pid := strings.TrimSpace(p.ID)
+			_, byID := avail["id:"+pid]
+			_, byCmd := avail["cmd:"+cmd]
+			if !byID && !byCmd {
+				removed++
+				continue
+			}
+		}
+		n = append(n, p)
+	}
+	if removed > 0 {
+		s.list = n
+		if err := s.saveLocked(); err != nil {
+			return removed, err
+		}
+	}
+	return removed, nil
 }
 
 // FetchAvailable mengambil daftar plugin yang tersedia dari server na-api.
