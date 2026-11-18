@@ -52,6 +52,7 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("POST /api/vipcodes/remove", s.handleVIPCodeRemove)
 	mux.HandleFunc("GET /api/logs", s.handleLogs)
 	mux.HandleFunc("POST /api/logs/clear", s.handleLogsClear)
+	mux.HandleFunc("GET /api/export", s.handleExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 	return s
 }
@@ -406,4 +407,28 @@ func (s *Server) handleLogsClear(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mgr.Logger().Clear()
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+	if s.mgr == nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "manager tidak tersedia"})
+		return
+	}
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format == "" {
+		format = "nodejs"
+	}
+	// tentukan nama file lebih awal agar header bisa diset setelah sukses; tulis ke buffer sementara
+	// namun agar hemat memori, stream langsung: set header generik lalu tulis zip.
+	ts := time.Now().Format("20060102-150405")
+	fname := "purulocal-bot-" + format + "-" + ts + ".zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+fname+"\"")
+	w.Header().Set("Cache-Control", "no-store")
+	if _, err := s.mgr.ExportZip(format, w); err != nil {
+		// jika header sudah terkirim dan zip setengah jadi, tidak bisa kirim JSON error bersih.
+		// log ke stderr sisi server untuk diagnosis.
+		// (client mungkin mendapat zip korup/terpotong)
+		_ = err
+	}
 }

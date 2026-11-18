@@ -120,6 +120,10 @@ func (m *Manager) Config() Config { return m.cfgStore.Get() }
 
 func (m *Manager) SaveConfig(cfg Config) error { return m.cfgStore.Save(cfg) }
 
+func (m *Manager) ConfigPath() string { return m.cfgStore.Path() }
+
+func (m *Manager) DataDir() string { return m.dataDir }
+
 func (m *Manager) Status() Status {
 	m.mu.RLock()
 	client := m.client

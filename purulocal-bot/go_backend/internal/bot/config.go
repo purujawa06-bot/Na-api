@@ -91,6 +91,8 @@ func NewConfigStore(path string) (*ConfigStore, error) {
 	return s, nil
 }
 
+func (s *ConfigStore) Path() string { return s.path }
+
 func (s *ConfigStore) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
