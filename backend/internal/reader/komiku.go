@@ -758,9 +758,27 @@ func fetchKomikuChapter(ctx context.Context, permalink string) (*komikuChapterRe
 	images := make([]string, 0)
 	if scope := htmlx.First(root, "", "", "Baca_Komik"); scope != nil {
 		for _, img := range htmlx.Find(scope, "img", "", "") {
-			src := htmlx.Attr(img, "src")
-			if src == "" || strings.Contains(strings.ToLower(src), "komiku-promosi") || strings.Contains(strings.ToLower(src), "komikuplus2") {
+			src := jsString(firstTruthy(
+				attrValue(img, "src"),
+				attrValue(img, "data-src"),
+				attrValue(img, "data-lazy-src"),
+				attrValue(img, "data-original"),
+			))
+			lower := strings.ToLower(src)
+			if src == "" || strings.Contains(lower, "komiku-promosi") || strings.Contains(lower, "komikuplus2") {
 				continue
+			}
+			// abaikan placeholder data URI kecil (lazyload), utamakan URL asli
+			if strings.HasPrefix(lower, "data:") {
+				src = jsString(firstTruthy(
+					attrValue(img, "data-src"),
+					attrValue(img, "data-lazy-src"),
+					attrValue(img, "data-original"),
+				))
+				lower = strings.ToLower(src)
+				if src == "" || strings.Contains(lower, "komiku-promosi") || strings.Contains(lower, "komikuplus2") || strings.HasPrefix(lower, "data:") {
+					continue
+				}
 			}
 			images = append(images, src)
 		}
