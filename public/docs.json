@@ -579,49 +579,6 @@
       ]
     },
     {
-      "title": "JJ CapCut Generator (Create Job)",
-      "summary": "Buat job generate video JJ (CapCut template) dari foto via cc.fgsi.dpdns.org.",
-      "description": "Mengunggah foto ke layanan JJ Capcut (cc.fgsi.dpdns.org) dan\n              membuat job render video dari template CapCut secara asinkron.\n              Endpoint otomatis memilih template secara acak yang jumlah slot\n              fotonya sesuai dengan jumlah foto yang diunggah. Jumlah foto\n              tidak boleh melebihi slot terbanyak dari template yang tersedia.\n              Respons mengembalikan `job_id`; gunakan endpoint GET untuk cek\n              status/hasil. Tautan hasil (`download_url`) bertoken/bermasa berlaku.",
-      "method": "POST",
-      "path": "/api/downloader/jj",
-      "responseType": "json",
-      "example": "const fd = new FormData();\n for (const file of fileInput.files) fd.append('photos', file);\n // opsional: fd.append('template_id', '7649585745329540360');\n fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/jj', { method: 'POST', body: fd })\n     .then(res => res.json())\n     .then(console.log);",
-      "params": [
-        {
-          "name": "photos",
-          "in": "formData",
-          "type": "file",
-          "description": "File foto JPG/PNG (bisa lebih dari satu, field dapat diulang). Jumlah harus sesuai slot template dan <= slot terbanyak (wajib).",
-          "required": true
-        },
-        {
-          "name": "template_id",
-          "in": "formData",
-          "type": "string",
-          "description": "ID template tertentu (opsional). Jika diisi, jumlah foto harus sama dengan slot template tersebut; jika kosong, template dipilih acak sesuai jumlah foto.",
-          "required": false
-        }
-      ]
-    },
-    {
-      "title": "JJ CapCut Generator (Get Job)",
-      "summary": "Cek status/hasil job generate video JJ.",
-      "description": "Mengambil status dan hasil job render JJ berdasarkan `id`/`job_id`\n              yang dikembalikan saat create job. Status: `processing`,\n              `selesai`, `gagal`, `timeout`, atau `error`. Jika selesai,\n              `download_url` berisi tautan unduh (bertoken/bermasa berlaku).",
-      "method": "GET",
-      "path": "/api/downloader/jj",
-      "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/downloader/jj?id=JOB_ID')\n     .then(res => res.json())\n     .then(console.log);",
-      "params": [
-        {
-          "name": "id",
-          "in": "query",
-          "type": "string",
-          "description": "ID job yang dikembalikan oleh endpoint create (wajib).",
-          "required": true
-        }
-      ]
-    },
-    {
       "title": "SoundCloud Downloader",
       "summary": "Download track SoundCloud (MP3 128 kbps) tanpa watermark & tanpa browser.",
       "description": "Mengambil link stream/download audio dari URL track SoundCloud publik.\n              Selalu merespons JSON (tanpa redirect/proxy byte): hasilnya berisi\n              metadata + stream_url/download_url CDN. Track Go+ (policy SNIP)\n              hanya menghasilkan preview 30 detik (ditandai is_preview=true).\n              Link kedaluwarsa ±1 jam.",
