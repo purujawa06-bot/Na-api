@@ -45,6 +45,10 @@ type Result struct {
 	DurationSec  uint32
 	ContactName  string
 	ContactVCard string
+	// Document (untuk mengirim file/dokumen, mis. zip export)
+	DocumentName string
+	DocumentMIME string
+	DocumentData []byte
 }
 
 // Request konteks pemanggilan command.
@@ -89,6 +93,8 @@ type BotAPI interface {
 	// group management dispatch
 	HandleGroupMgmt(req Request) (Result, bool)
 	SendReply(ctx context.Context, evt *events.Message, text string) error
+	// export bot (zip data+runner)
+	ExportBotZip(format string) ([]byte, string, error)
 }
 
 // GroupSettingsView tampilan ringkas pengaturan grup untuk handler.

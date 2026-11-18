@@ -819,14 +819,6 @@ export default function App() {
             <div className="row"><div className="l"><div className="t">Loading react</div><div className="d">Beri react emoji ⏳ pada pesan command saat bot sedang memproses, lalu hapus setelah selesai</div></div><label className="switch"><input type="checkbox" checked={settings.loading_react} onChange={onField('loading_react')} /><span className="slider" /></label></div>
           </div>
           <div className="card">
-            <div className="card-h"><div className="card-title">Export Bot</div></div>
-            <div className="hint">Unduh zip berisi semua data bot, binary (jika tersedia), dan skrip runner. Saat dijalankan, skrip akan mengecek auto-update runtime saat startup lalu spawn binary bot. Bisa dijalankan lokal maupun di cloud.</div>
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:8}}>
-              <button className="btn" onClick={() => { window.location.href = '/api/export?format=nodejs' }}>Export (Node.js)</button>
-              <button className="btn" onClick={() => { window.location.href = '/api/export?format=python' }}>Export (Python)</button>
-            </div>
-          </div>
-          <div className="card">
             <div className="card-h"><div className="card-title">Aplikasi</div></div>
             <button className="btn" onClick={checkUpdate}>Cek Update Aplikasi</button>
             <button className="btn primary mt8" onClick={saveSettings}>Simpan Settings</button>

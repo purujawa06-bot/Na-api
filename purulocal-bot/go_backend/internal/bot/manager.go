@@ -558,6 +558,22 @@ func (m *Manager) onMessage(evt *events.Message) {
 		_ = m.sendContact(ctx, evt, res)
 		return
 	}
+	if len(res.DocumentData) > 0 {
+		if err := m.sendDocumentBytes(ctx, evt, res); err != nil {
+			m.logError("send.document", "cmd="+cmd+" err="+err.Error())
+			fb := strings.TrimSpace(res.Caption)
+			if fb == "" {
+				fb = strings.TrimSpace(res.Reply)
+			}
+			if fb == "" {
+				fb = "Gagal mengirim dokumen."
+			} else {
+				fb = fb + "\n\n(Gagal mengirim dokumen)"
+			}
+			_ = m.sendReply(ctx, evt, fb)
+		}
+		return
+	}
 	replyText := strings.TrimSpace(res.Reply)
 	if replyText == "" {
 		replyText = strings.TrimSpace(res.Caption)
@@ -715,7 +731,56 @@ func buildOwnerVCard(name, number string) string {
 	}, "\n")
 }
 
+func (m *Manager) sendDocumentBytes(ctx context.Context, evt *events.Message, res ExecResult) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+	if evt == nil || len(res.DocumentData) == 0 {
+		return errors.New("dokumen kosong")
+	}
+	data := res.DocumentData
+	mime := strings.TrimSpace(res.DocumentMIME)
+	if mime == "" {
+		mime = http.DetectContentType(data)
+		if mime == "" || mime == "application/octet-stream" {
+			mime = "application/octet-stream"
+		}
+	}
+	fileName := strings.TrimSpace(res.DocumentName)
+	if fileName == "" {
+		fileName = "file.bin"
+	}
+	caption := strings.TrimSpace(res.Caption)
+	if caption == "" {
+		caption = strings.TrimSpace(res.Reply)
+	}
 
+	upCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	uploaded, err := c.Upload(upCtx, data, whatsmeow.MediaDocument)
+	if err != nil {
+		return err
+	}
+	doc := &waE2E.DocumentMessage{
+		URL:           proto.String(uploaded.URL),
+		DirectPath:    proto.String(uploaded.DirectPath),
+		MediaKey:      uploaded.MediaKey,
+		Mimetype:      proto.String(mime),
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    proto.Uint64(uint64(len(data))),
+		FileName:      proto.String(fileName),
+		Caption:       proto.String(caption),
+		ContextInfo:   buildReplyContext(evt),
+	}
+	sCtx, cancel2 := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel2()
+	_, err = c.SendMessage(sCtx, evt.Info.Chat, &waE2E.Message{DocumentMessage: doc})
+	return err
+}
 
 func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error {
 	m.mu.RLock()

@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"time"
@@ -205,6 +206,15 @@ func (m *Manager) SendReply(ctx context.Context, evt *events.Message, text strin
 	return m.sendReply(ctx, evt, text)
 }
 
+func (m *Manager) ExportBotZip(format string) ([]byte, string, error) {
+	var buf bytes.Buffer
+	name, err := m.ExportZip(format, &buf)
+	if err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), name, nil
+}
+
 // HandleGroupMgmt mengadaptasi cmd.Request ke handler grup internal.
 func (m *Manager) HandleGroupMgmt(req botcmd.Request) (botcmd.Result, bool) {
 	cfg := m.Config()
@@ -241,5 +251,8 @@ func cmdResultToExec(r botcmd.Result) ExecResult {
 		DurationSec:  r.DurationSec,
 		ContactName:  r.ContactName,
 		ContactVCard: r.ContactVCard,
+		DocumentName: r.DocumentName,
+		DocumentMIME: r.DocumentMIME,
+		DocumentData: r.DocumentData,
 	}
 }

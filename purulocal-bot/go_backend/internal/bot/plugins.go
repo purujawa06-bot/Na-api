@@ -217,6 +217,10 @@ type ExecResult struct {
 	DurationSec  uint32 `json:"duration_sec,omitempty"`
 	ContactName  string `json:"contact_name,omitempty"`
 	ContactVCard string `json:"contact_vcard,omitempty"`
+	// Document (internal, tidak dari plugin JSON)
+	DocumentName string `json:"-"`
+	DocumentMIME string `json:"-"`
+	DocumentData []byte `json:"-"`
 }
 
 func (s *PluginStore) Handle(ctx context.Context, cmd, args, user string, cfg Config, messages []ChatMessage) (ExecResult, bool, error) {
