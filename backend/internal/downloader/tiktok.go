@@ -100,6 +100,7 @@ type ssstikExtract struct {
 	MP3URL   string `json:"mp3"`
 	Author   string `json:"author"`
 	Caption  string `json:"caption"`
+	Avatar   string `json:"avatar"`
 }
 
 var reCaptionClean = regexp.MustCompile(`\s+`)
@@ -205,13 +206,16 @@ func (h *handler) viaSsstikCDP(ctx context.Context, rawURL string) (tiktokResult
     const lines = txt.split('\n').map(norm).filter(Boolean);
     const wi = lines.findIndex(l => /without watermark/i.test(l));
     if (wi > 0) { caption = lines[wi - 1] || ''; if (wi - 2 >= 0) author = lines[wi - 2] || ''; }
+    let avatar = (doc.querySelector('img.result_author') || {}).getAttribute ? (doc.querySelector('img.result_author').getAttribute('src') || '') : '';
     if (!author || !caption) {
+      const h2 = norm((doc.querySelector('h2') || {}).innerText || (doc.querySelector('h2') || {}).textContent);
       const h3 = norm((doc.querySelector('h3') || {}).innerText || (doc.querySelector('h3') || {}).textContent);
       const p = norm((doc.querySelector('.maintext') || doc.querySelector('p') || {}).innerText || (doc.querySelector('.maintext') || doc.querySelector('p') || {}).textContent);
-      if (!author && h3) author = h3;
+      const avatarAlt = norm((doc.querySelector('img.result_author') || {}).getAttribute ? (doc.querySelector('img.result_author').getAttribute('alt') || '') : '');
+      if (!author && (h2 || h3 || avatarAlt)) author = h2 || h3 || avatarAlt;
       if (!caption && p) caption = p;
     }
-    return JSON.stringify({ ok: resp.ok, status: resp.status, video, mp3, author, caption, empty: !video && !mp3, len: html.length });
+    return JSON.stringify({ ok: resp.ok, status: resp.status, video, mp3, author, caption, avatar, empty: !video && !mp3, len: html.length });
   } catch (e) {
     return JSON.stringify({ ok: false, error: String(e && e.message || e) });
   }
@@ -230,6 +234,7 @@ func (h *handler) viaSsstikCDP(ctx context.Context, rawURL string) (tiktokResult
 		MP3     string `json:"mp3"`
 		Author  string `json:"author"`
 		Caption string `json:"caption"`
+		Avatar  string `json:"avatar"`
 		Empty   bool   `json:"empty"`
 		Len     int    `json:"len"`
 	}
@@ -244,6 +249,7 @@ func (h *handler) viaSsstikCDP(ctx context.Context, rawURL string) (tiktokResult
 	ex.MP3 = strings.TrimSpace(ex.MP3)
 	ex.Author = strings.TrimSpace(ex.Author)
 	ex.Caption = strings.TrimSpace(reCaptionClean.ReplaceAllString(ex.Caption, " "))
+	ex.Avatar = strings.TrimSpace(ex.Avatar)
 	if ex.Video == "" && ex.MP3 == "" {
 		return tiktokResult{}, fmt.Errorf("tautan unduhan tidak ditemukan dari ssstik (status %d)", ex.Status)
 	}
@@ -251,6 +257,7 @@ func (h *handler) viaSsstikCDP(ctx context.Context, rawURL string) (tiktokResult
 	result := tiktokResult{
 		Author:  pointerString(ex.Author),
 		Caption: pointerString(ex.Caption),
+		Avatar:  pointerString(ex.Avatar),
 	}
 	if ex.Video != "" {
 		v := ex.Video
