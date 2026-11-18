@@ -11,7 +11,7 @@
  * @param {string} query.url - URL gambar panel chapter asli (wajib, http/https).
  * @response binary
  * @example
- * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=https%3A%2F%2Fimg.komiku.org%2Fwp-content%2Fuploads%2F787279-1.jpg')
+ * fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=https%3A%2F%2Fimg.komiku.org%2Fupload5%2Fmy-wife-waited-for-me-in-the-wheat-%2F27%2F2026-09-01%2F1.webp')
  *     .then(res => res.blob())
  *     .then(console.log);
  */

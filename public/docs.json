@@ -1232,7 +1232,7 @@
       "method": "GET",
       "path": "/api/komiku/image",
       "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=https%3A%2F%2Fimg.komiku.org%2Fwp-content%2Fuploads%2F787279-1.jpg')\n     .then(res => res.blob())\n     .then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/komiku/image?url=https%3A%2F%2Fimg.komiku.org%2Fupload5%2Fmy-wife-waited-for-me-in-the-wheat-%2F27%2F2026-09-01%2F1.webp')\n     .then(res => res.blob())\n     .then(console.log);",
       "params": [
         {
           "name": "url",
