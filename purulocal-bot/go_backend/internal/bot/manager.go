@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	botcmd "purulocal-bot/internal/bot/cmd"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -219,26 +221,17 @@ func (m *Manager) ListAllFeatures() []FeatureItem {
 		}
 		return m.vip.IsFeatureVIP(id)
 	}
-	// built-ins
-	builtins := []struct{ id, name, cmd string }{
-		{"builtin:ping", "Ping", "ping"},
-		{"builtin:menu", "Menu", "menu"},
-		{"builtin:owner", "Owner", "owner"},
-		{"builtin:sticker", "Sticker", "sticker"},
-		{"builtin:upsw", "Upload Status", "upsw"},
-		{"builtin:vip", "VIP Redeem", "vip"},
-		{"builtin:stats", "Stats", "stats"},
-		{"builtin:logs", "Logs", "logs"},
-		{"builtin:antilink", "Antilink", "antilink"},
-		{"builtin:welcome", "Welcome", "welcome"},
-		{"builtin:setwelcome", "Set Welcome", "setwelcome"},
-		{"builtin:goodbye", "Goodbye", "goodbye"},
-		{"builtin:setgoodbye", "Set Goodbye", "setgoodbye"},
-		{"builtin:tagall", "Tagall", "tagall"},
-		{"builtin:hidetag", "Hidetag", "hidetag"},
-	}
-	for _, b := range builtins {
-		items = append(items, FeatureItem{ID: b.id, Name: b.name, Command: b.cmd, Type: "builtin", VIP: isVIP(b.id)})
+	// built-ins dari registry cmd (1 fitur 1 file, metadata di /internal/bot/cmd)
+	for _, f := range botcmd.All() {
+		id := f.ID
+		if id == "" {
+			id = "builtin:" + f.Command
+		}
+		name := strings.TrimSpace(f.Name)
+		if name == "" {
+			name = f.Command
+		}
+		items = append(items, FeatureItem{ID: id, Name: name, Command: f.Command, Type: "builtin", VIP: isVIP(id)})
 	}
 	if m.customCmds != nil {
 		for _, c := range m.customCmds.List() {
@@ -390,74 +383,60 @@ func (m *Manager) onMessage(evt *events.Message) {
 		userKey = evt.Info.Chat.String()
 	}
 
-	// kumpulkan kandidat ID pengirim (termasuk resolusi LID<->PN) untuk owner/izin
-	senderIDs := []string{userKey, evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
-	resolvedPN := ""
-	resolvedLID := ""
-	if c := m.client; c != nil && c.Store != nil {
-		tryResolve := func(j types.JID) {
-			if j.IsEmpty() {
+
+	// kumpulkan kandidat ID pengirim (JID/LID + resolusi LID<->PN) via handler global
+	m.mu.RLock()
+	waClient := m.client
+	m.mu.RUnlock()
+	senderIDs := CollectSenderIDs(ctx, waClient, evt)
+
+
+	// dispatch via registry cmd (1 fitur 1 file di /internal/bot/cmd)
+	if feat, okf := botcmd.Find(cmd); okf {
+		switch feat.Trigger {
+		case botcmd.TriggerSticker:
+			maybeReact()
+			doTyping()
+			defer stopReact()
+			if cfg.TypingBeforeReply {
+				m.sendTyping(ctx, evt.Info.Chat, false)
+			}
+			featID := feat.ID
+			if featID == "" {
+				featID = "builtin:" + feat.Command
+			}
+			if !m.isFeatureAllowed(featID, userKey) {
+				_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
 				return
 			}
-			if alt, err := c.Store.GetAltJID(ctx, j); err == nil && !alt.IsEmpty() {
-				s := alt.String()
-				senderIDs = append(senderIDs, s)
-				if alt.Server == types.DefaultUserServer || alt.Server == "s.whatsapp.net" {
-					resolvedPN = s
-				} else if alt.Server == types.HiddenUserServer || alt.Server == "lid" {
-					resolvedLID = s
-				}
+			_ = m.HandleSticker(ctx, evt)
+			return
+		case botcmd.TriggerUpsw:
+			maybeReact()
+			doTyping()
+			defer stopReact()
+			if cfg.TypingBeforeReply {
+				m.sendTyping(ctx, evt.Info.Chat, false)
 			}
-		}
-		tryResolve(evt.Info.Sender)
-		tryResolve(evt.Info.SenderAlt)
-		if evt.Info.Sender.Server == types.DefaultUserServer {
-			resolvedPN = evt.Info.Sender.String()
-		}
-		if evt.Info.SenderAlt.Server == types.DefaultUserServer && resolvedPN == "" {
-			resolvedPN = evt.Info.SenderAlt.String()
-		}
-	}
-	senderIDs = append(senderIDs, "pn:"+evt.Info.PushName, "resolved_pn:"+resolvedPN, "resolved_lid:"+resolvedLID)
-
-	// built-in: sticker dari image (kirim/reply image dengan caption .s/.sticker)
-	if cmd == "s" || cmd == "sticker" {
-		maybeReact()
-		doTyping()
-		defer stopReact()
-		if cfg.TypingBeforeReply {
-			m.sendTyping(ctx, evt.Info.Chat, false)
-		}
-		if !m.isFeatureAllowed("builtin:sticker", userKey) {
-			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+			featID := feat.ID
+			if featID == "" {
+				featID = "builtin:" + feat.Command
+			}
+			if !m.isFeatureAllowed(featID, userKey) {
+				_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+				return
+			}
+			ids := senderIDs
+			if len(ids) == 0 {
+				ids = []string{userKey}
+			}
+			if !isOwnerAny(cfg.OwnerNumber, ids...) {
+				_ = m.sendReply(ctx, evt, "Perintah ini khusus owner.")
+				return
+			}
+			_ = m.HandleUpsw(ctx, evt, strings.TrimSpace(args))
 			return
 		}
-		_ = m.handleStickerCommand(ctx, evt, cfg)
-		return
-	}
-
-	// built-in: upsw (owner-only) - kirim/reply foto/video dengan .upsw <text> untuk post status/story
-	if cmd == "upsw" || cmd == "upstatus" || cmd == "sw" {
-		maybeReact()
-		doTyping()
-		defer stopReact()
-		if cfg.TypingBeforeReply {
-			m.sendTyping(ctx, evt.Info.Chat, false)
-		}
-		if !m.isFeatureAllowed("builtin:upsw", userKey) {
-			_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
-			return
-		}
-		ids := senderIDs
-		if len(ids) == 0 {
-			ids = []string{userKey}
-		}
-		if !isOwnerAny(cfg.OwnerNumber, ids...) {
-			_ = m.sendReply(ctx, evt, "Perintah ini khusus owner.")
-			return
-		}
-		_ = m.handleUpswCommand(ctx, evt, strings.TrimSpace(args))
-		return
 	}
 
 	// custom commands (lokal)
@@ -479,14 +458,21 @@ func (m *Manager) onMessage(evt *events.Message) {
 	}
 
 	// group management commands (butuh konteks evt/chat)
-	if isGroupMgmtCommand(cmd) {
+	if feat, okf := botcmd.Find(cmd); okf && feat.Trigger == botcmd.TriggerGroupMgmt {
 		maybeReact()
 		doTyping()
 		defer stopReact()
 		if cfg.TypingBeforeReply {
 			m.sendTyping(ctx, evt.Info.Chat, false)
 		}
-		if res, ok := m.handleGroupMgmtCommand(ctx, evt, cmd, args, userKey, cfg, senderIDs...); ok {
+		if res, ok := m.HandleGroupMgmt(botcmd.Request{
+			Ctx:       ctx,
+			Cmd:       cmd,
+			Args:      args,
+			UserKey:   userKey,
+			SenderIDs: senderIDs,
+			Evt:       evt,
+		}); ok {
 			if strings.TrimSpace(res.Reply) != "" {
 				_ = m.sendReply(ctx, evt, res.Reply)
 			}
@@ -725,83 +711,7 @@ func buildOwnerVCard(name, number string) string {
 	}, "\n")
 }
 
-func isOwner(userKey, ownerNumber string) bool {
-	return isOwnerAny(ownerNumber, userKey)
-}
 
-func isOwnerAny(ownerNumber string, userKeys ...string) bool {
-	normalizeDigits := func(s string) string {
-		out := make([]rune, 0, len(s))
-		for _, r := range s {
-			if r >= '0' && r <= '9' {
-				out = append(out, r)
-			}
-		}
-		return string(out)
-	}
-	trimCore := func(d string) string {
-		d = strings.TrimLeft(d, "0")
-		d = strings.TrimPrefix(d, "62")
-		d = strings.TrimLeft(d, "0")
-		return d
-	}
-	ownerDigits := normalizeDigits(ownerNumber)
-	if ownerDigits == "" {
-		return false
-	}
-	oCore := trimCore(ownerDigits)
-
-	extractUserDigits := func(raw string) string {
-		s := strings.TrimSpace(raw)
-		if s == "" {
-			return ""
-		}
-		// strip known prefixes added in senderIDs/debug
-		for _, p := range []string{"resolved_pn:", "resolved_lid:", "pn:"} {
-			if strings.HasPrefix(s, p) {
-				s = strings.TrimPrefix(s, p)
-			}
-		}
-		// for JID-like values take user part before @ and drop device suffix :n
-		if i := strings.Index(s, "@"); i >= 0 {
-			s = s[:i]
-		}
-		if i := strings.Index(s, ":"); i >= 0 {
-			s = s[:i]
-		}
-		// if it looks like a plain number, normalize directly; otherwise collect digits
-		d := normalizeDigits(s)
-		return d
-	}
-
-	for _, userKey := range userKeys {
-		if strings.TrimSpace(userKey) == "" {
-			continue
-		}
-		userDigits := extractUserDigits(userKey)
-		if userDigits == "" {
-			// last resort: try parsing as JID string (handles odd forms)
-			if j, err := types.ParseJID(userKey); err == nil && !j.IsEmpty() {
-				userDigits = normalizeDigits(j.User)
-				if i := strings.Index(userDigits, ":"); i >= 0 { // unlikely but safe
-					userDigits = userDigits[:i]
-				}
-			}
-		}
-		if userDigits == "" {
-			continue
-		}
-		uCore := trimCore(userDigits)
-		if uCore != "" && oCore != "" && uCore == oCore {
-			return true
-		}
-		// fallback: kecocokan langsung/suffix pada digit penuh
-		if userDigits == ownerDigits || strings.HasSuffix(userDigits, ownerDigits) || strings.HasSuffix(ownerDigits, userDigits) {
-			return true
-		}
-	}
-	return false
-}
 
 func (m *Manager) sendText(ctx context.Context, to types.JID, text string) error {
 	m.mu.RLock()
@@ -1112,108 +1022,36 @@ func parseCommand(text string) (cmd, args string) {
 	return cmd, args
 }
 
+
 func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config, senderIDs ...string) (ExecResult, bool) {
-	switch cmd {
-	case "ping":
-		if !m.isFeatureAllowed("builtin:ping", userKey) {
+	// builtin via registry cmd (1 fitur 1 file di /internal/bot/cmd)
+	if f, ok := botcmd.Find(cmd); ok && f.Trigger == botcmd.TriggerDefault {
+		featID := f.ID
+		if featID == "" {
+			featID = "builtin:" + f.Command
+		}
+		if !m.isFeatureAllowed(featID, userKey) {
 			return m.vipDeniedReply(), true
 		}
-		return ExecResult{Reply: "pong"}, true
-	case "menu":
-		if !m.isFeatureAllowed("builtin:menu", userKey) {
-			return m.vipDeniedReply(), true
-		}
-		return ExecResult{Reply: m.buildMenu(cfg)}, true
-	case "owner":
-		if !m.isFeatureAllowed("builtin:owner", userKey) {
-			return m.vipDeniedReply(), true
-		}
-		return ExecResult{
-			ContactName:  cfg.OwnerName,
-			ContactVCard: buildOwnerVCard(cfg.OwnerName, cfg.OwnerNumber),
-		}, true
-	case "vip":
-		if !m.isFeatureAllowed("builtin:vip", userKey) {
-			return m.vipDeniedReply(), true
-		}
-		code := normalizeVIPCode(args)
-		if len(code) != 4 {
-			return ExecResult{Reply: "*VIP*\nGunakan: *.vip* <kode 4 karakter>"}, true
-		}
-		if m.vip == nil {
-			return ExecResult{Reply: "*VIP*\nFitur VIP tidak tersedia."}, true
-		}
-		exp, err := m.vip.Redeem(userKey, code, time.Now())
-		if err != nil {
-			return ExecResult{Reply: "*Gagal Redeem VIP*\n" + err.Error()}, true
-		}
-		remain := exp - time.Now().Unix()
-		return ExecResult{Reply: "*VIP Aktif*\n*Sisa:* " + formatRemaining(remain)}, true
-	case "stats":
-		if !m.isFeatureAllowed("builtin:stats", userKey) {
-			return m.vipDeniedReply(), true
-		}
-		debugLines := []string{}
-		pushName := ""
-		senderID := ""
-		senderAltID := ""
-		resolvedPN := ""
-		resolvedLID := ""
-		for _, id := range senderIDs {
-			switch {
-			case strings.HasPrefix(id, "pn:"):
-				if pushName == "" {
-					pushName = strings.TrimPrefix(id, "pn:")
-				}
-			case strings.HasPrefix(id, "resolved_pn:"):
-				if resolvedPN == "" {
-					resolvedPN = strings.TrimPrefix(id, "resolved_pn:")
-				}
-			case strings.HasPrefix(id, "resolved_lid:"):
-				if resolvedLID == "" {
-					resolvedLID = strings.TrimPrefix(id, "resolved_lid:")
-				}
-			case senderID == "":
-				senderID = id
-			case senderAltID == "" && id != senderID:
-				senderAltID = id
+		if f.OwnerOnly {
+			ids := senderIDs
+			if len(ids) == 0 {
+				ids = []string{userKey}
+			}
+			if !isOwnerAny(cfg.OwnerNumber, ids...) {
+				return ExecResult{Reply: "Perintah ini khusus owner."}, true
 			}
 		}
-		debugLines = append(debugLines, "UserKey: "+userKey)
-		if senderID != "" {
-			debugLines = append(debugLines, "Sender: "+senderID)
+		res, handled := f.Run(botcmd.Request{
+			Ctx:       ctx,
+			Cmd:       cmd,
+			Args:      args,
+			UserKey:   userKey,
+			SenderIDs: senderIDs,
+		}, m)
+		if handled {
+			return cmdResultToExec(res), true
 		}
-		if senderAltID != "" {
-			debugLines = append(debugLines, "SenderAlt: "+senderAltID)
-		}
-		if resolvedPN != "" {
-			debugLines = append(debugLines, "ResolvedPN: "+resolvedPN)
-		}
-		if resolvedLID != "" {
-			debugLines = append(debugLines, "ResolvedLID: "+resolvedLID)
-		}
-		if strings.TrimSpace(pushName) != "" {
-			debugLines = append(debugLines, "Username: "+strings.TrimSpace(pushName))
-		}
-		debugBlock := "\n\n*Debug*\n" + strings.Join(debugLines, "\n")
-		if m.vip == nil {
-			return ExecResult{Reply: "*Status:* Bukan VIP" + debugBlock}, true
-		}
-		ok, exp := m.vip.IsUserVIP(userKey, time.Now())
-		if !ok {
-			return ExecResult{Reply: "*Status:* Bukan VIP" + debugBlock}, true
-		}
-		remain := exp - time.Now().Unix()
-		return ExecResult{Reply: "*Status:* VIP\n*Sisa:* " + formatRemaining(remain) + debugBlock}, true
-	case "logs":
-		ids := senderIDs
-		if len(ids) == 0 {
-			ids = []string{userKey}
-		}
-		if !isOwnerAny(cfg.OwnerNumber, ids...) {
-			return ExecResult{Reply: "Perintah ini khusus owner."}, true
-		}
-		return ExecResult{Reply: m.formatLogsForOwner()}, true
 	}
 	if m.plugins != nil {
 		if p, okp := m.plugins.Find(cmd); okp {
@@ -1254,6 +1092,7 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 	}
 	return ExecResult{}, false
 }
+
 
 func (m *Manager) formatLogsForOwner() string {
 	if m == nil || m.logger == nil {
@@ -1352,109 +1191,13 @@ func menuSmallCaps(s string) string {
 	return b.String()
 }
 
+
+// buildMenu mempertahankan kompatibilitas; menu kini dibuat otomatis dari metadata cmd.
 func (m *Manager) buildMenu(cfg Config) string {
-	botName := strings.TrimSpace(cfg.BotName)
-	if botName == "" {
-		botName = "PuruBot"
-	}
-	var b strings.Builder
-	b.WriteString("╭─〔 " + botName + " 〕\n")
-	b.WriteString("│\n")
-	b.WriteString("├─ ᴜᴍᴜᴍ\n")
-	b.WriteString("│  • .ping\n")
-	b.WriteString("│  • .menu\n")
-	b.WriteString("│  • .owner\n")
-	b.WriteString("│  • .vip\n")
-	b.WriteString("│  • .stats\n")
-	b.WriteString("│\n")
-	b.WriteString("├─ ꜱᴛɪᴄᴋᴇʀ\n")
-	b.WriteString("│  • .sticker\n")
-	b.WriteString("│\n")
-	b.WriteString("├─ ᴊᴊ\n")
-	b.WriteString("│\n")
-	b.WriteString("├─ ᴏᴡɴᴇʀ\n")
-	b.WriteString("│  • .logs\n")
-	b.WriteString("│  • .upsw\n")
-
-	// Custom commands (aktif) per kategori
-	if m.customCmds != nil {
-		catMap := map[string][]string{}
-		catLabel := map[string]string{}
-		catOrder := []string{}
-		for _, c := range m.customCmds.List() {
-			if !c.Enabled || strings.TrimSpace(c.Command) == "" {
-				continue
-			}
-			cmdName := strings.ToLower(strings.TrimSpace(c.Command))
-			cat := strings.TrimSpace(c.Category)
-			if cat == "" {
-				cat = "Custom"
-			}
-			key := strings.ToUpper(cat)
-			if _, ok := catMap[key]; !ok {
-				catOrder = append(catOrder, key)
-				catMap[key] = []string{}
-				catLabel[key] = menuSmallCaps(cat)
-			}
-			catMap[key] = append(catMap[key], "│  • ."+cmdName)
-		}
-		for _, key := range catOrder {
-			b.WriteString("│\n")
-			b.WriteString("├─ " + catLabel[key] + "\n")
-			for _, line := range catMap[key] {
-				b.WriteString(line + "\n")
-			}
-		}
-	}
-
-	// Plugin terpasang per kategori
-	if m.plugins != nil {
-		catMap := map[string][]string{}
-		catLabel := map[string]string{}
-		catOrder := []string{}
-		for _, p := range m.plugins.ListInstalled() {
-			if !p.Enabled || p.Command == "" {
-				continue
-			}
-			cmdName := strings.ToLower(strings.TrimSpace(p.Command))
-			cat := strings.TrimSpace(p.Category)
-			if cat == "" {
-				cat = "Plugin"
-			}
-			if cmdName == "play" {
-				cat = "Downloader"
-			}
-			key := strings.ToUpper(cat)
-			label := "│  • ." + cmdName
-			if _, ok := catMap[key]; !ok {
-				catOrder = append(catOrder, key)
-				catMap[key] = []string{}
-				catLabel[key] = menuSmallCaps(cat)
-			}
-			catMap[key] = append(catMap[key], label)
-		}
-		for _, key := range catOrder {
-			b.WriteString("│\n")
-			b.WriteString("├─ " + catLabel[key] + "\n")
-			for _, line := range catMap[key] {
-				b.WriteString(line + "\n")
-			}
-		}
-	}
-
-	b.WriteString("│\n")
-	b.WriteString("├─ ɢʀᴏᴜᴘ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ\n")
-	b.WriteString("│  • .antilink on/off\n")
-	b.WriteString("│  • .welcome on/off\n")
-	b.WriteString("│  • .setwelcome <text>\n")
-	b.WriteString("│  • .goodbye on/off\n")
-	b.WriteString("│  • .setgoodbye <text>\n")
-	b.WriteString("│  • .tagall <text>\n")
-	b.WriteString("│  • .hidetag <text>\n")
-	b.WriteString("│\n")
-	b.WriteString("╰────────")
-	return b.String()
+	_ = cfg
+	return m.BuildMenuText()
 }
+
 
 type spamAction int
 
@@ -1819,8 +1562,11 @@ func (m *Manager) enforceAntilink(evt *events.Message, text string) bool {
 	defer cancel()
 
 	cfg := m.Config()
-	senderIDs := []string{evt.Info.Sender.String(), evt.Info.SenderAlt.String()}
-	if isOwnerAny(cfg.OwnerNumber, senderIDs...) || m.isGroupAdmin(ctx, evt.Info.Chat, evt.Info.Sender) {
+	m.mu.RLock()
+	waClient := m.client
+	m.mu.RUnlock()
+	senderIDs := CollectSenderIDs(ctx, waClient, evt)
+	if IsOwnerAny(cfg.OwnerNumber, senderIDs...) || m.isGroupAdmin(ctx, evt.Info.Chat, evt.Info.Sender) {
 		return false
 	}
 
