@@ -146,7 +146,8 @@ func exportReadme(format, runner string) string {
 		"- PURULOCAL_BIN             : path binary bot (override)\r\n\r\n" +
 		"Saat startup skrip akan mengecek manifest update runtime. Jika ada versi/arsitektur\r\n" +
 		"yang cocok, binary diperbarui lalu dijalankan. Jika tidak ada update cocok, binary\r\n" +
-		"yang dibundel/tersedia tetap dijalankan.\r\n"
+		"yang dibundel/tersedia dan kompatibel akan dijalankan. Pastikan runtime untuk\r\n" +
+		"platform cloud (mis. linux-amd64/linux-arm64) tersedia di manifest.\r\n"
 }
 
 func writeZipBytes(zw *zip.Writer, name string, data []byte, mode fs.FileMode) error {
@@ -256,7 +257,6 @@ func nodeRunnerScript() string {
  */
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const https = require('https');
@@ -270,19 +270,24 @@ const BIN_DIR = path.join(BASE, 'bin');
 function log(msg) { console.log('[purulocal] ' + msg); }
 function warn(msg) { console.warn('[purulocal] ' + msg); }
 
+function hostPlatform() {
+  const p = process.platform === 'win32' ? 'windows' : process.platform;
+  let a = process.arch;
+  if (a === 'x64') a = 'amd64';
+  if (a === 'arm64') a = 'arm64';
+  return { os: p, arch: a };
+}
+
 function platformKeys() {
-  const p = process.platform; // linux, darwin, win32, android
-  const a = process.arch;     // x64, arm64, arm
+  const h = hostPlatform();
+  const archs = h.arch === 'amd64' ? ['amd64', 'x64'] : h.arch === 'arm64' ? ['arm64', 'aarch64'] : [h.arch];
   const keys = [];
-  const plat = p === 'win32' ? 'windows' : p;
-  const archs = a === 'x64' ? ['amd64', 'x64'] : a === 'arm64' ? ['arm64', 'aarch64'] : [a];
-  for (const ar of archs) {
-    keys.push(plat + '-' + ar);
-    keys.push(plat + '_' + ar);
-    keys.push(ar);
-  }
-  if (p === 'android' && a === 'arm64') keys.unshift('arm64-v8a', 'android-arm64');
-  return keys;
+  for (const ar of archs) { keys.push(h.os + '-' + ar); keys.push(h.os + '_' + ar); }
+  for (const ar of archs) keys.push(ar);
+  if (h.os === 'android' && h.arch === 'arm64') keys.unshift('arm64-v8a', 'android-arm64');
+  if (h.os === 'linux' && h.arch === 'amd64') keys.unshift('linux-amd64', 'linux-x64');
+  if (h.os === 'linux' && h.arch === 'arm64') keys.unshift('linux-arm64', 'linux-aarch64');
+  return Array.from(new Set(keys));
 }
 
 function fetchText(url, redirects) {
@@ -329,23 +334,46 @@ function pickRuntime(manifest) {
     if (v && typeof v === 'object' && v.url) return { key: k, url: String(v.url), sha256: String(v.sha256 || '').toLowerCase() };
     if (v && typeof v === 'string') return { key: k, url: v, sha256: '' };
   }
-  // fallback generic linux x64 keys sometimes named differently
   return null;
+}
+
+function loadBundledInfo() {
+  try { return JSON.parse(fs.readFileSync(path.join(BIN_DIR, 'bundled-binary.json'), 'utf8')); } catch (e) { return null; }
+}
+
+function archNorm(a) {
+  a = String(a || '').toLowerCase();
+  if (a === 'x64' || a === 'x86_64' || a === 'amd64') return 'amd64';
+  if (a === 'arm64' || a === 'aarch64') return 'arm64';
+  return a;
+}
+
+function bundledCompatible() {
+  const info = loadBundledInfo();
+  if (!info) return true; // unknown, try
+  const h = hostPlatform();
+  const osOk = String(info.os || '') === h.os;
+  const archOk = archNorm(info.arch) === archNorm(h.arch);
+  return osOk && archOk;
 }
 
 function candidateBins() {
   const names = process.platform === 'win32'
     ? ['purulocal-bot.exe', 'libpurulocal.exe']
-    : ['purulocal-bot', 'libpurulocal-arm64-v8a.so', 'purulocal'];
+    : ['purulocal-bot', 'purulocal', 'libpurulocal-arm64-v8a.so'];
   const dirs = [BIN_DIR, BASE, path.join(BASE, 'runtime')];
   const out = [];
   for (const d of dirs) for (const n of names) out.push(path.join(d, n));
   return out;
 }
 
-function findBinary() {
-  if (process.env.PURULOCAL_BIN && fs.existsSync(process.env.PURULOCAL_BIN)) return process.env.PURULOCAL_BIN;
-  for (const p of candidateBins()) { try { if (fs.existsSync(p) && fs.statSync(p).isFile()) return p; } catch (e) {} }
+function findBinary(downloadedPath) {
+  if (process.env.PURULOCAL_BIN && fs.existsSync(process.env.PURULOCAL_BIN)) return { path: process.env.PURULOCAL_BIN, source: 'env' };
+  if (downloadedPath && fs.existsSync(downloadedPath)) return { path: downloadedPath, source: 'downloaded' };
+  if (!bundledCompatible()) return null;
+  for (const p of candidateBins()) {
+    try { if (fs.existsSync(p) && fs.statSync(p).isFile()) return { path: p, source: 'bundled' }; } catch (e) {}
+  }
   return null;
 }
 
@@ -358,10 +386,13 @@ async function autoUpdate() {
     manifest = JSON.parse(buf.toString('utf8'));
   } catch (e) {
     warn('Gagal cek update manifest: ' + e.message);
-    return;
+    return { downloaded: null, hasPick: false, err: e };
   }
   const pick = pickRuntime(manifest);
-  if (!pick) { log('Tidak ada runtime cocok di manifest untuk platform ini, lewati update.'); return; }
+  if (!pick) {
+    log('Tidak ada runtime cocok di manifest untuk platform ini (' + platformKeys().join(', ') + '). Lewati update.');
+    return { downloaded: null, hasPick: false };
+  }
 
   const target = path.join(BIN_DIR, process.platform === 'win32' ? 'purulocal-bot.exe' : 'purulocal-bot');
   const state = loadState();
@@ -369,10 +400,11 @@ async function autoUpdate() {
   const prev = state[pick.key] || {};
   if (rv && prev.runtimeVersion === rv && prev.sha256 && pick.sha256 && prev.sha256 === pick.sha256 && fs.existsSync(target)) {
     log('Runtime sudah terbaru (' + pick.key + ' rv=' + rv + ').');
-    return;
+    return { downloaded: target, hasPick: true };
   }
   if (!pick.sha256 && fs.existsSync(target) && prev.url === pick.url && prev.runtimeVersion === rv) {
-    log('Runtime sudah sesuai manifest.'); return;
+    log('Runtime sudah sesuai manifest.');
+    return { downloaded: target, hasPick: true };
   }
 
   log('Mengunduh update runtime (' + pick.key + ') ...');
@@ -384,18 +416,40 @@ async function autoUpdate() {
     if (pick.sha256) {
       const sum = (await sha256File(tmp)).toLowerCase();
       if (sum !== pick.sha256) {
-        fs.unlinkSync(tmp);
+        try { fs.unlinkSync(tmp); } catch (e) {}
         throw new Error('sha256 mismatch: ' + sum + ' != ' + pick.sha256);
       }
     }
-    try { fs.renameSync(tmp, target); } catch (e) { fs.copyFileSync(tmp, target); fs.unlinkSync(tmp); }
+    try { fs.renameSync(tmp, target); } catch (e) { fs.copyFileSync(tmp, target); try { fs.unlinkSync(tmp); } catch (e2) {} }
     ensureExec(target);
     state[pick.key] = { runtimeVersion: rv, sha256: pick.sha256, url: pick.url, updated_at: new Date().toISOString() };
     saveState(state);
     log('Runtime diperbarui: ' + target);
+    return { downloaded: target, hasPick: true };
   } catch (e) {
     warn('Update runtime gagal, gunakan binary yang ada: ' + e.message);
+    return { downloaded: fs.existsSync(target) ? target : null, hasPick: true, err: e };
   }
+}
+
+function spawnBinary(bin) {
+  log('Menjalankan: ' + bin.path + ' (' + bin.source + ')');
+  log('UI/API: http://' + (process.env.PURULOCAL_ADDR || '0.0.0.0:8787'));
+  const child = spawn(bin.path, process.argv.slice(2), { stdio: 'inherit', env: process.env, cwd: BASE });
+  const forward = (sig) => { try { child.kill(sig); } catch (e) {} };
+  process.on('SIGINT', () => forward('SIGINT'));
+  process.on('SIGTERM', () => forward('SIGTERM'));
+  child.on('error', (err) => {
+    console.error('[purulocal] Gagal menjalankan binary: ' + err.message);
+    if (err && (err.code === 'ENOEXEC' || err.code === 'EACCES' || err.code === 'EINVAL')) {
+      console.error('[purulocal] Binary tidak kompatibel/dapat dijalankan di platform ini (' + process.platform + '/' + process.arch + '). Pastikan runtime yang sesuai tersedia di manifest atau set PURULOCAL_BIN ke binary yang benar.');
+    }
+    process.exit(1);
+  });
+  child.on('exit', (code, signal) => {
+    if (signal) process.exit(128);
+    process.exit(code == null ? 1 : code);
+  });
 }
 
 async function main() {
@@ -403,24 +457,18 @@ async function main() {
   if (!process.env.PURULOCAL_DATA) process.env.PURULOCAL_DATA = path.join(BASE, 'data');
   if (!process.env.PURULOCAL_ADDR) process.env.PURULOCAL_ADDR = '0.0.0.0:8787';
 
-  await autoUpdate();
-  const bin = findBinary();
+  const upd = await autoUpdate();
+  const bin = findBinary(upd && upd.downloaded);
   if (!bin) {
-    console.error('[purulocal] Binary bot tidak ditemukan. Pastikan folder bin/ berisi binary yang sesuai platform atau set PURULOCAL_BIN.');
+    const b = loadBundledInfo();
+    console.error('[purulocal] Binary bot yang kompatibel tidak ditemukan untuk platform ' + process.platform + '/' + process.arch + '.');
+    if (b && !bundledCompatible()) console.error('[purulocal] Binary yang dibundel berasal dari ' + b.os + '/' + b.arch + ' (tidak kompatibel).');
+    console.error('[purulocal] Pastikan runtime untuk platform ini tersedia di manifest: ' + MANIFEST_URL);
+    console.error('[purulocal] Atau set PURULOCAL_BIN ke path binary puruLocal yang sesuai platform.');
     process.exit(1);
   }
-  ensureExec(bin);
-  log('Menjalankan: ' + bin);
-  log('UI/API: http://' + (process.env.PURULOCAL_ADDR || '0.0.0.0:8787'));
-
-  const child = spawn(bin, process.argv.slice(2), { stdio: 'inherit', env: process.env, cwd: BASE });
-  const forward = (sig) => { try { child.kill(sig); } catch (e) {} };
-  process.on('SIGINT', () => forward('SIGINT'));
-  process.on('SIGTERM', () => forward('SIGTERM'));
-  child.on('exit', (code, signal) => {
-    if (signal) process.exit(128);
-    process.exit(code == null ? 1 : code);
-  });
+  ensureExec(bin.path);
+  spawnBinary(bin);
 }
 
 main().catch((e) => { console.error('[purulocal] fatal:', e); process.exit(1); });
@@ -443,9 +491,7 @@ import signal
 import stat
 import subprocess
 import sys
-import tempfile
 import urllib.request
-from urllib.parse import urljoin
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 MANIFEST_URL = os.environ.get('PURULOCAL_UPDATE_MANIFEST', 'https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json')
@@ -461,22 +507,46 @@ def warn(msg):
     print('[purulocal] ' + msg, file=sys.stderr, flush=True)
 
 
-def platform_keys():
-    p = sys.platform  # linux, darwin, win32
-    m = platform.machine().lower()
-    keys = []
-    plat = 'windows' if p.startswith('win') else ('darwin' if p == 'darwin' else ('linux' if p.startswith('linux') else p))
-    if m in ('x86_64', 'amd64'):
-        archs = ['amd64', 'x64']
-    elif m in ('aarch64', 'arm64'):
-        archs = ['arm64', 'aarch64']
+def host_platform():
+    p = sys.platform
+    if p.startswith('win'):
+        pos = 'windows'
+    elif p == 'darwin':
+        pos = 'darwin'
+    elif p.startswith('linux'):
+        pos = 'linux'
     else:
-        archs = [m]
+        pos = p
+    m = platform.machine().lower()
+    if m in ('x86_64', 'amd64'):
+        arch = 'amd64'
+    elif m in ('aarch64', 'arm64'):
+        arch = 'arm64'
+    else:
+        arch = m
+    return {'os': pos, 'arch': arch}
+
+
+def platform_keys():
+    h = host_platform()
+    archs = ['amd64', 'x64'] if h['arch'] == 'amd64' else (['arm64', 'aarch64'] if h['arch'] == 'arm64' else [h['arch']])
+    keys = []
     for ar in archs:
-        keys.extend([plat + '-' + ar, plat + '_' + ar, ar])
-    if plat == 'linux' and 'arm64' in archs:
+        keys.extend([h['os'] + '-' + ar, h['os'] + '_' + ar])
+    keys.extend(archs)
+    if h['os'] == 'android' and h['arch'] == 'arm64':
         keys = ['arm64-v8a', 'android-arm64'] + keys
-    return keys
+    if h['os'] == 'linux' and h['arch'] == 'amd64':
+        keys = ['linux-amd64', 'linux-x64'] + keys
+    if h['os'] == 'linux' and h['arch'] == 'arm64':
+        keys = ['linux-arm64', 'linux-aarch64'] + keys
+    seen = set()
+    out = []
+    for k in keys:
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
 
 
 def fetch_bytes(url, redirects=5):
@@ -522,11 +592,36 @@ def pick_runtime(manifest):
     return None
 
 
+def load_bundled_info():
+    try:
+        with open(os.path.join(BIN_DIR, 'bundled-binary.json'), 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def arch_norm(a):
+    a = str(a or '').lower()
+    if a in ('x64', 'x86_64', 'amd64'):
+        return 'amd64'
+    if a in ('arm64', 'aarch64'):
+        return 'arm64'
+    return a
+
+
+def bundled_compatible():
+    info = load_bundled_info()
+    if not info:
+        return True
+    h = host_platform()
+    return str(info.get('os') or '') == h['os'] and arch_norm(info.get('arch')) == arch_norm(h['arch'])
+
+
 def candidate_bins():
     if os.name == 'nt':
         names = ['purulocal-bot.exe', 'libpurulocal.exe']
     else:
-        names = ['purulocal-bot', 'libpurulocal-arm64-v8a.so', 'purulocal']
+        names = ['purulocal-bot', 'purulocal', 'libpurulocal-arm64-v8a.so']
     dirs = [BIN_DIR, BASE, os.path.join(BASE, 'runtime')]
     out = []
     for d in dirs:
@@ -535,13 +630,17 @@ def candidate_bins():
     return out
 
 
-def find_binary():
+def find_binary(downloaded_path=None):
     env_bin = os.environ.get('PURULOCAL_BIN')
     if env_bin and os.path.isfile(env_bin):
-        return env_bin
+        return {'path': env_bin, 'source': 'env'}
+    if downloaded_path and os.path.isfile(downloaded_path):
+        return {'path': downloaded_path, 'source': 'downloaded'}
+    if not bundled_compatible():
+        return None
     for p in candidate_bins():
         if os.path.isfile(p):
-            return p
+            return {'path': p, 'source': 'bundled'}
     return None
 
 
@@ -549,8 +648,8 @@ def ensure_exec(p):
     if os.name == 'nt':
         return
     try:
-        st = os.stat(p).st_mode
-        os.chmod(p, st | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        st_mode = os.stat(p).st_mode
+        os.chmod(p, st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     except Exception:
         pass
 
@@ -560,11 +659,11 @@ def auto_update():
         manifest = json.loads(fetch_bytes(MANIFEST_URL).decode('utf-8'))
     except Exception as e:
         warn('Gagal cek update manifest: ' + str(e))
-        return
+        return {'downloaded': None, 'has_pick': False, 'err': e}
     pick = pick_runtime(manifest)
     if not pick:
-        log('Tidak ada runtime cocok di manifest untuk platform ini, lewati update.')
-        return
+        log('Tidak ada runtime cocok di manifest untuk platform ini (' + ', '.join(platform_keys()) + '). Lewati update.')
+        return {'downloaded': None, 'has_pick': False}
 
     target = os.path.join(BIN_DIR, 'purulocal-bot.exe' if os.name == 'nt' else 'purulocal-bot')
     state = load_state()
@@ -572,10 +671,10 @@ def auto_update():
     prev = state.get(pick['key']) or {}
     if rv and prev.get('runtimeVersion') == rv and prev.get('sha256') and pick['sha256'] and prev.get('sha256') == pick['sha256'] and os.path.isfile(target):
         log('Runtime sudah terbaru (' + pick['key'] + ' rv=' + rv + ').')
-        return
+        return {'downloaded': target, 'has_pick': True}
     if not pick['sha256'] and os.path.isfile(target) and prev.get('url') == pick['url'] and prev.get('runtimeVersion') == rv:
         log('Runtime sudah sesuai manifest.')
-        return
+        return {'downloaded': target, 'has_pick': True}
 
     log('Mengunduh update runtime (' + pick['key'] + ') ...')
     try:
@@ -604,8 +703,10 @@ def auto_update():
         state[pick['key']] = {'runtimeVersion': rv, 'sha256': pick['sha256'], 'url': pick['url']}
         save_state(state)
         log('Runtime diperbarui: ' + target)
+        return {'downloaded': target, 'has_pick': True}
     except Exception as e:
         warn('Update runtime gagal, gunakan binary yang ada: ' + str(e))
+        return {'downloaded': target if os.path.isfile(target) else None, 'has_pick': True, 'err': e}
 
 
 def main():
@@ -613,16 +714,30 @@ def main():
     os.environ.setdefault('PURULOCAL_DATA', os.path.join(BASE, 'data'))
     os.environ.setdefault('PURULOCAL_ADDR', '0.0.0.0:8787')
 
-    auto_update()
-    bin_path = find_binary()
-    if not bin_path:
-        print('[purulocal] Binary bot tidak ditemukan. Pastikan folder bin/ berisi binary yang sesuai platform atau set PURULOCAL_BIN.', file=sys.stderr)
+    upd = auto_update()
+    bin_info = find_binary((upd or {}).get('downloaded'))
+    if not bin_info:
+        b = load_bundled_info()
+        h = host_platform()
+        print('[purulocal] Binary bot yang kompatibel tidak ditemukan untuk platform ' + h['os'] + '/' + h['arch'] + '.', file=sys.stderr)
+        if b and not bundled_compatible():
+            print('[purulocal] Binary yang dibundel berasal dari ' + str(b.get('os')) + '/' + str(b.get('arch')) + ' (tidak kompatibel).', file=sys.stderr)
+        print('[purulocal] Pastikan runtime untuk platform ini tersedia di manifest: ' + MANIFEST_URL, file=sys.stderr)
+        print('[purulocal] Atau set PURULOCAL_BIN ke path binary puruLocal yang sesuai platform.', file=sys.stderr)
         sys.exit(1)
+    bin_path = bin_info['path']
     ensure_exec(bin_path)
-    log('Menjalankan: ' + bin_path)
+    log('Menjalankan: ' + bin_path + ' (' + bin_info.get('source', '') + ')')
     log('UI/API: http://' + (os.environ.get('PURULOCAL_ADDR') or '0.0.0.0:8787'))
 
-    child = subprocess.Popen([bin_path] + sys.argv[1:], cwd=BASE, env=os.environ.copy())
+    try:
+        child = subprocess.Popen([bin_path] + sys.argv[1:], cwd=BASE, env=os.environ.copy())
+    except OSError as e:
+        print('[purulocal] Gagal menjalankan binary: ' + str(e), file=sys.stderr)
+        if getattr(e, 'errno', None) in (8, 13):
+            h = host_platform()
+            print('[purulocal] Binary tidak kompatibel/dapat dijalankan di platform ini (' + h['os'] + '/' + h['arch'] + '). Pastikan runtime yang sesuai tersedia di manifest atau set PURULOCAL_BIN ke binary yang benar.', file=sys.stderr)
+        sys.exit(1)
 
     def forward(sig, frame):
         try:

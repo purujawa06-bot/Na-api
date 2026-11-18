@@ -1,4 +1,4 @@
-﻿name: Build puruLocal Runtime (.so)
+name: Build puruLocal Runtime (.so)
 # Update UI/fitur/backend runtime tanpa membangun/memperbarui APK.
 # APK hanya untuk perubahan arsitektur/shell (lihat workflow build-purulocal-apk).
 
@@ -47,30 +47,42 @@ jobs:
           go mod tidy
           go build ./...
 
-      - name: Build Go backend runtime for Android (arm64)
+      - name: Build Go backend runtimes (android arm64 + linux amd64/arm64)
         working-directory: purulocal-bot/go_backend
-        env:
-          GOOS: android
-          GOARCH: arm64
-          CGO_ENABLED: "0"
         run: |
+          set -e
           mkdir -p ../runtime-out
-          go build -trimpath -ldflags="-s -w" -o ../runtime-out/libpurulocal-arm64-v8a.so ./cmd/purulocal
+          # Android arm64 (launcher/runtime Android)
+          GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../runtime-out/libpurulocal-arm64-v8a.so ./cmd/purulocal
+          # Linux amd64/arm64 (cloud/server, dipakai runner export)
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../runtime-out/purulocal-bot-linux-amd64 ./cmd/purulocal
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../runtime-out/purulocal-bot-linux-arm64 ./cmd/purulocal
           ls -lh ../runtime-out/
 
       - name: Prepare runtime manifest
         working-directory: purulocal-bot/runtime-out
         run: |
-          sha256sum libpurulocal-arm64-v8a.so > libpurulocal-arm64-v8a.so.sha256
-          cat libpurulocal-arm64-v8a.so.sha256
-          RUNTIME_HASH=$(awk '{print $1}' libpurulocal-arm64-v8a.so.sha256)
+          sha256sum libpurulocal-arm64-v8a.so purulocal-bot-linux-amd64 purulocal-bot-linux-arm64 > checksums.sha256
+          cat checksums.sha256
+          export HASH_ANDROID_ARM64=$(awk '$2=="libpurulocal-arm64-v8a.so"{print $1}' checksums.sha256)
+          export HASH_LINUX_AMD64=$(awk '$2=="purulocal-bot-linux-amd64"{print $1}' checksums.sha256)
+          export HASH_LINUX_ARM64=$(awk '$2=="purulocal-bot-linux-arm64"{print $1}' checksums.sha256)
           curl -fsSL "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json" -o prev-manifest.json || echo '{}' > prev-manifest.json
-          export RUNTIME_HASH
           python3 - <<'PY'
           import json, os
           run = int(os.environ.get('GITHUB_RUN_NUMBER', '0') or '0')
           sha_env = os.environ.get('GITHUB_SHA','')
-          rhash = os.environ.get('RUNTIME_HASH','')
+          hashes = {
+            "arm64-v8a": os.environ.get('HASH_ANDROID_ARM64',''),
+            "linux-amd64": os.environ.get('HASH_LINUX_AMD64',''),
+            "linux-arm64": os.environ.get('HASH_LINUX_ARM64',''),
+          }
+          base = "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/"
+          files = {
+            "arm64-v8a": "libpurulocal-arm64-v8a.so",
+            "linux-amd64": "purulocal-bot-linux-amd64",
+            "linux-arm64": "purulocal-bot-linux-arm64",
+          }
           prev = {}
           try:
             with open('prev-manifest.json','r',encoding='utf-8') as f:
@@ -81,15 +93,13 @@ jobs:
           prev_rv = int(prev.get('runtimeVersion') or 0)
           runtime_version = max(run, prev_rv + 1)
           m = dict(prev) if isinstance(prev, dict) else {}
+          rt = dict(m.get('runtime') or {})
+          for k, fn in files.items():
+            rt[k] = {"url": base + fn, "sha256": hashes.get(k, "")}
           m.update({
             "app": "puruLocalBot",
             "runtimeVersion": runtime_version,
-            "runtime": {
-              "arm64-v8a": {
-                "url": "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/libpurulocal-arm64-v8a.so",
-                "sha256": rhash
-              }
-            },
+            "runtime": rt,
             "force": False,
             "changelog": f"Runtime update (UI/fitur) #{runtime_version} (commit {sha_env})"
           })
@@ -113,6 +123,9 @@ jobs:
           path: |
             purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so
             purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so.sha256
+            purulocal-bot/runtime-out/purulocal-bot-linux-amd64
+            purulocal-bot/runtime-out/purulocal-bot-linux-arm64
+            purulocal-bot/runtime-out/checksums.sha256
             purulocal-bot/runtime-out/update-manifest.json
 
       - name: Publish rolling runtime release (no APK)
@@ -128,6 +141,9 @@ jobs:
           files: |
             purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so
             purulocal-bot/runtime-out/libpurulocal-arm64-v8a.so.sha256
+            purulocal-bot/runtime-out/purulocal-bot-linux-amd64
+            purulocal-bot/runtime-out/purulocal-bot-linux-arm64
+            purulocal-bot/runtime-out/checksums.sha256
             purulocal-bot/runtime-out/update-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
