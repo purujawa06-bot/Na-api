@@ -482,7 +482,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 
 	// resolve command (builtin/plugin) - react hanya jika dikenali
 	// cek cepat apakah command mungkin dikenal sebelum react?
-	res, ok := m.resolveCommand(ctx, cmd, args, userKey, cfg, senderIDs...)
+	res, ok := m.resolveCommand(ctx, evt, cmd, args, userKey, cfg, senderIDs...)
 	if !ok {
 		return
 	}
@@ -1023,7 +1023,7 @@ func parseCommand(text string) (cmd, args string) {
 }
 
 
-func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string, cfg Config, senderIDs ...string) (ExecResult, bool) {
+func (m *Manager) resolveCommand(ctx context.Context, evt *events.Message, cmd, args, userKey string, cfg Config, senderIDs ...string) (ExecResult, bool) {
 	// builtin via registry cmd (1 fitur 1 file di /internal/bot/cmd)
 	if f, ok := botcmd.Find(cmd); ok && f.Trigger == botcmd.TriggerDefault {
 		featID := f.ID
@@ -1044,6 +1044,7 @@ func (m *Manager) resolveCommand(ctx context.Context, cmd, args, userKey string,
 		}
 		res, handled := f.Run(botcmd.Request{
 			Ctx:       ctx,
+			Evt:       evt,
 			Cmd:       cmd,
 			Args:      args,
 			UserKey:   userKey,
@@ -1386,28 +1387,40 @@ func hasLink(text string) bool {
 }
 
 func (m *Manager) isGroupAdmin(ctx context.Context, chat, sender types.JID) bool {
-	if chat.IsEmpty() || sender.IsEmpty() {
-		return false
+	isAdmin, isSuper, known := m.groupSenderRole(ctx, chat, sender)
+	_ = isSuper
+	return known && isAdmin
+}
+
+func (m *Manager) groupSenderRole(ctx context.Context, chat, sender types.JID) (isAdmin bool, isSuperAdmin bool, known bool) {
+	if chat.IsEmpty() || sender.IsEmpty() || ctx == nil {
+		return false, false, false
 	}
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
 	if c == nil {
-		return false
+		return false, false, false
 	}
 	info, err := c.GetGroupInfo(ctx, chat)
 	if err != nil || info == nil {
-		return false
+		return false, false, false
 	}
-	sUser := sender.User
+	match := func(pjid types.JID) bool {
+		if pjid.IsEmpty() {
+			return false
+		}
+		if sender.User != "" && pjid.User == sender.User {
+			return true
+		}
+		return pjid.String() == sender.String()
+	}
 	for _, p := range info.Participants {
-		if p.JID.User == sUser || p.JID.String() == sender.String() {
-			if p.IsAdmin || p.IsSuperAdmin {
-				return true
-			}
+		if match(p.JID) {
+			return p.IsAdmin || p.IsSuperAdmin, p.IsSuperAdmin, true
 		}
 	}
-	return false
+	return false, false, true
 }
 
 func (m *Manager) getGroupParticipants(ctx context.Context, chat types.JID) ([]types.JID, error) {

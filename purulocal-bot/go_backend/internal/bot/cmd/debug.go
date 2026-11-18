@@ -3,6 +3,7 @@ package cmd
 import (
 	"strings"
 
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 )
 
@@ -17,33 +18,44 @@ func init() {
 		},
 		Run: func(req Request, api BotAPI) (Result, bool) {
 			evt := req.Evt
+			ctx := req.Ctx
 			var b strings.Builder
 			b.WriteString("*DEBUG INFO*\n")
 
+			// --- sumber dasar ---
 			isGroup := false
 			isFromMe := false
-			var sender, senderAlt, chat types.JID
+			chat := types.EmptyJID
+			sender := types.EmptyJID
+			senderAlt := types.EmptyJID
 			pushName := ""
-			chatStr, senderStr, senderAltStr := "", "", ""
 			if evt != nil {
 				isGroup = evt.Info.IsGroup
 				isFromMe = evt.Info.IsFromMe
+				chat = evt.Info.Chat
 				sender = evt.Info.Sender
 				senderAlt = evt.Info.SenderAlt
-				chat = evt.Info.Chat
 				pushName = strings.TrimSpace(evt.Info.PushName)
-				chatStr = chat.String()
-				senderStr = sender.String()
-				senderAltStr = senderAlt.String()
 			}
 
-			isOwner := api.IsOwner(req.SenderIDs...)
-			senderIsPN := isPNJID(sender)
-			senderIsLID := isLIDJID(sender)
-			altIsPN := isPNJID(senderAlt)
-			altIsLID := isLIDJID(senderAlt)
-			hasAlt := senderAltStr != "" && !senderAlt.IsEmpty()
+			// fallback dari UserKey/kandidat bila evt/sender kosong
+			userKeyJID := parseJIDSafe(req.UserKey)
+			if sender.IsEmpty() && !userKeyJID.IsEmpty() {
+				sender = userKeyJID
+			}
+			if chat.IsEmpty() {
+				// coba tebak chat dari kandidat (grup @g.us) jika ada
+				for _, id := range req.SenderIDs {
+					j := parseJIDSafe(id)
+					if !j.IsEmpty() && j.Server == types.GroupServer {
+						chat = j
+						isGroup = true
+						break
+					}
+				}
+			}
 
+			// resolved dari kandidat
 			resolvedPN, resolvedLID := "", ""
 			for _, id := range req.SenderIDs {
 				if strings.HasPrefix(id, "resolved_pn:") && resolvedPN == "" {
@@ -53,16 +65,40 @@ func init() {
 					resolvedLID = strings.TrimPrefix(id, "resolved_lid:")
 				}
 			}
+			resolvedPNJID := parseJIDSafe(resolvedPN)
+			resolvedLIDJID := parseJIDSafe(resolvedLID)
 
-			ctx := req.Ctx
-			isGroupAdmin := false
-			groupAdminKnown := false
-			if evt != nil && isGroup && ctx != nil {
-				isGroupAdmin = api.IsGroupAdminEvt(ctx, evt)
-				groupAdminKnown = true
+			// deteksi tipe JID (sender/alt) dengan fallback dari resolved
+			senderIsPN := isPNJID(sender) || (!resolvedPNJID.IsEmpty() && sameUser(sender, resolvedPNJID))
+			senderIsLID := isLIDJID(sender) || (!resolvedLIDJID.IsEmpty() && sameUser(sender, resolvedLIDJID))
+			// jika sender kosong total, infer dari UserKey/resolved
+			if sender.IsEmpty() {
+				senderIsPN = isPNJID(userKeyJID) || strings.TrimSpace(resolvedPN) != ""
+				senderIsLID = isLIDJID(userKeyJID) || strings.TrimSpace(resolvedLID) != ""
+			}
+			hasAlt := !senderAlt.IsEmpty()
+			altIsPN := isPNJID(senderAlt)
+			altIsLID := isLIDJID(senderAlt)
+
+			isOwner := api.IsOwner(req.SenderIDs...)
+			chatIsGroupJID := !chat.IsEmpty() && chat.Server == types.GroupServer
+			if chatIsGroupJID {
+				isGroup = true
 			}
 
-			// Ringkasan boolean (sesuai harapan/terdeteksi)
+			// peran grup (admin/superadmin)
+			isAdmin, isSuperAdmin, roleKnown := false, false, false
+			if isGroup && evt != nil && ctx != nil && !chat.IsEmpty() {
+				isAdmin, isSuperAdmin, roleKnown = api.GroupSenderRole(ctx, evt)
+			}
+
+			// quoted/reply context
+			qParticipant, qID, qType := "", "", ""
+			if evt != nil && evt.Message != nil {
+				qParticipant, qID, qType = extractQuoted(evt.Message)
+			}
+
+			// --- Status (boolean, terdeteksi/sesuai harapan) ---
 			b.WriteString("\n*Status*\n")
 			writeBool(&b, "isOwner", isOwner)
 			writeBool(&b, "isGroup", isGroup)
@@ -74,49 +110,70 @@ func init() {
 				writeBool(&b, "isJID (PN alt)", altIsPN)
 				writeBool(&b, "isLID (alt)", altIsLID)
 			}
-			if groupAdminKnown {
-				writeBool(&b, "isGroupAdmin", isGroupAdmin)
+			if roleKnown {
+				writeBool(&b, "isAdmin", isAdmin)
+				writeBool(&b, "isSuperAdmin", isSuperAdmin)
 			} else {
-				b.WriteString("• isGroupAdmin: - (bukan grup/tidak diketahui)\n")
+				b.WriteString("• isAdmin: - (bukan grup/tidak diketahui)\n")
+				b.WriteString("• isSuperAdmin: - (bukan grup/tidak diketahui)\n")
 			}
 			writeBool(&b, "resolvedPN", strings.TrimSpace(resolvedPN) != "")
 			writeBool(&b, "resolvedLID", strings.TrimSpace(resolvedLID) != "")
+			writeBool(&b, "evtAvailable", evt != nil)
 
-			// Identitas pengirim
+			// --- Identitas pengirim ---
 			b.WriteString("\n*Identitas*\n")
-			writeKV(&b, "UserKey", req.UserKey)
+			writeKV(&b, "UserKey", emptyDash(req.UserKey))
 			writeKV(&b, "PushName", emptyDash(pushName))
-			writeKV(&b, "Sender", emptyDash(senderStr))
+			writeKV(&b, "Sender", emptyDash(jidStr(sender)))
 			writeKV(&b, "Sender.Server", emptyDash(sender.Server))
 			writeKV(&b, "Sender.User", emptyDash(sender.User))
 			if hasAlt {
-				writeKV(&b, "SenderAlt", emptyDash(senderAltStr))
+				writeKV(&b, "SenderAlt", emptyDash(senderAlt.String()))
 				writeKV(&b, "SenderAlt.Server", emptyDash(senderAlt.Server))
 				writeKV(&b, "SenderAlt.User", emptyDash(senderAlt.User))
 			}
 			writeKV(&b, "ResolvedPN", emptyDash(resolvedPN))
 			writeKV(&b, "ResolvedLID", emptyDash(resolvedLID))
 
-			// Chat & bot
+			// --- Chat & bot ---
 			b.WriteString("\n*Chat & Bot*\n")
-			writeKV(&b, "Chat", emptyDash(chatStr))
+			writeKV(&b, "Chat", emptyDash(jidStr(chat)))
 			writeKV(&b, "Chat.Server", emptyDash(chat.Server))
-			writeKV(&b, "Chat.IsGroup", fmtBool(isGroup))
+			writeBool(&b, "Chat.IsGroup", isGroup)
 			writeKV(&b, "BotName", emptyDash(api.ConfigBotName()))
 			writeKV(&b, "OwnerNumber(cfg)", maskNumber(api.ConfigOwnerNumber()))
 
-			// Kandidat ID (ringkas)
+			// --- Reply/quoted (jika command reply pesan) ---
+			if strings.TrimSpace(qParticipant) != "" || strings.TrimSpace(qID) != "" {
+				b.WriteString("\n*Reply/Quoted*\n")
+				writeKV(&b, "Quoted.Participant", emptyDash(qParticipant))
+				qpj := parseJIDSafe(qParticipant)
+				if !qpj.IsEmpty() {
+					writeKV(&b, "Quoted.Server", emptyDash(qpj.Server))
+					writeKV(&b, "Quoted.User", emptyDash(qpj.User))
+					writeBool(&b, "Quoted.isJID(PN)", isPNJID(qpj))
+					writeBool(&b, "Quoted.isLID", isLIDJID(qpj))
+				}
+				writeKV(&b, "Quoted.StanzaID", emptyDash(qID))
+				if qType != "" {
+					writeKV(&b, "Quoted.Type", qType)
+				}
+			}
+
+			// --- Kandidat ID (ringkas, dedupe) ---
 			b.WriteString("\n*Kandidat ID*\n")
 			count := 0
+			seen := map[string]bool{}
 			for _, id := range req.SenderIDs {
 				id = strings.TrimSpace(id)
-				if id == "" {
+				if id == "" || seen[id] {
 					continue
 				}
-				// hindari duplikat noise panjang berulang di tampilan utama
+				seen[id] = true
 				b.WriteString("• " + id + "\n")
 				count++
-				if count >= 20 {
+				if count >= 24 {
 					b.WriteString("• ...(dipotong)\n")
 					break
 				}
@@ -128,6 +185,24 @@ func init() {
 			return Result{Reply: strings.TrimSpace(b.String())}, true
 		},
 	})
+}
+
+func parseJIDSafe(s string) types.JID {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return types.EmptyJID
+	}
+	// strip prefiks metadata kandidat
+	for _, p := range []string{"resolved_pn:", "resolved_lid:", "pn:"} {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimSpace(strings.TrimPrefix(s, p))
+		}
+	}
+	j, err := types.ParseJID(s)
+	if err != nil {
+		return types.EmptyJID
+	}
+	return j
 }
 
 func isPNJID(j types.JID) bool {
@@ -142,6 +217,82 @@ func isLIDJID(j types.JID) bool {
 		return false
 	}
 	return j.Server == types.HiddenUserServer || j.Server == "lid"
+}
+
+func sameUser(a, b types.JID) bool {
+	if a.IsEmpty() || b.IsEmpty() || a.User == "" || b.User == "" {
+		return false
+	}
+	return a.User == b.User
+}
+
+func jidStr(j types.JID) string {
+	if j.IsEmpty() {
+		return ""
+	}
+	return j.String()
+}
+
+
+
+// extractQuoted pulls quoted context from an events.Message-like holder.
+func extractQuoted(msg *waE2E.Message) (participant, stanzaID, msgType string) {
+	ci := extractContextInfo(msg)
+	if ci == nil {
+		return "", "", ""
+	}
+	participant = strings.TrimSpace(ci.GetParticipant())
+	stanzaID = strings.TrimSpace(ci.GetStanzaID())
+	if qm := ci.GetQuotedMessage(); qm != nil {
+		switch {
+		case qm.GetConversation() != "" || qm.GetExtendedTextMessage() != nil:
+			msgType = "text"
+		case qm.GetImageMessage() != nil:
+			msgType = "image"
+		case qm.GetVideoMessage() != nil:
+			msgType = "video"
+		case qm.GetAudioMessage() != nil:
+			msgType = "audio"
+		case qm.GetDocumentMessage() != nil:
+			msgType = "document"
+		case qm.GetStickerMessage() != nil:
+			msgType = "sticker"
+		case qm.GetContactMessage() != nil:
+			msgType = "contact"
+		default:
+			msgType = "other"
+		}
+	}
+	return
+}
+
+func extractContextInfo(msg *waE2E.Message) *waE2E.ContextInfo {
+	if msg == nil {
+		return nil
+	}
+	switch {
+	case msg.GetExtendedTextMessage() != nil:
+		return msg.GetExtendedTextMessage().GetContextInfo()
+	case msg.GetImageMessage() != nil:
+		return msg.GetImageMessage().GetContextInfo()
+	case msg.GetVideoMessage() != nil:
+		return msg.GetVideoMessage().GetContextInfo()
+	case msg.GetDocumentMessage() != nil:
+		return msg.GetDocumentMessage().GetContextInfo()
+	case msg.GetAudioMessage() != nil:
+		return msg.GetAudioMessage().GetContextInfo()
+	case msg.GetStickerMessage() != nil:
+		return msg.GetStickerMessage().GetContextInfo()
+	case msg.GetContactMessage() != nil:
+		return msg.GetContactMessage().GetContextInfo()
+	case msg.GetButtonsResponseMessage() != nil:
+		return msg.GetButtonsResponseMessage().GetContextInfo()
+	case msg.GetListResponseMessage() != nil:
+		return msg.GetListResponseMessage().GetContextInfo()
+	case msg.GetTemplateButtonReplyMessage() != nil:
+		return msg.GetTemplateButtonReplyMessage().GetContextInfo()
+	}
+	return nil
 }
 
 func writeBool(b *strings.Builder, label string, v bool) {
@@ -177,3 +328,5 @@ func maskNumber(n string) string {
 	}
 	return strings.Repeat("*", len(n)-4) + n[len(n)-4:]
 }
+
+

@@ -158,6 +158,29 @@ func (m *Manager) IsGroupAdminEvt(ctx context.Context, evt *events.Message) bool
 	return m.isGroupAdmin(ctx, evt.Info.Chat, evt.Info.Sender)
 }
 
+func (m *Manager) GroupSenderRole(ctx context.Context, evt *events.Message) (isAdmin bool, isSuperAdmin bool, known bool) {
+	if evt == nil {
+		return false, false, false
+	}
+	// coba sender utama lalu sender alt (LID/PN bisa berbeda)
+	if a, s, k := m.groupSenderRole(ctx, evt.Info.Chat, evt.Info.Sender); k {
+		if a || s {
+			return a, s, k
+		}
+		// jika sender utama ditemukan tapi bukan admin, coba alt juga (beberapa kasus identitas)
+		if !evt.Info.SenderAlt.IsEmpty() {
+			if a2, s2, k2 := m.groupSenderRole(ctx, evt.Info.Chat, evt.Info.SenderAlt); k2 && (a2 || s2) {
+				return a2, s2, k2
+			}
+		}
+		return a, s, k
+	}
+	if !evt.Info.SenderAlt.IsEmpty() {
+		return m.groupSenderRole(ctx, evt.Info.Chat, evt.Info.SenderAlt)
+	}
+	return false, false, false
+}
+
 func (m *Manager) CanManageGroupEvt(ctx context.Context, evt *events.Message, senderIDs ...string) (bool, string) {
 	return m.canManageGroup(ctx, evt, m.Config(), senderIDs...)
 }

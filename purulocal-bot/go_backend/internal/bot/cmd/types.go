@@ -73,6 +73,7 @@ type BotAPI interface {
 	BuildOwnerVCard() (name, vcard string)
 	// group
 	IsGroupAdminEvt(ctx context.Context, evt *events.Message) bool
+	GroupSenderRole(ctx context.Context, evt *events.Message) (isAdmin bool, isSuperAdmin bool, known bool)
 	CanManageGroupEvt(ctx context.Context, evt *events.Message, senderIDs ...string) (bool, string)
 	GroupGet(chatID string) GroupSettingsView
 	GroupSetAntilink(chatID string, on bool) (GroupSettingsView, error)
