@@ -69,7 +69,7 @@ export default function App() {
   const [settings, setSettings] = useState({
     bot_name: 'puruLocal Bot', owner_name: 'Owner', owner_number: '', bot_number: '',
     block_self_chat: true, read_chat: false, typing_before_reply: true, anti_spam: true, loading_react: false,
-    ai_system_prompt: '', sticker_pack: '', sticker_author: ''
+    ai_system_prompt: '', sticker_pack: '', sticker_author: '', rtdb_url: ''
   })
   const [settingsMsg, setSettingsMsg] = useState({ text: '', err: false })
   const [aiMsg, setAiMsg] = useState({ text: '', err: false })
@@ -128,6 +128,7 @@ export default function App() {
         ai_system_prompt: c.ai_system_prompt || '',
         sticker_pack: c.sticker_pack || '',
         sticker_author: c.sticker_author || '',
+        rtdb_url: c.rtdb_url || '',
       }
     })
     if (force) setFormTouchedFlag(false)
@@ -188,6 +189,8 @@ export default function App() {
       ai_system_prompt: settings.ai_system_prompt || '',
       sticker_pack: settings.sticker_pack || '',
       sticker_author: settings.sticker_author || '',
+      rtdb_url: (settings.rtdb_url || '').trim(),
+      device_code: c.device_code || '',
     }
     return { ...body, ...overrides }
   }, [config, settings])
@@ -266,8 +269,12 @@ export default function App() {
   }
 
   const toggleRun = async () => {
-    if (status && status.paused) await api('/api/start', { method: 'POST' })
-    else await api('/api/pause', { method: 'POST' })
+    if (status && status.paused) {
+      const d = await api('/api/start', { method: 'POST' })
+      if (d && d.ok === false) setGlobalMsg({ text: d.error || 'Gagal start (cloud aktif?)', err: true })
+    } else {
+      await api('/api/pause', { method: 'POST' })
+    }
     refresh(false)
   }
   const logoutBot = async () => {
@@ -466,6 +473,7 @@ export default function App() {
 
   const pageTitle = (PAGES.find(p => p.id === page) || PAGES[0]).title
   const paused = !!(status && status.paused)
+  const playLocked = !!(status && (status.play_locked || (status.role === 'local' && status.cloud_active)))
 
   if (!isLogged) {
     return (
@@ -536,9 +544,21 @@ export default function App() {
               <div className="stat"><div className="k">Session</div><div className="v">{String(!!(status && status.has_session))}</div></div>
             </div>
             {status && status.jid ? <div className="muted mt8">JID: {status.jid}</div> : null}
-            <button className={'btn mt10 ' + (paused ? 'primary' : 'warn')} onClick={toggleRun}>{paused ? '▶ Start' : '⏸ Pause'}</button>
+            <button className={'btn mt10 ' + (paused ? 'primary' : 'warn')} onClick={toggleRun} disabled={paused && playLocked}>{paused ? '▶ Start' : '⏸ Pause'}</button>
+            {playLocked ? <div className="msg err">Cloud sedang aktif. Bot lokal dipause & tidak bisa di-start sampai cloud offline (ambil alih otomatis saat cloud offline).</div> : null}
             <button className="btn danger mt8" onClick={logoutBot}>Logout</button>
             <div className={'msg' + (globalMsg.err ? ' err' : '')}>{globalMsg.text}</div>
+          </div>
+          <div className="card">
+            <div className="card-h"><div className="card-title">Cloud Sync</div></div>
+            <div className="status-grid">
+              <div className="stat"><div className="k">Role</div><div className="v">{(status && status.role) || 'local'}</div></div>
+              <div className="stat"><div className="k">Cloud aktif</div><div className="v">{String(!!(status && status.cloud_active))}</div></div>
+              <div className="stat"><div className="k">RTDB</div><div className="v">{(status && status.rtdb_configured) ? 'terset' : 'belum'}</div></div>
+              <div className="stat"><div className="k">Sync terakhir</div><div className="v">{(status && status.sync_last_at) ? status.sync_last_at : '-'}</div></div>
+            </div>
+            {status && status.device_code ? <div className="muted mt8">Device code: <b>{status.device_code}</b></div> : <div className="muted mt8">Device code: - (set RTDB URL di Settings)</div>}
+            {status && status.sync_last_error ? <div className="msg err mt8">Sync: {status.sync_last_error}</div> : null}
           </div>
         </div>
       )}
@@ -817,6 +837,14 @@ export default function App() {
             <div className="row"><div className="l"><div className="t">Bot status mengetik</div><div className="d">Ketik 1.5 detik sebelum membalas command</div></div><label className="switch"><input type="checkbox" checked={settings.typing_before_reply} onChange={onField('typing_before_reply')} /><span className="slider" /></label></div>
             <div className="row"><div className="l"><div className="t">Anti-spam</div><div className="d">Ban 10 detik jika user mengirim pesan beruntun cepat (&lt;500 ms)</div></div><label className="switch"><input type="checkbox" checked={settings.anti_spam} onChange={onField('anti_spam')} /><span className="slider" /></label></div>
             <div className="row"><div className="l"><div className="t">Loading react</div><div className="d">Beri react emoji ⏳ pada pesan command saat bot sedang memproses, lalu hapus setelah selesai</div></div><label className="switch"><input type="checkbox" checked={settings.loading_react} onChange={onField('loading_react')} /><span className="slider" /></label></div>
+          </div>
+          <div className="card">
+            <div className="card-h"><div className="card-title">Cloud Sync (RTDB)</div></div>
+            <div className="hint">Wajib diisi untuk export & sync cloud-first. Device code unik dibuat sekali (tidak berubah) dan ditanam saat export. Cloud aktif (heartbeat &lt; 1 menit) → lokal auto-pause & tidak bisa start; saat cloud offline lokal ambil alih otomatis.</div>
+            <label>RTDB URL</label>
+            <input type="text" value={settings.rtdb_url} onChange={onField('rtdb_url')} placeholder="https://xxxxx-default-rtdb.firebaseio.com" />
+            <label>Device Code (unik, read-only)</label>
+            <input type="text" value={(config && config.device_code) || ''} readOnly placeholder="(otomatis setelah RTDB URL disimpan)" />
           </div>
           <div className="card">
             <div className="card-h"><div className="card-title">Aplikasi</div></div>

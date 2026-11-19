@@ -20,14 +20,19 @@ func main() {
 	if dataDir == "" {
 		dataDir = "data"
 	}
-	addr := os.Getenv("PURULOCAL_ADDR")
-	if addr == "" {
-		addr = "127.0.0.1:8787" // local phone / localhost
-	}
 
 	manager, err := bot.NewManager(cfgPath, dataDir)
 	if err != nil {
 		log.Fatalf("init bot manager: %v", err)
+	}
+
+	addr := os.Getenv("PURULOCAL_ADDR")
+	if addr == "" {
+		if a := manager.Config().ListenAddr(); a != "" {
+			addr = a
+		} else {
+			addr = "127.0.0.1:8787" // local phone / localhost
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -182,6 +182,10 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
+	if ok, reason := s.mgr.CanStartBot(); !ok {
+		writeJSON(w, 409, map[string]any{"ok": false, "error": reason, "status": s.mgr.Status()})
+		return
+	}
 	s.mgr.SetPaused(false)
 	// pastikan terkoneksi jika sudah pernah login
 	_ = s.mgr.AutoReconnect(r.Context())
@@ -414,10 +418,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": "manager tidak tersedia"})
 		return
 	}
-	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
-	if format == "" {
-		format = "nodejs"
-	}
+	format := "nodejs"
 	// tentukan nama file lebih awal agar header bisa diset setelah sukses; tulis ke buffer sementara
 	// namun agar hemat memori, stream langsung: set header generik lalu tulis zip.
 	ts := time.Now().Format("20060102-150405")

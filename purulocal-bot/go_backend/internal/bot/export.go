@@ -18,22 +18,30 @@ import (
 const defaultUpdateManifestURL = "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json"
 
 // ExportZip menulis zip ekspor bot (data + skrip runner + info binary) ke w.
-// format: "nodejs" atau "python". Mengembalikan nama file zip yang disarankan.
+// Mengembalikan nama file zip yang disarankan.
 func (m *Manager) ExportZip(format string, w io.Writer) (string, error) {
 	format = strings.ToLower(strings.TrimSpace(format))
-	var runnerName, runnerContent string
 	switch format {
-	case "node", "nodejs", "js":
+	case "", "node", "nodejs", "js":
 		format = "nodejs"
-		runnerName = "index.js"
-		runnerContent = nodeRunnerScript()
-	case "python", "py":
-		format = "python"
-		runnerName = "main.py"
-		runnerContent = pythonRunnerScript()
 	default:
-		return "", fmt.Errorf("format tidak didukung: %s (gunakan nodejs atau python)", format)
+		return "", fmt.Errorf("format tidak didukung: %s (gunakan nodejs)", format)
 	}
+	// export hanya diizinkan jika RTDB_URL sudah diisi (sync cloud-first)
+	cfg := m.Config()
+	if strings.TrimSpace(cfg.RTDBURL) == "" {
+		return "", fmt.Errorf("export ditolak: isi RTDB URL di Settings terlebih dahulu (diperlukan untuk sync cloud-first)")
+	}
+	// pastikan device_code unik & persisten tertanam
+	if strings.TrimSpace(cfg.DeviceCode) == "" {
+		if ensured, err := m.EnsureDeviceCode(); err == nil {
+			cfg = ensured
+		} else {
+			return "", fmt.Errorf("gagal menyiapkan device code: %w", err)
+		}
+	}
+	runnerName := "index.js"
+	runnerContent := nodeRunnerScript()
 
 	root := "purulocal-bot-export"
 	zw := zip.NewWriter(w)
@@ -48,7 +56,9 @@ func (m *Manager) ExportZip(format string, w io.Writer) (string, error) {
 		"config_file":    "config.json",
 		"data_dir":       "data",
 		"binary_hint":    "bin/purulocal-bot",
-		"note":           "Jalankan runner (index.js/main.py). Runner akan cek auto-update runtime saat startup lalu spawn binary bot.",
+		"device_code":    cfg.DeviceCode,
+		"cloud_first":    true,
+		"note":           "Jalankan runner (index.js). Runner cek auto-update runtime saat startup lalu spawn binary bot (mode cloud, sync RTDB).",
 	}
 	if err := writeZipJSON(zw, root+"/export-info.json", meta); err != nil {
 		_ = zw.Close()
@@ -125,10 +135,6 @@ func (m *Manager) ExportZip(format string, w io.Writer) (string, error) {
 }
 
 func exportReadme(format, runner string) string {
-	cmd := "node index.js"
-	if format == "python" {
-		cmd = "python3 main.py"
-	}
 	return "puruLocal Bot export\r\n" +
 		"====================\r\n\r\n" +
 		"Isi:\r\n" +
@@ -137,11 +143,11 @@ func exportReadme(format, runner string) string {
 		"- bin/        : binary bot yang dibundel (jika tersedia)\r\n" +
 		"- " + runner + " : skrip runner (spawn binary + auto-update saat startup)\r\n\r\n" +
 		"Menjalankan (lokal/cloud):\r\n" +
-		"  " + cmd + "\r\n\r\n" +
+		"  node index.js\r\n\r\n" +
 		"Variabel lingkungan (opsional):\r\n" +
 		"- PURULOCAL_CONFIG          : path config (default ./config.json)\r\n" +
 		"- PURULOCAL_DATA            : folder data (default ./data)\r\n" +
-		"- PURULOCAL_ADDR            : alamat bind UI/API (default 0.0.0.0:8787)\r\n" +
+		"- PURULOCAL_ADDR            : alamat bind UI/API (override; jika kosong pakai config port atau 0.0.0.0:8787)\r\n" +
 		"- PURULOCAL_UPDATE_MANIFEST : URL manifest update runtime\r\n" +
 		"- PURULOCAL_BIN             : path binary bot (override)\r\n\r\n" +
 		"Saat startup skrip akan mengecek manifest update runtime. Jika ada versi/arsitektur\r\n" +
@@ -452,10 +458,28 @@ function spawnBinary(bin) {
   });
 }
 
+function addrFromConfig(cfgPath) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')) || {};
+    let p = cfg.port;
+    if (p === undefined || p === null) return '';
+    p = String(p).trim();
+    if (!p) return '';
+    return p.indexOf(':') >= 0 ? p : ('0.0.0.0:' + p);
+  } catch (e) { return ''; }
+}
+
 async function main() {
   if (!process.env.PURULOCAL_CONFIG) process.env.PURULOCAL_CONFIG = path.join(BASE, 'config.json');
   if (!process.env.PURULOCAL_DATA) process.env.PURULOCAL_DATA = path.join(BASE, 'data');
-  if (!process.env.PURULOCAL_ADDR) process.env.PURULOCAL_ADDR = '0.0.0.0:8787';
+  if (!process.env.PURULOCAL_ADDR) {
+    const fromCfg = addrFromConfig(process.env.PURULOCAL_CONFIG);
+    process.env.PURULOCAL_ADDR = fromCfg || '0.0.0.0:8787';
+  }
+  // instance hasil export berjalan sebagai cloud (heartbeat cloud-first)
+  if (process.env.PURULOCAL_CLOUD === undefined || process.env.PURULOCAL_CLOUD === '') {
+    process.env.PURULOCAL_CLOUD = '1';
+  }
 
   const upd = await autoUpdate();
   const bin = findBinary(upd && upd.downloaded);
@@ -475,286 +499,3 @@ main().catch((e) => { console.error('[purulocal] fatal:', e); process.exit(1); }
 `
 }
 
-func pythonRunnerScript() string {
-	return `#!/usr/bin/env python3
-"""
-puruLocal Bot runner (Python)
-- Cek auto-update runtime saat startup (manifest) lalu jalankan binary bot.
-- Dapat dijalankan lokal maupun di cloud.
-"""
-import hashlib
-import json
-import os
-import platform
-import shutil
-import signal
-import stat
-import subprocess
-import sys
-import urllib.request
-
-BASE = os.path.dirname(os.path.abspath(__file__))
-MANIFEST_URL = os.environ.get('PURULOCAL_UPDATE_MANIFEST', 'https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json')
-STATE_FILE = os.path.join(BASE, '.purulocal-runtime.json')
-BIN_DIR = os.path.join(BASE, 'bin')
-
-
-def log(msg):
-    print('[purulocal] ' + msg, flush=True)
-
-
-def warn(msg):
-    print('[purulocal] ' + msg, file=sys.stderr, flush=True)
-
-
-def host_platform():
-    p = sys.platform
-    if p.startswith('win'):
-        pos = 'windows'
-    elif p == 'darwin':
-        pos = 'darwin'
-    elif p.startswith('linux'):
-        pos = 'linux'
-    else:
-        pos = p
-    m = platform.machine().lower()
-    if m in ('x86_64', 'amd64'):
-        arch = 'amd64'
-    elif m in ('aarch64', 'arm64'):
-        arch = 'arm64'
-    else:
-        arch = m
-    return {'os': pos, 'arch': arch}
-
-
-def platform_keys():
-    h = host_platform()
-    archs = ['amd64', 'x64'] if h['arch'] == 'amd64' else (['arm64', 'aarch64'] if h['arch'] == 'arm64' else [h['arch']])
-    keys = []
-    for ar in archs:
-        keys.extend([h['os'] + '-' + ar, h['os'] + '_' + ar])
-    keys.extend(archs)
-    if h['os'] == 'android' and h['arch'] == 'arm64':
-        keys = ['arm64-v8a', 'android-arm64'] + keys
-    if h['os'] == 'linux' and h['arch'] == 'amd64':
-        keys = ['linux-amd64', 'linux-x64'] + keys
-    if h['os'] == 'linux' and h['arch'] == 'arm64':
-        keys = ['linux-arm64', 'linux-aarch64'] + keys
-    seen = set()
-    out = []
-    for k in keys:
-        if k not in seen:
-            seen.add(k)
-            out.append(k)
-    return out
-
-
-def fetch_bytes(url, redirects=5):
-    req = urllib.request.Request(url, headers={'User-Agent': 'puruLocal-runner/1.0'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read()
-
-
-def sha256_file(path):
-    h = hashlib.sha256()
-    with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b''):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def load_state():
-    try:
-        with open(STATE_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def save_state(st):
-    try:
-        with open(STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(st, f, indent=2)
-    except Exception:
-        pass
-
-
-def pick_runtime(manifest):
-    if not isinstance(manifest, dict):
-        return None
-    rt = manifest.get('runtime') or {}
-    for k in platform_keys():
-        v = rt.get(k)
-        if isinstance(v, dict) and v.get('url'):
-            return {'key': k, 'url': str(v.get('url')), 'sha256': str(v.get('sha256') or '').lower()}
-        if isinstance(v, str) and v:
-            return {'key': k, 'url': v, 'sha256': ''}
-    return None
-
-
-def load_bundled_info():
-    try:
-        with open(os.path.join(BIN_DIR, 'bundled-binary.json'), 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
-def arch_norm(a):
-    a = str(a or '').lower()
-    if a in ('x64', 'x86_64', 'amd64'):
-        return 'amd64'
-    if a in ('arm64', 'aarch64'):
-        return 'arm64'
-    return a
-
-
-def bundled_compatible():
-    info = load_bundled_info()
-    if not info:
-        return True
-    h = host_platform()
-    return str(info.get('os') or '') == h['os'] and arch_norm(info.get('arch')) == arch_norm(h['arch'])
-
-
-def candidate_bins():
-    if os.name == 'nt':
-        names = ['purulocal-bot.exe', 'libpurulocal.exe']
-    else:
-        names = ['purulocal-bot', 'purulocal', 'libpurulocal-arm64-v8a.so']
-    dirs = [BIN_DIR, BASE, os.path.join(BASE, 'runtime')]
-    out = []
-    for d in dirs:
-        for n in names:
-            out.append(os.path.join(d, n))
-    return out
-
-
-def find_binary(downloaded_path=None):
-    env_bin = os.environ.get('PURULOCAL_BIN')
-    if env_bin and os.path.isfile(env_bin):
-        return {'path': env_bin, 'source': 'env'}
-    if downloaded_path and os.path.isfile(downloaded_path):
-        return {'path': downloaded_path, 'source': 'downloaded'}
-    if not bundled_compatible():
-        return None
-    for p in candidate_bins():
-        if os.path.isfile(p):
-            return {'path': p, 'source': 'bundled'}
-    return None
-
-
-def ensure_exec(p):
-    if os.name == 'nt':
-        return
-    try:
-        st_mode = os.stat(p).st_mode
-        os.chmod(p, st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    except Exception:
-        pass
-
-
-def auto_update():
-    try:
-        manifest = json.loads(fetch_bytes(MANIFEST_URL).decode('utf-8'))
-    except Exception as e:
-        warn('Gagal cek update manifest: ' + str(e))
-        return {'downloaded': None, 'has_pick': False, 'err': e}
-    pick = pick_runtime(manifest)
-    if not pick:
-        log('Tidak ada runtime cocok di manifest untuk platform ini (' + ', '.join(platform_keys()) + '). Lewati update.')
-        return {'downloaded': None, 'has_pick': False}
-
-    target = os.path.join(BIN_DIR, 'purulocal-bot.exe' if os.name == 'nt' else 'purulocal-bot')
-    state = load_state()
-    rv = str(manifest.get('runtimeVersion') or '')
-    prev = state.get(pick['key']) or {}
-    if rv and prev.get('runtimeVersion') == rv and prev.get('sha256') and pick['sha256'] and prev.get('sha256') == pick['sha256'] and os.path.isfile(target):
-        log('Runtime sudah terbaru (' + pick['key'] + ' rv=' + rv + ').')
-        return {'downloaded': target, 'has_pick': True}
-    if not pick['sha256'] and os.path.isfile(target) and prev.get('url') == pick['url'] and prev.get('runtimeVersion') == rv:
-        log('Runtime sudah sesuai manifest.')
-        return {'downloaded': target, 'has_pick': True}
-
-    log('Mengunduh update runtime (' + pick['key'] + ') ...')
-    try:
-        os.makedirs(BIN_DIR, exist_ok=True)
-        tmp = target + '.download'
-        data = fetch_bytes(pick['url'])
-        with open(tmp, 'wb') as f:
-            f.write(data)
-        if pick['sha256']:
-            s = sha256_file(tmp).lower()
-            if s != pick['sha256']:
-                try:
-                    os.remove(tmp)
-                except Exception:
-                    pass
-                raise Exception('sha256 mismatch: ' + s + ' != ' + pick['sha256'])
-        try:
-            os.replace(tmp, target)
-        except Exception:
-            shutil.copyfile(tmp, target)
-            try:
-                os.remove(tmp)
-            except Exception:
-                pass
-        ensure_exec(target)
-        state[pick['key']] = {'runtimeVersion': rv, 'sha256': pick['sha256'], 'url': pick['url']}
-        save_state(state)
-        log('Runtime diperbarui: ' + target)
-        return {'downloaded': target, 'has_pick': True}
-    except Exception as e:
-        warn('Update runtime gagal, gunakan binary yang ada: ' + str(e))
-        return {'downloaded': target if os.path.isfile(target) else None, 'has_pick': True, 'err': e}
-
-
-def main():
-    os.environ.setdefault('PURULOCAL_CONFIG', os.path.join(BASE, 'config.json'))
-    os.environ.setdefault('PURULOCAL_DATA', os.path.join(BASE, 'data'))
-    os.environ.setdefault('PURULOCAL_ADDR', '0.0.0.0:8787')
-
-    upd = auto_update()
-    bin_info = find_binary((upd or {}).get('downloaded'))
-    if not bin_info:
-        b = load_bundled_info()
-        h = host_platform()
-        print('[purulocal] Binary bot yang kompatibel tidak ditemukan untuk platform ' + h['os'] + '/' + h['arch'] + '.', file=sys.stderr)
-        if b and not bundled_compatible():
-            print('[purulocal] Binary yang dibundel berasal dari ' + str(b.get('os')) + '/' + str(b.get('arch')) + ' (tidak kompatibel).', file=sys.stderr)
-        print('[purulocal] Pastikan runtime untuk platform ini tersedia di manifest: ' + MANIFEST_URL, file=sys.stderr)
-        print('[purulocal] Atau set PURULOCAL_BIN ke path binary puruLocal yang sesuai platform.', file=sys.stderr)
-        sys.exit(1)
-    bin_path = bin_info['path']
-    ensure_exec(bin_path)
-    log('Menjalankan: ' + bin_path + ' (' + bin_info.get('source', '') + ')')
-    log('UI/API: http://' + (os.environ.get('PURULOCAL_ADDR') or '0.0.0.0:8787'))
-
-    try:
-        child = subprocess.Popen([bin_path] + sys.argv[1:], cwd=BASE, env=os.environ.copy())
-    except OSError as e:
-        print('[purulocal] Gagal menjalankan binary: ' + str(e), file=sys.stderr)
-        if getattr(e, 'errno', None) in (8, 13):
-            h = host_platform()
-            print('[purulocal] Binary tidak kompatibel/dapat dijalankan di platform ini (' + h['os'] + '/' + h['arch'] + '). Pastikan runtime yang sesuai tersedia di manifest atau set PURULOCAL_BIN ke binary yang benar.', file=sys.stderr)
-        sys.exit(1)
-
-    def forward(sig, frame):
-        try:
-            child.send_signal(sig)
-        except Exception:
-            pass
-
-    signal.signal(signal.SIGINT, forward)
-    try:
-        signal.signal(signal.SIGTERM, forward)
-    except Exception:
-        pass
-    code = child.wait()
-    sys.exit(code)
-
-
-if __name__ == '__main__':
-    main()
-`
-}

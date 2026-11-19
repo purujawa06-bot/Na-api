@@ -45,30 +45,41 @@ func init() {
 }
 
 type Status struct {
-	Connected bool   `json:"connected"`
-	LoggedIn  bool   `json:"logged_in"`
-	Paused    bool   `json:"paused"`
-	HasSession bool  `json:"has_session"`
-	JID       string `json:"jid,omitempty"`
-	PushName  string `json:"push_name,omitempty"`
-	LastError string `json:"last_error,omitempty"`
+	Connected           bool   `json:"connected"`
+	LoggedIn            bool   `json:"logged_in"`
+	Paused              bool   `json:"paused"`
+	HasSession          bool   `json:"has_session"`
+	JID                 string `json:"jid,omitempty"`
+	PushName            string `json:"push_name,omitempty"`
+	LastError           string `json:"last_error,omitempty"`
+	Role                string `json:"role,omitempty"`                 // local|cloud
+	CloudActive         bool   `json:"cloud_active"`                   // heartbeat cloud < 60s
+	CloudLastHeartbeat  int64  `json:"cloud_last_heartbeat,omitempty"` // unix ms
+	PausedByCloud       bool   `json:"paused_by_cloud"`
+	PlayLocked          bool   `json:"play_locked"`           // local tidak boleh play saat cloud aktif
+	RTDBConfigured      bool   `json:"rtdb_configured"`       // rtdb_url terisi
+	DeviceCode          string `json:"device_code,omitempty"` // kode device (immutable)
+	SyncLastAt          string `json:"sync_last_at,omitempty"`
+	SyncLastError       string `json:"sync_last_error,omitempty"`
 }
 
 type Manager struct {
 	cfgStore *ConfigStore
 	dataDir  string
 
-	mu         sync.RWMutex
-	client     *whatsmeow.Client
-	qrChan     <-chan whatsmeow.QRChannelItem
-	status     Status
-	paused     bool
-	plugins    *PluginStore
-	aiHist     *AIHistoryStore
-	customCmds *CustomCommandStore
-	vip        *VIPStore
-	logger     *Logger
-	group      *GroupSettingsStore
+	mu             sync.RWMutex
+	client         *whatsmeow.Client
+	qrChan         <-chan whatsmeow.QRChannelItem
+	status         Status
+	paused         bool // user/manual pause
+	pausedByCloud  bool // forced pause (cloud-first, local side)
+	plugins        *PluginStore
+	aiHist         *AIHistoryStore
+	customCmds     *CustomCommandStore
+	vip            *VIPStore
+	logger         *Logger
+	group          *GroupSettingsStore
+	cloudSync      *CloudSyncService
 
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
@@ -103,7 +114,7 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{
+	m := &Manager{
 		cfgStore:    cfgStore,
 		dataDir:     dataDir,
 		plugins:     pstore,
@@ -113,7 +124,11 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 		logger:      NewLogger(300),
 		group:       gstore,
 		lastMsgAt:   map[string]time.Time{},
-		bannedUntil: map[string]time.Time{},	}, nil
+		bannedUntil: map[string]time.Time{},
+	}
+	m.cloudSync = newCloudSyncService(m)
+	m.cloudSync.Start()
+	return m, nil
 }
 
 func (m *Manager) Config() Config { return m.cfgStore.Get() }
@@ -124,15 +139,37 @@ func (m *Manager) ConfigPath() string { return m.cfgStore.Path() }
 
 func (m *Manager) DataDir() string { return m.dataDir }
 
+func (m *Manager) EnsureDeviceCode() (Config, error) { return m.cfgStore.EnsureDeviceCode() }
+
 func (m *Manager) Status() Status {
 	m.mu.RLock()
 	client := m.client
-	paused := m.paused
+	paused := m.paused || m.pausedByCloud
+	pausedByCloud := m.pausedByCloud
 	base := m.status
 	m.mu.RUnlock()
 
+	cfg := m.Config()
 	s := base
 	s.Paused = paused
+	s.PausedByCloud = pausedByCloud
+	s.RTDBConfigured = strings.TrimSpace(cfg.RTDBURL) != ""
+	s.DeviceCode = strings.TrimSpace(cfg.DeviceCode)
+	if m.cloudSync != nil {
+		enabled, role, cloudActive, cloudHB, pbc, lastSync, lastErr := m.cloudSync.CloudStatus()
+		s.Role = role
+		s.CloudActive = cloudActive
+		s.CloudLastHeartbeat = cloudHB
+		if enabled {
+			s.PausedByCloud = pbc
+			s.PlayLocked = (role == "local" && cloudActive)
+			if pbc {
+				s.Paused = true
+			}
+		}
+		s.SyncLastAt = lastSync
+		s.SyncLastError = lastErr
+	}
 	if client != nil {
 		s.Connected = client.IsConnected()
 		s.LoggedIn = client.IsLoggedIn()
@@ -159,16 +196,74 @@ func (m *Manager) Status() Status {
 	return s
 }
 
+// SetPaused mengatur pause manual (user). Tidak dapat meng-unpause lokal saat cloud aktif (cloud-first).
 func (m *Manager) SetPaused(paused bool) {
+	if !paused && m.cloudSync != nil {
+		if ok, _ := m.cloudSync.CanLocalPlay(); !ok {
+			// tolak unpause saat cloud aktif
+			return
+		}
+	}
 	m.mu.Lock()
 	m.paused = paused
+	if !paused {
+		m.pausedByCloud = false
+	}
 	m.mu.Unlock()
 }
 
+// IsPaused mengembalikan status pause efektif (manual atau dipaksa cloud-first).
 func (m *Manager) IsPaused() bool {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.paused
+	p := m.paused || m.pausedByCloud
+	m.mu.RUnlock()
+	if p {
+		return true
+	}
+	if m.cloudSync != nil {
+		if ok, _ := m.cloudSync.CanLocalPlay(); !ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) ForcePauseByCloud(on bool) {
+	m.mu.Lock()
+	m.pausedByCloud = on
+	m.mu.Unlock()
+}
+
+func (m *Manager) AutoTakeoverFromCloud() {
+	// cloud offline terdeteksi: lokal ambil alih (auto-resume) bila tidak dipause manual
+	m.mu.Lock()
+	manual := m.paused
+	m.pausedByCloud = false
+	m.mu.Unlock()
+	if !manual {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			_ = m.AutoReconnect(ctx)
+		}()
+	}
+}
+
+func (m *Manager) OnSyncedStoreDB() {
+	// store.db diperbarui dari remote saat instance pasif: lepaskan client lama agar baca state baru saat takeover
+	// aman dilakukan karena instance pasif/paused (tidak memproses pesan aktif)
+	if m.cloudSync != nil && m.cloudSync.Role() == "local" && m.cloudSync.CloudActive() {
+		// putuskan koneksi & reset client agar tidak memegang handle DB lama
+		m.mu.RLock()
+		c := m.client
+		m.mu.RUnlock()
+		if c != nil {
+			c.Disconnect()
+		}
+		m.mu.Lock()
+		m.client = nil
+		m.mu.Unlock()
+	}
 }
 
 func (m *Manager) Plugins() *PluginStore { return m.plugins }
@@ -1352,6 +1447,14 @@ func (m *Manager) ConnectQR(ctx context.Context) (<-chan string, error) {
 	return out, nil
 }
 
+// CanStartBot mengembalikan apakah bot boleh di-start (cloud-first).
+func (m *Manager) CanStartBot() (bool, string) {
+	if m.cloudSync != nil {
+		return m.cloudSync.CanLocalPlay()
+	}
+	return true, ""
+}
+
 // PairPhone meminta pairing code untuk nomor (format internasional tanpa +).
 func (m *Manager) PairPhone(ctx context.Context, phone string) (string, error) {
 	client, err := m.ensureClient(ctx)
@@ -1424,6 +1527,9 @@ func (m *Manager) AutoReconnect(ctx context.Context) error {
 }
 
 func (m *Manager) Close() error {
+	if m.cloudSync != nil {
+		m.cloudSync.Stop()
+	}
 	m.Disconnect()
 	return nil
 }
