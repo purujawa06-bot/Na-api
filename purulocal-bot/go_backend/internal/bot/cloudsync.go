@@ -273,38 +273,69 @@ func (s *CloudSyncService) tickSync() {
 	s.mu.Unlock()
 }
 
-// isWriter menentukan apakah instance ini sumber tulis (push). Cloud aktif => cloud writer, lokal passive.
+// isHotDataWriter menentukan apakah instance ini sumber tulis untuk data runtime/hot
+// (store.db, ai_history, dll). Cloud aktif => cloud writer, lokal passive; cloud offline => lokal writer.
 // book_cloudsync_iswriter
-func (s *CloudSyncService) isWriter() bool {
+func (s *CloudSyncService) isHotDataWriter() bool {
 	if s.Role() == "cloud" {
 		return true
 	}
-	// local writer hanya saat cloud tidak aktif
+	// local writer untuk hot data hanya saat cloud tidak aktif
 	return !s.CloudActive()
 }
 
+func isConfigFile(name string) bool {
+	return name == "config.json"
+}
+
+// isHotDataFile: data yang sering berubah (session, history AI, runtime store, dll).
+// config.json diperlakukan terpisah (setting: one-way local -> cloud).
+func isHotDataFile(name string) bool {
+	return !isConfigFile(name)
+}
+
 func (s *CloudSyncService) doSync(ctx context.Context, cfg Config) error {
-	writer := s.isWriter()
-	if writer {
-		if err := s.pushAll(ctx, cfg); err != nil {
+	hotWriter := s.isHotDataWriter()
+	isLocal := s.Role() == "local"
+
+	// PUSH:
+	// - hot data: hanya sisi aktif/writer (siapa yang "on") -> bolak-balik mengikuti siapa yang on
+	// - config (setting owner/system prompt AI, dll): satu arah hanya local -> cloud
+	if hotWriter || isLocal {
+		if err := s.pushSelected(ctx, cfg, hotWriter /*pushHot*/, isLocal /*pushConfig*/); err != nil {
 			return err
 		}
-	} else {
-		// passive/pull-only: tarik perubahan remote
-		if err := s.pullAll(ctx, cfg); err != nil {
+	}
+
+	// PULL:
+	// - hot data: sisi pasif menarik dari sisi aktif
+	// - config: cloud menarik setting dari local; local tidak menarik/menimpa setting dari cloud
+	wantPullHot := !hotWriter
+	wantPullConfig := !isLocal // cloud pulls config
+	if wantPullHot || wantPullConfig {
+		if err := s.pullSelected(ctx, cfg, wantPullHot, wantPullConfig); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *CloudSyncService) pushAll(ctx context.Context, cfg Config) error {
+func (s *CloudSyncService) pushSelected(ctx context.Context, cfg Config, pushHot, pushConfig bool) error {
 	files, err := s.collectLocalFiles()
 	if err != nil {
 		return err
 	}
 	remoteMeta, _ := s.fetchRemoteMeta(ctx, cfg)
 	for name, lf := range files {
+		if isConfigFile(name) {
+			if !pushConfig {
+				continue
+			}
+		} else {
+			if !pushHot {
+				continue
+			}
+		}
 		rm, ok := remoteMeta[name]
 		if ok && rm.SHA256 == lf.SHA256 && rm.MTime >= lf.MTime && rm.Size == lf.Size {
 			continue
@@ -325,12 +356,18 @@ func (s *CloudSyncService) pushAll(ctx context.Context, cfg Config) error {
 			return err
 		}
 	}
-	// simpan state lokal
-	_ = s.saveLocalSyncState(filesToMeta(files))
+	// simpan state lokal untuk file yang kita kelola (push)
+	st := s.loadLocalSyncState()
+	for name, lf := range files {
+		if (isConfigFile(name) && pushConfig) || (isHotDataFile(name) && pushHot) {
+			st[name] = rtdbFileMeta{SHA256: lf.SHA256, MTime: lf.MTime, Size: lf.Size}
+		}
+	}
+	_ = s.saveLocalSyncState(st)
 	return nil
 }
 
-func (s *CloudSyncService) pullAll(ctx context.Context, cfg Config) error {
+func (s *CloudSyncService) pullSelected(ctx context.Context, cfg Config, pullHot, pullConfig bool) error {
 	remote, err := s.fetchRemoteFiles(ctx, cfg)
 	if err != nil {
 		return err
@@ -341,6 +378,15 @@ func (s *CloudSyncService) pullAll(ctx context.Context, cfg Config) error {
 		if rf.Deleted {
 			continue
 		}
+		if isConfigFile(name) {
+			if !pullConfig {
+				continue
+			}
+		} else {
+			if !pullHot {
+				continue
+			}
+		}
 		lm, ok := localMeta[name]
 		if ok && lm.SHA256 == rf.SHA256 && lm.MTime == rf.MTime {
 			continue
@@ -349,26 +395,26 @@ func (s *CloudSyncService) pullAll(ctx context.Context, cfg Config) error {
 		if err != nil || len(data) == 0 {
 			continue
 		}
-		isCfg := name == s.relConfigName() || name == "config.json"
-	if isCfg {
-		// jaga device_code/rtdb_url immutable lokal
-		data = s.mergeConfigKeepIdentity(data)
-	}
-	if err := s.applyLocalFile(name, data); err != nil {
-		continue
-	}
-	if isCfg {
-		// reload config in-memory
-		_ = s.mgr.cfgStore.Load()
-	}
-		if strings.HasSuffix(strings.ToLower(name), "store.db") || name == "data/store.db" || name == filepath.ToSlash(filepath.Join("data", "store.db")) {
+		isCfg := isConfigFile(name)
+		if isCfg {
+			// cloud menerima setting dari local; jaga identity/sync lokal
+			data = s.mergeConfigKeepIdentity(data)
+		}
+		if err := s.applyLocalFile(name, data); err != nil {
+			continue
+		}
+		if isCfg {
+			// reload config in-memory
+			_ = s.mgr.cfgStore.Load()
+		}
+		if strings.HasSuffix(strings.ToLower(name), "store.db") {
 			changedStore = true
 		}
 		localMeta[name] = rtdbFileMeta{SHA256: rf.SHA256, MTime: rf.MTime, Size: rf.Size}
 	}
 	_ = s.saveLocalSyncState(localMeta)
 	if changedStore {
-		// store diperbarui saat passive: pastikan client tidak memegang DB lama
+		// store diperbarui dari remote: pastikan client tidak memegang DB lama
 		s.mgr.OnSyncedStoreDB()
 	}
 	return nil

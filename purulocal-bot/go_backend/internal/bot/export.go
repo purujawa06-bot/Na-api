@@ -41,7 +41,7 @@ func (m *Manager) ExportZip(format string, w io.Writer) (string, error) {
 		}
 	}
 	runnerName := "index.js"
-	runnerContent := nodeRunnerScript()
+	runnerContent := NodeRunnerScript()
 
 	root := "purulocal-bot-export"
 	zw := zip.NewWriter(w)
@@ -253,12 +253,15 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func nodeRunnerScript() string {
+// NodeRunnerScript mengembalikan skrip runner Node.js (index.js) untuk export/cloud.
+// book_node_runner_script
+func NodeRunnerScript() string {
 	return `#!/usr/bin/env node
 'use strict';
 /**
  * puruLocal Bot runner (Node.js)
- * - Cek auto-update runtime saat startup (manifest) lalu jalankan binary bot.
+ * - Cek auto-update runtime & runner (index.js) via manifest.
+ * - Auto-update penting: update index.js lalu auto-restart.
  * - Dapat dijalankan lokal maupun di cloud.
  */
 const fs = require('fs');
@@ -272,6 +275,11 @@ const BASE = __dirname;
 const MANIFEST_URL = process.env.PURULOCAL_UPDATE_MANIFEST || 'https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json';
 const STATE_FILE = path.join(BASE, '.purulocal-runtime.json');
 const BIN_DIR = path.join(BASE, 'bin');
+const RUNNER_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+let childProc = null;
+let restarting = false;
+let runnerCheckTimer = null;
 
 function log(msg) { console.log('[purulocal] ' + msg); }
 function warn(msg) { console.warn('[purulocal] ' + msg); }
@@ -318,6 +326,12 @@ function fetchText(url, redirects) {
   });
 }
 
+async function fetchManifest() {
+  const buf = await fetchText(MANIFEST_URL);
+  return JSON.parse(buf.toString('utf8'));
+}
+
+function sha256Buffer(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
 function sha256File(file) {
   return new Promise((resolve, reject) => {
     const h = crypto.createHash('sha256');
@@ -343,6 +357,84 @@ function pickRuntime(manifest) {
   return null;
 }
 
+function pickRunner(manifest) {
+  if (!manifest || typeof manifest !== 'object') return null;
+  let r = manifest.runner;
+  if (typeof r === 'string') r = { url: r };
+  if (!r || typeof r !== 'object') {
+    // fallback fields
+    if (manifest.runnerUrl) r = { url: String(manifest.runnerUrl), sha256: manifest.runnerSha256 || '', important: !!manifest.runnerImportant, version: manifest.runnerVersion || '' };
+    else return null;
+  }
+  const url = r.url || r.href || '';
+  if (!url) return null;
+  const important = !!(r.important || r.force || r.critical || manifest.runnerImportant || manifest.runnerForce || manifest.importantRunner);
+  return {
+    url: String(url),
+    sha256: String(r.sha256 || r.hash || '').toLowerCase(),
+    version: r.version != null ? String(r.version) : (r.runtimeVersion != null ? String(r.runtimeVersion) : ''),
+    important: important
+  };
+}
+
+async function maybeUpdateRunner(manifest) {
+  const pick = pickRunner(manifest);
+  if (!pick) return { updated: false, important: false };
+  const state = loadState();
+  const prev = state.runner || {};
+  const curSha = prev.sha256 || '';
+  let need = false;
+  if (pick.sha256 && pick.sha256 !== curSha) need = true;
+  if (!pick.sha256 && pick.version && String(pick.version) !== String(prev.version || '')) need = true;
+  if (!pick.sha256 && !pick.version && pick.url && pick.url !== prev.url) need = true;
+  // jika sha tidak diketahui, coba deteksi perubahan konten saat penting
+  if (!need && !pick.sha256 && !pick.version) need = !!pick.important;
+  if (!need) return { updated: false, important: pick.important };
+
+  log('Update runner (index.js) terdeteksi' + (pick.important ? ' [PENTING]' : '') + ', mengunduh...');
+  try {
+    const buf = await fetchText(pick.url);
+    const sum = sha256Buffer(buf).toLowerCase();
+    if (pick.sha256 && sum !== pick.sha256) throw new Error('sha256 mismatch runner: ' + sum + ' != ' + pick.sha256);
+    if (!pick.sha256 && curSha && sum === curSha) {
+      // konten sama, perbarui state saja
+      state.runner = { sha256: sum, url: pick.url, version: pick.version || '', updated_at: new Date().toISOString() };
+      saveState(state);
+      return { updated: false, important: pick.important };
+    }
+    const target = __filename;
+    const tmp = target + '.update';
+    fs.writeFileSync(tmp, buf);
+    try { fs.renameSync(tmp, target); } catch (e) { fs.copyFileSync(tmp, target); try { fs.unlinkSync(tmp); } catch (e2) {} }
+    state.runner = { sha256: pick.sha256 || sum, url: pick.url, version: pick.version || '', updated_at: new Date().toISOString() };
+    saveState(state);
+    log('Runner (index.js) diperbarui.');
+    return { updated: true, important: pick.important };
+  } catch (e) {
+    warn('Gagal update runner (index.js): ' + e.message);
+    return { updated: false, important: pick.important, err: e };
+  }
+}
+
+function restartSelf(reason) {
+  if (restarting) return;
+  restarting = true;
+  log('Restart runner' + (reason ? ' (' + reason + ')' : '') + ' ...');
+  if (runnerCheckTimer) { try { clearInterval(runnerCheckTimer); } catch (e) {} }
+  if (childProc) { try { childProc.kill('SIGTERM'); } catch (e) {} }
+  setTimeout(() => {
+    try {
+      const child = spawn(process.execPath, process.argv.slice(1), { stdio: 'inherit', env: process.env, cwd: BASE });
+      child.on('exit', (code) => process.exit(code == null ? 0 : code));
+      child.on('error', () => process.exit(0));
+      // lepas runner lama
+      setTimeout(() => process.exit(0), 1000);
+    } catch (e) {
+      process.exit(0);
+    }
+  }, 500);
+}
+
 function loadBundledInfo() {
   try { return JSON.parse(fs.readFileSync(path.join(BIN_DIR, 'bundled-binary.json'), 'utf8')); } catch (e) { return null; }
 }
@@ -356,7 +448,7 @@ function archNorm(a) {
 
 function bundledCompatible() {
   const info = loadBundledInfo();
-  if (!info) return true; // unknown, try
+  if (!info) return true;
   const h = hostPlatform();
   const osOk = String(info.os || '') === h.os;
   const archOk = archNorm(info.arch) === archNorm(h.arch);
@@ -385,18 +477,11 @@ function findBinary(downloadedPath) {
 
 function ensureExec(p) { try { if (process.platform !== 'win32') fs.chmodSync(p, 0o755); } catch (e) {} }
 
-async function autoUpdate() {
-  let manifest;
-  try {
-    const buf = await fetchText(MANIFEST_URL);
-    manifest = JSON.parse(buf.toString('utf8'));
-  } catch (e) {
-    warn('Gagal cek update manifest: ' + e.message);
-    return { downloaded: null, hasPick: false, err: e };
-  }
+async function autoUpdateRuntime(manifest) {
+  if (!manifest) return { downloaded: null, hasPick: false };
   const pick = pickRuntime(manifest);
   if (!pick) {
-    log('Tidak ada runtime cocok di manifest untuk platform ini (' + platformKeys().join(', ') + '). Lewati update.');
+    log('Tidak ada runtime cocok di manifest untuk platform ini (' + platformKeys().join(', ') + '). Lewati update runtime.');
     return { downloaded: null, hasPick: false };
   }
 
@@ -420,7 +505,7 @@ async function autoUpdate() {
     const buf = await fetchText(pick.url);
     fs.writeFileSync(tmp, buf);
     if (pick.sha256) {
-      const sum = (await sha256File(tmp)).toLowerCase();
+      const sum = sha256Buffer(buf).toLowerCase();
       if (sum !== pick.sha256) {
         try { fs.unlinkSync(tmp); } catch (e) {}
         throw new Error('sha256 mismatch: ' + sum + ' != ' + pick.sha256);
@@ -439,23 +524,46 @@ async function autoUpdate() {
 }
 
 function spawnBinary(bin) {
+  if (restarting) return;
   log('Menjalankan: ' + bin.path + ' (' + bin.source + ')');
   log('UI/API: http://' + (process.env.PURULOCAL_ADDR || '0.0.0.0:8787'));
   const child = spawn(bin.path, process.argv.slice(2), { stdio: 'inherit', env: process.env, cwd: BASE });
+  childProc = child;
   const forward = (sig) => { try { child.kill(sig); } catch (e) {} };
   process.on('SIGINT', () => forward('SIGINT'));
   process.on('SIGTERM', () => forward('SIGTERM'));
   child.on('error', (err) => {
+    childProc = null;
     console.error('[purulocal] Gagal menjalankan binary: ' + err.message);
     if (err && (err.code === 'ENOEXEC' || err.code === 'EACCES' || err.code === 'EINVAL')) {
       console.error('[purulocal] Binary tidak kompatibel/dapat dijalankan di platform ini (' + process.platform + '/' + process.arch + '). Pastikan runtime yang sesuai tersedia di manifest atau set PURULOCAL_BIN ke binary yang benar.');
     }
-    process.exit(1);
+    if (!restarting) process.exit(1);
   });
   child.on('exit', (code, signal) => {
+    childProc = null;
+    if (restarting) return;
     if (signal) process.exit(128);
     process.exit(code == null ? 1 : code);
   });
+}
+
+function startRunnerAutoUpdateLoop() {
+  if (runnerCheckTimer) return;
+  runnerCheckTimer = setInterval(async () => {
+    if (restarting) return;
+    try {
+      const manifest = await fetchManifest();
+      const res = await maybeUpdateRunner(manifest);
+      if (res && res.updated) {
+        // update penting atau ada versi runner baru -> auto restart
+        restartSelf(res.important ? 'update penting index.js' : 'update index.js');
+      }
+    } catch (e) {
+      // diamkan, coba lagi interval berikutnya
+    }
+  }, RUNNER_CHECK_INTERVAL_MS);
+  if (runnerCheckTimer && typeof runnerCheckTimer.unref === 'function') runnerCheckTimer.unref();
 }
 
 function addrFromConfig(cfgPath) {
@@ -481,7 +589,19 @@ async function main() {
     process.env.PURULOCAL_CLOUD = '1';
   }
 
-  const upd = await autoUpdate();
+  let manifest = null;
+  try { manifest = await fetchManifest(); } catch (e) { warn('Gagal cek manifest saat startup: ' + e.message); }
+
+  // Auto-update runner (index.js): jika ada update (terutama penting) -> update & auto restart
+  if (manifest) {
+    const r = await maybeUpdateRunner(manifest);
+    if (r && r.updated) {
+      restartSelf(r.important ? 'update penting index.js' : 'update index.js');
+      return;
+    }
+  }
+
+  const upd = await autoUpdateRuntime(manifest);
   const bin = findBinary(upd && upd.downloaded);
   if (!bin) {
     const b = loadBundledInfo();
@@ -492,6 +612,10 @@ async function main() {
     process.exit(1);
   }
   ensureExec(bin.path);
+
+  // Cek berkala: jika ada update penting index.js -> otomatis update & restart
+  startRunnerAutoUpdateLoop();
+
   spawnBinary(bin);
 }
 

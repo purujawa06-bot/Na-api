@@ -4,8 +4,10 @@ purulocal-bot/go_backend/internal/bot/config.go - Config dasar bot (nama/owner/n
 purulocal-bot/go_backend/internal/bot/cloudsync.go - Cloud-first sync direct RTDB REST: presence/heartbeat, pause/takeover, sync dataDir+config (LWW, snapshot store.db)
 purulocal-bot/go_backend/internal/bot/manager.go - Whatsmeow manager: sesi/QR/pair, pause efektif (manual/cloud), cloud lock/takeover, integrasi cloudsync
 purulocal-bot/go_backend/internal/web/server.go - HTTP API/UI lokal: status/config/koneksi, /api/start 409 saat cloud aktif, /api/export
-purulocal-bot/go_backend/internal/bot/export.go - Export zip Node.js (wajib RTDB+device_code, runner set PURULOCAL_CLOUD=1)
+purulocal-bot/go_backend/internal/bot/export.go - Export zip Node.js (wajib RTDB+device_code, runner set PURULOCAL_CLOUD=1), NodeRunnerScript + auto-update runner/runtime
 purulocal-bot/go_backend/internal/bot/cmd/export.go - Command .export owner-only (Node.js), ditolak tanpa RTDB URL
+purulocal-bot/go_backend/cmd/purulocal/main.go - Entrypoint bot/UI lokal, resolve addr, flag -emit-runner
+.github/workflows/build-purulocal-runtime.yml - Build/publish runtime + purulocal-runner.js + manifest (runner) rolling release
 purulocal-bot/flutter_app/lib/screens/home_screen.dart - UI Flutter: config, QR/pair, auto-update check
 purulocal-bot/flutter_app/lib/services/update_service.dart - OTA update manifest/download/verify/install
 .github/workflows/build-purulocal-apk.yml - Build APK puruLocal via GitHub Actions (no local OOM)

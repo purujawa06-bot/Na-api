@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +13,12 @@ import (
 )
 
 func main() {
+	for _, a := range os.Args[1:] {
+		if a == "-emit-runner" || a == "--emit-runner" {
+			fmt.Print(bot.NodeRunnerScript())
+			return
+		}
+	}
 	cfgPath := os.Getenv("PURULOCAL_CONFIG")
 	if cfgPath == "" {
 		cfgPath = "config.json"
