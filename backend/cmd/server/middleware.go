@@ -24,6 +24,7 @@ var noStorePrefixes = []string{
 	"/api/chat",
 	"/api/temp",
 	"/api/tools-image",
+	"/api/tools/noise-remover",
 	"/api/uploader",
 	"/api/admin",
 	"/api/agent-tools",

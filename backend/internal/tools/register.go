@@ -31,6 +31,7 @@ func Register(mux *http.ServeMux, deps *app.Deps) {
 	mux.HandleFunc("POST /api/tools-image/upscaler", h.upscaler)
 	mux.HandleFunc("POST /api/tools-image/remove-background", h.removeBackground)
 	mux.HandleFunc("POST /api/tools-image/html-to-image", h.htmlToImage)
+	mux.HandleFunc("POST /api/tools/noise-remover", h.noiseRemover)
 	mux.HandleFunc("GET /api/tools/brat", h.brat)
 	mux.HandleFunc("POST /api/tools/brat", h.brat)
 	mux.HandleFunc("GET /api/tools/check-web", h.checkWeb)

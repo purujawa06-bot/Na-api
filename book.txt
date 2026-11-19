@@ -11,3 +11,4 @@ purulocal-bot/go_backend/cmd/purulocal/main.go - Entrypoint bot/UI lokal, resolv
 purulocal-bot/flutter_app/lib/screens/home_screen.dart - UI Flutter: config, QR/pair, auto-update check
 purulocal-bot/flutter_app/lib/services/update_service.dart - OTA update manifest/download/verify/install
 .github/workflows/build-purulocal-apk.yml - Build APK puruLocal via GitHub Actions (no local OOM)
+14: backend/internal/tools/noiseremover.go:noiseRemover - Endpoint PDFLeader noise remover (demo/full) NDJSON

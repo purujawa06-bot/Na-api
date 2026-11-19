@@ -1597,6 +1597,45 @@
           "required": true
         }
       ]
+    },
+    {
+      "title": "Audio/Video Noise Remover",
+      "summary": "Hapus noise audio/video via pdfleader.com (streaming NDJSON).",
+      "description": "Menerima URL publik file audio/video, mengunggah ke layanan pdfleader, lalu\n              memproses penghapusan noise. Mode `demo` (default) memproses cuplikan gratis\n              (dibatasi `duration_seconds`, maks 30 detik) dan mengembalikan URL hasil.\n              Mode `full` mengirim pemrosesan penuh namun pada akun anonim umumnya ditolak\n              upstream dengan HTTP 402 (butuh pembayaran/subscription); error upstream\n              diteruskan apa adanya.\n\n              Respons berupa streaming JSON (JSON Lines/NDJSON) dengan event `processing`\n              berkala (heartbeat) dan event terminal `done`.",
+      "method": "POST",
+      "path": "/api/tools/noise-remover",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/tools/noise-remover', {\n     method: 'POST',\n     headers: { 'Content-Type': 'application/json' },\n     body: JSON.stringify({ file: 'https://example.com/audio.wav', mode: 'demo', filename: 'audio.wav', duration_seconds: 30 })\n }).then(res => res.text()).then(console.log);",
+      "params": [
+        {
+          "name": "file",
+          "in": "body",
+          "type": "string",
+          "description": "URL publik file audio/video (http/https) (wajib).",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "in": "body",
+          "type": "string",
+          "description": "Mode pemrosesan: `demo` (default, cuplikan gratis) atau `full` (penuh, dapat 402/paywall).",
+          "required": false
+        },
+        {
+          "name": "filename",
+          "in": "body",
+          "type": "string",
+          "description": "Nama file opsional (petunjuk). Default diambil dari URL.",
+          "required": false
+        },
+        {
+          "name": "duration_seconds",
+          "in": "body",
+          "type": "number",
+          "description": "Durasi demo dalam detik (1-30, default 30). Diabaikan saat `mode=full`.",
+          "required": false
+        }
+      ]
     }
   ],
   "uploader": [
