@@ -439,7 +439,12 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadNoiseSource(ctx context.Context, rawURL string, body map[string]any) ([]byte, string, string, error) {
-	resp, err := webclient.Get(ctx, rawURL, map[string]string{"user-agent": webclient.UserAgentChrome})
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("gagal mengunduh file: %w", err)
+	}
+	req.Header.Set("User-Agent", pdfleaderUA)
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("gagal mengunduh file: %w", err)
 	}
