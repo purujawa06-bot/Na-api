@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
-	"github.com/purujawa06-bot/na-api/backend/internal/webclient"
 )
 
 const (
@@ -42,21 +41,15 @@ func newPdfleaderClient() (*pdfleaderClient, error) {
 
 func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, body any) (*http.Response, []byte, error) {
 	fullURL := endpoint
-	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+	if !strings.HasPrefix(endpoint, "http") {
 		fullURL = pdfleaderBase + "/" + strings.TrimPrefix(endpoint, "/")
 	}
 	var reader io.Reader
 	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return nil, nil, err
-		}
+		b, _ := json.Marshal(body)
 		reader = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, reader)
-	if err != nil {
-		return nil, nil, err
-	}
+	req, _ := http.NewRequestWithContext(ctx, method, fullURL, reader)
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("x-pdf-app", "PDFLEADER")
 	req.Header.Set("Origin", "https://pdfleader.com")
@@ -69,11 +62,8 @@ func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, b
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, webclient.MaxBodyBytes))
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	resp.Body.Close()
-	if err != nil {
-		return resp, nil, err
-	}
 	return resp, data, nil
 }
 
@@ -128,23 +118,17 @@ func (c *pdfleaderClient) getUploadLink(ctx context.Context, filename string) (u
 
 //book_pdfleader_uploadToStorage
 func (c *pdfleaderClient) uploadToStorage(ctx context.Context, uploadURL string, body []byte, contentType string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
 	req.ContentLength = int64(len(body))
-	// Use a client without cookie jar: presigned storage URL must not receive session cookies.
 	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
 	if err != nil {
 		return err
 	}
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("upload storage gagal (HTTP %d): %s", resp.StatusCode, snippet(bodyBytes))
+		return fmt.Errorf("upload storage gagal (HTTP %d)", resp.StatusCode)
 	}
 	return nil
 }
@@ -193,6 +177,9 @@ type demoResult struct {
 func (c *pdfleaderClient) pollDemo(ctx context.Context, demoID string) (demoResult, error) {
 	deadline := time.Now().Add(noisePollTimeout)
 	for {
+		if err := sleepContext(ctx, noisePollInterval); err != nil {
+			return demoResult{}, err
+		}
 		resp, data, err := c.doJSON(ctx, http.MethodGet, "/api/v1/noise-remover/demo/"+url.PathEscape(demoID), nil)
 		if err != nil {
 			return demoResult{}, err
@@ -211,9 +198,6 @@ func (c *pdfleaderClient) pollDemo(ctx context.Context, demoID string) (demoResu
 		}
 		if time.Now().After(deadline) {
 			return demoResult{}, fmt.Errorf("demo kehabisan waktu (timeout polling)")
-		}
-		if err := sleepContext(ctx, noisePollInterval); err != nil {
-			return demoResult{}, err
 		}
 	}
 }
@@ -239,6 +223,9 @@ func (c *pdfleaderClient) submitFull(ctx context.Context, filename, key string, 
 func (c *pdfleaderClient) pollFull(ctx context.Context, fileID string) (map[string]any, error) {
 	deadline := time.Now().Add(noisePollTimeout)
 	for {
+		if err := sleepContext(ctx, noisePollInterval); err != nil {
+			return nil, err
+		}
 		// status/progress endpoint
 		_, statusData, _ := c.doJSON(ctx, http.MethodPost, "/api/v1/files/"+url.PathEscape(fileID)+"/noise-removed", map[string]any{})
 		var statusMap map[string]any
@@ -264,9 +251,6 @@ func (c *pdfleaderClient) pollFull(ctx context.Context, fileID string) (map[stri
 		}
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("proses full kehabisan waktu (timeout polling)")
-		}
-		if err := sleepContext(ctx, noisePollInterval); err != nil {
-			return nil, err
 		}
 	}
 }
