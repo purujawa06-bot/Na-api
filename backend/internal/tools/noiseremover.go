@@ -383,20 +383,35 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 		return
 	}
+	_ = sleepContext(ctx, 2*time.Second)
+	uploadVerify := ""
+	if vr, ve := (&http.Client{Timeout: 30 * time.Second}).Get(link.URL); ve == nil {
+		vb, _ := io.ReadAll(vr.Body)
+		vr.Body.Close()
+		head := vb
+		if len(head) > 8 {
+			head = head[:8]
+		}
+		uploadVerify = fmt.Sprintf("status=%d ct=%s len=%d head=%x", vr.StatusCode, vr.Header.Get("Content-Type"), len(vb), head)
+	} else {
+		uploadVerify = "err=" + ve.Error()
+	}
+	debugInfo := map[string]any{"filename": filename, "key": key, "size": len(data), "contentType": contentType, "link": link, "uploadVerify": uploadVerify}
 
 	if mode == "demo" {
 		emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengirim permintaan noise remover (demo)..."})
 		demoID, err := client.submitDemo(ctx, filename, key, len(data), durationSeconds)
 		if err != nil {
 			emitter.stopHeartbeat()
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
+			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502, "debug": debugInfo})
 			return
 		}
+		debugInfo["demoId"] = demoID
 		emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Menunggu hasil demo..."})
 		res, err := client.pollDemo(ctx, demoID)
 		emitter.stopHeartbeat()
 		if err != nil {
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
+			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502, "debug": debugInfo})
 			return
 		}
 		emitter.emit(map[string]any{
@@ -411,6 +426,7 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 			"size":            res.Size,
 			"durationSeconds": res.DurationSeconds,
 			"container":       res.Container,
+			"debug":           debugInfo,
 		})
 		return
 	}
