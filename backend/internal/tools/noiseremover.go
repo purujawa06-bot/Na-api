@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"path"
 	"strings"
@@ -28,16 +27,43 @@ const (
 )
 
 type pdfleaderClient struct {
-	http *http.Client
+	http    *http.Client
+	cookies map[string]string
 }
 
 //book_pdfleader_newClient
 func newPdfleaderClient() (*pdfleaderClient, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
+	return &pdfleaderClient{
+		http:    &http.Client{Timeout: 60 * time.Second},
+		cookies: map[string]string{},
+	}, nil
+}
+
+func (c *pdfleaderClient) setCookies(resp *http.Response) {
+	for _, sc := range resp.Header.Values("Set-Cookie") {
+		part := sc
+		if i := strings.Index(part, ";"); i >= 0 {
+			part = part[:i]
+		}
+		if j := strings.Index(part, "="); j > 0 {
+			name := strings.TrimSpace(part[:j])
+			value := part[j+1:]
+			if name != "" {
+				c.cookies[name] = value
+			}
+		}
 	}
-	return &pdfleaderClient{http: &http.Client{Jar: jar, Timeout: 60 * time.Second}}, nil
+}
+
+func (c *pdfleaderClient) cookieHeader() string {
+	if len(c.cookies) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(c.cookies))
+	for k, v := range c.cookies {
+		parts = append(parts, k+"="+v)
+	}
+	return strings.Join(parts, "; ")
 }
 
 func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, body any) (*http.Response, []byte, error) {
@@ -65,10 +91,14 @@ func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, b
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if ch := c.cookieHeader(); ch != "" {
+		req.Header.Set("Cookie", ch)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
+	c.setCookies(resp)
 	data, err := io.ReadAll(io.LimitReader(resp.Body, webclient.MaxBodyBytes))
 	resp.Body.Close()
 	if err != nil {
@@ -309,9 +339,6 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	}
 	emitter := newNDJSONEmitter(w, flusher)
 	defer emitter.close()
-	emitter.startHeartbeat(heartbeatInterval, func() any {
-		return streamEvent{Event: "processing", Status: "running"}
-	})
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
