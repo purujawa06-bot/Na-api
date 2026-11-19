@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	cloudHeartbeatInterval = 20 * time.Second
-	localPresencePoll      = 15 * time.Second
-	cloudActiveWindow      = 60 * time.Second
+	cloudHeartbeatInterval = 3 * time.Second  // heartbeat cloud (cepat/instan)
+	localPresencePoll      = 2 * time.Second  // poll status cloud di lokal
+	cloudActiveWindow      = 8 * time.Second  // cloud dianggap aktif jika heartbeat < 8s
 	syncInterval           = 30 * time.Second
 )
 

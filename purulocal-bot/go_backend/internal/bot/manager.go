@@ -84,6 +84,10 @@ type Manager struct {
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
 	bannedUntil map[string]time.Time
+
+	reconnectMu          sync.Mutex
+	reconnectTimer       *time.Timer
+	intentionalDisconnect bool
 }
 
 func NewManager(configPath, dataDir string) (*Manager, error) {
@@ -386,10 +390,82 @@ func (m *Manager) eventHandler(evt interface{}) {
 		go m.onMessage(v)
 	case *events.GroupInfo:
 		go m.onGroupInfo(v)
+	case *events.StreamReplaced:
+		m.mu.Lock()
+		m.status.LastError = "stream replaced (sesi bentrok)"
+		m.mu.Unlock()
+		if m.logger != nil {
+			m.logger.Warn("connection", "Sesi digantikan/stream replaced (kemungkinan bentrok), reconnect dalam 10 detik")
+		}
+		m.scheduleReconnect10s("stream replaced (sesi bentrok)")
 	case *events.Disconnected:
 		m.mu.Lock()
 		m.status.LastError = "disconnected"
 		m.mu.Unlock()
+		// ws terputus / EOF setelah bentrok: coba reconnect otomatis (fixed 10s)
+		m.scheduleReconnect10s("disconnected/ws terputus")
+	case *events.Connected:
+		m.cancelReconnect()
+		m.mu.Lock()
+		m.intentionalDisconnect = false
+		m.mu.Unlock()
+	}
+}
+
+func (m *Manager) scheduleReconnect10s(reason string) {
+	m.reconnectMu.Lock()
+	defer m.reconnectMu.Unlock()
+	m.mu.RLock()
+	intentional := m.intentionalDisconnect
+	m.mu.RUnlock()
+	if intentional {
+		return
+	}
+	// jangan reconnect jika pause efektif (manual/cloud-lock)
+	if m.IsPaused() {
+		return
+	}
+	if m.reconnectTimer != nil {
+		m.reconnectTimer.Stop()
+		m.reconnectTimer = nil
+	}
+	m.reconnectTimer = time.AfterFunc(10*time.Second, func() {
+		m.reconnectMu.Lock()
+		m.reconnectTimer = nil
+		m.reconnectMu.Unlock()
+
+		m.mu.RLock()
+		intentional := m.intentionalDisconnect
+		m.mu.RUnlock()
+		if intentional || m.IsPaused() {
+			return
+		}
+		// butuh sesi tersimpan untuk reconnect otomatis
+		if m.client == nil {
+			// coba ensure client; jika tidak ada sesi, AutoReconnect akan no-op
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+		if err := m.AutoReconnect(ctx); err != nil {
+			if m.logger != nil {
+				m.logger.Warn("connection", "Auto-reconnect ("+reason+") gagal: "+err.Error()+", coba lagi 10 detik")
+			}
+			// retry fixed 10s
+			m.scheduleReconnect10s(reason)
+			return
+		}
+		if m.logger != nil {
+			m.logger.Info("connection", "Auto-reconnect berhasil ("+reason+")")
+		}
+	})
+}
+
+func (m *Manager) cancelReconnect() {
+	m.reconnectMu.Lock()
+	defer m.reconnectMu.Unlock()
+	if m.reconnectTimer != nil {
+		m.reconnectTimer.Stop()
+		m.reconnectTimer = nil
 	}
 }
 
@@ -1487,6 +1563,10 @@ func (m *Manager) PairPhone(ctx context.Context, phone string) (string, error) {
 }
 
 func (m *Manager) Disconnect() {
+	m.mu.Lock()
+	m.intentionalDisconnect = true
+	m.mu.Unlock()
+	m.cancelReconnect()
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
@@ -1496,6 +1576,7 @@ func (m *Manager) Disconnect() {
 }
 
 func (m *Manager) Logout(ctx context.Context) error {
+	m.cancelReconnect()
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
@@ -1509,6 +1590,7 @@ func (m *Manager) Logout(ctx context.Context) error {
 	m.client = nil
 	m.qrChan = nil
 	m.paused = false
+	m.intentionalDisconnect = true
 	m.status = Status{}
 	m.mu.Unlock()
 	return err
@@ -1530,6 +1612,10 @@ func (m *Manager) Close() error {
 	if m.cloudSync != nil {
 		m.cloudSync.Stop()
 	}
+	m.cancelReconnect()
+	m.mu.Lock()
+	m.intentionalDisconnect = true
+	m.mu.Unlock()
 	m.Disconnect()
 	return nil
 }

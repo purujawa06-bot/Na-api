@@ -551,6 +551,7 @@ export default function App() {
           </div>
           <div className="card">
             <div className="card-h"><div className="card-title">Cloud Sync</div></div>
+            <div className="hint">Jika ingin dijalankan di cloud sendiri, gunakan <b>.export</b> pada bot (owner).</div>
             <div className="status-grid">
               <div className="stat"><div className="k">Role</div><div className="v">{(status && status.role) || 'local'}</div></div>
               <div className="stat"><div className="k">Cloud aktif</div><div className="v">{String(!!(status && status.cloud_active))}</div></div>
