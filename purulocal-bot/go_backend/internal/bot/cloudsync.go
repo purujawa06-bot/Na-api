@@ -47,9 +47,18 @@ type CloudSyncService struct {
 	lastSyncAt      time.Time
 	lastSyncErr     string
 	syncing         bool
+	lastRestartCmdID string
+	restartApplying  bool
 
 	startOnce sync.Once
 	stopOnce  sync.Once
+}
+
+type cloudRestartCommand struct {
+	ID   string `json:"id"`
+	TS   int64  `json:"ts"`
+	Port string `json:"port,omitempty"`
+	By   string `json:"by,omitempty"`
 }
 
 type rtdbPresence struct {
@@ -82,13 +91,15 @@ func newCloudSyncService(m *Manager) *CloudSyncService {
 		role = "cloud"
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &CloudSyncService{
+	s := &CloudSyncService{
 		mgr:        m,
 		ctx:        ctx,
 		cancel:     cancel,
 		role:       role,
 		instanceID: randomHexID(8),
 	}
+	s.lastRestartCmdID = s.loadLastRestartCmdID()
+	return s
 }
 
 func randomHexID(n int) string {
@@ -206,6 +217,8 @@ func (s *CloudSyncService) tickPresence() {
 		s.cloudLastHB = p.TS
 		s.pausedByCloud = false
 		s.mu.Unlock()
+		// cek perintah kontrol (restart cloud)
+		s.checkCloudRestartCommand(ctx, cfg)
 		return
 	}
 
@@ -510,6 +523,141 @@ func (s *CloudSyncService) absPathForName(name string) string {
 		clean = strings.TrimPrefix(name, ddBase+"/")
 	}
 	return filepath.Join(dataDir, clean)
+}
+
+func (s *CloudSyncService) controlStatePath() string {
+	return filepath.Join(s.mgr.DataDir(), ".cloud_control.json")
+}
+
+func (s *CloudSyncService) loadLastRestartCmdID() string {
+	b, err := os.ReadFile(s.controlStatePath())
+	if err != nil {
+		return ""
+	}
+	var st struct {
+		LastRestartID string `json:"last_restart_id"`
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(st.LastRestartID)
+}
+
+func (s *CloudSyncService) saveLastRestartCmdID(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return
+	}
+	st := struct {
+		LastRestartID string `json:"last_restart_id"`
+	}{LastRestartID: id}
+	b, _ := json.MarshalIndent(st, "", "  ")
+	_ = os.WriteFile(s.controlStatePath(), b, 0o600)
+	s.mu.Lock()
+	s.lastRestartCmdID = id
+	s.mu.Unlock()
+}
+
+// PushConfigNow mendorong config.json saat ini ke RTDB (dipakai agar cloud menerima port baru sebelum restart).
+func (s *CloudSyncService) PushConfigNow(ctx context.Context) error {
+	cfg := s.mgr.Config()
+	if !cfg.CloudSyncReady() {
+		return fmt.Errorf("cloud sync belum siap (RTDB/device code)")
+	}
+	b, err := os.ReadFile(s.mgr.ConfigPath())
+	if err != nil {
+		return err
+	}
+	rf := rtdbFile{Name: "config.json", SHA256: sha256Hex(b), MTime: fileMTime(s.mgr.ConfigPath()), Size: int64(len(b)), DataB64: base64.StdEncoding.EncodeToString(b)}
+	if err := s.rtdbPut(ctx, cfg, "files/"+encodeKey("config.json"), rf); err != nil {
+		return err
+	}
+	st := s.loadLocalSyncState()
+	st["config.json"] = rtdbFileMeta{SHA256: rf.SHA256, MTime: rf.MTime, Size: rf.Size}
+	_ = s.saveLocalSyncState(st)
+	return nil
+}
+
+// RequestCloudRestart menyimpan port (jika ada), push config, lalu mengirim perintah restart ke cloud via RTDB.
+// Dipanggil dari sisi lokal (UI) setelah konfirmasi.
+func (s *CloudSyncService) RequestCloudRestart(ctx context.Context, port string) error {
+	cfg := s.mgr.Config()
+	if !cfg.CloudSyncReady() {
+		return fmt.Errorf("cloud sync belum siap: set RTDB URL/device code terlebih dahulu")
+	}
+	if s.Role() == "cloud" {
+		return fmt.Errorf("perintah ini hanya dari sisi lokal")
+	}
+	port = strings.TrimSpace(port)
+	if port != "" {
+		// simpan port agar tersinkron ke cloud (setting/config local -> cloud)
+		newCfg := cfg
+		newCfg.Port = FlexString(port)
+		if err := s.mgr.SaveConfig(newCfg); err != nil {
+			return err
+		}
+		cfg = s.mgr.Config()
+	}
+	// pastikan config (port) terkirim segera
+	if err := s.PushConfigNow(ctx); err != nil {
+		// lanjut coba kirim perintah meski push config gagal? lebih baik laporkan
+		return fmt.Errorf("gagal mengirim config ke cloud: %w", err)
+	}
+	cmd := cloudRestartCommand{ID: randomHexID(12), TS: time.Now().UnixMilli(), Port: port, By: "local"}
+	if err := s.rtdbPut(ctx, cfg, "control/cloud_restart", cmd); err != nil {
+		return err
+	}
+	if s.mgr.logger != nil {
+		s.mgr.logger.Info("cloudsync", "Perintah restart cloud dikirim (port="+port+")")
+	}
+	return nil
+}
+
+func (s *CloudSyncService) checkCloudRestartCommand(ctx context.Context, cfg Config) {
+	if s.Role() != "cloud" {
+		return
+	}
+	s.mu.RLock()
+	applying := s.restartApplying
+	seen := s.lastRestartCmdID
+	s.mu.RUnlock()
+	if applying {
+		return
+	}
+	var cmd cloudRestartCommand
+	if err := s.rtdbGet(ctx, cfg, "control/cloud_restart", &cmd); err != nil {
+		return
+	}
+	if strings.TrimSpace(cmd.ID) == "" || cmd.ID == seen {
+		return
+	}
+	// tandai diterima agar tidak berulang
+	s.saveLastRestartCmdID(cmd.ID)
+	s.mu.Lock()
+	if s.restartApplying {
+		s.mu.Unlock()
+		return
+	}
+	s.restartApplying = true
+	s.mu.Unlock()
+
+	if s.mgr.logger != nil {
+		s.mgr.logger.Warn("cloudsync", "Menerima perintah restart cloud (port="+strings.TrimSpace(cmd.Port)+"), restart...")
+	}
+	// terapkan port dari perintah jika ada (agar pasti ikut saat restart), lalu simpan lokal & reload
+	if p := strings.TrimSpace(cmd.Port); p != "" {
+		cur := s.mgr.Config()
+		cur.Port = FlexString(p)
+		_ = s.mgr.cfgStore.Save(cur)
+		_ = s.mgr.cfgStore.Load()
+	}
+	// beri jeda singkat agar log/IO sempat flush, lalu minta restart proses
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		if s.mgr != nil {
+			s.mgr.RequestRestart("cloud restart command")
+		}
+	}()
 }
 
 func (s *CloudSyncService) applyLocalFile(name string, data []byte) error {

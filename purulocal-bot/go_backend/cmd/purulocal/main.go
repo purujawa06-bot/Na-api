@@ -53,8 +53,19 @@ func main() {
 
 	srv := web.NewServer(addr, manager)
 	log.Printf("puruLocal Bot UI/API berjalan di http://%s (sesi lokal di perangkat)", addr)
-	if err := srv.Start(ctx); err != nil {
-		log.Fatalf("server: %v", err)
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Start(ctx) }()
+	select {
+	case <-ctx.Done():
+	case err := <-errCh:
+		if err != nil {
+			log.Printf("server: %v", err)
+		}
+	case reason := <-manager.RestartRequested():
+		log.Printf("restart requested: %s", reason)
+		stop()
+		_ = manager.Close()
+		os.Exit(42)
 	}
 
 	_ = manager.Close()

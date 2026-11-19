@@ -544,6 +544,14 @@ function spawnBinary(bin) {
     childProc = null;
     if (restarting) return;
     if (signal) process.exit(128);
+    // kode 42: restart diminta (mis. ubah port cloud dari local) -> respawn binary
+    if (code === 42) {
+      log('Binary meminta restart, memulai ulang dalam 1 detik...');
+      setTimeout(() => {
+        if (!restarting) spawnBinary(bin);
+      }, 1000);
+      return;
+    }
     process.exit(code == null ? 1 : code);
   });
 }

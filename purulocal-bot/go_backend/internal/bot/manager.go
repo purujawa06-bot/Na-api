@@ -85,9 +85,12 @@ type Manager struct {
 	lastMsgAt   map[string]time.Time
 	bannedUntil map[string]time.Time
 
-	reconnectMu          sync.Mutex
-	reconnectTimer       *time.Timer
+	reconnectMu           sync.Mutex
+	reconnectTimer        *time.Timer
 	intentionalDisconnect bool
+
+	restartOnce sync.Once
+	restartCh   chan string
 }
 
 func NewManager(configPath, dataDir string) (*Manager, error) {
@@ -129,6 +132,7 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 		group:       gstore,
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
+		restartCh:   make(chan string, 1),
 	}
 	m.cloudSync = newCloudSyncService(m)
 	m.cloudSync.Start()
@@ -1618,6 +1622,35 @@ func (m *Manager) Close() error {
 	m.mu.Unlock()
 	m.Disconnect()
 	return nil
+}
+
+// RequestRestart meminta proses bot restart (dipakai cloud saat menerima perintah restart dari local).
+func (m *Manager) RequestRestart(reason string) {
+	if m == nil {
+		return
+	}
+	m.restartOnce.Do(func() {
+		if m.logger != nil {
+			m.logger.Warn("system", "Restart diminta: "+reason)
+		}
+		if m.restartCh != nil {
+			select {
+			case m.restartCh <- reason:
+			default:
+			}
+		}
+	})
+}
+
+// RestartRequested mengembalikan channel yang menerima sinyal saat restart diminta.
+func (m *Manager) RestartRequested() <-chan string { return m.restartCh }
+
+// RequestCloudRestart mengubah port config (opsional) dan mengirim perintah restart ke cloud via RTDB.
+func (m *Manager) RequestCloudRestart(ctx context.Context, port string) error {
+	if m.cloudSync == nil {
+		return fmt.Errorf("cloud sync tidak tersedia")
+	}
+	return m.cloudSync.RequestCloudRestart(ctx, port)
 }
 
 // SelfJID helper (opsional) untuk cek nomor sendiri.

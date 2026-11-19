@@ -36,6 +36,7 @@ func NewServer(addr string, mgr *bot.Manager) *Server {
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("POST /api/pause", s.handlePause)
 	mux.HandleFunc("POST /api/start", s.handleStart)
+	mux.HandleFunc("POST /api/cloud/restart", s.handleCloudRestart)
 	mux.HandleFunc("GET /api/plugins", s.handlePlugins)
 	mux.HandleFunc("GET /api/plugins/available", s.handlePluginsAvailable)
 	mux.HandleFunc("POST /api/plugins/install", s.handlePluginInstall)
@@ -190,6 +191,25 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	// pastikan terkoneksi jika sudah pernah login
 	_ = s.mgr.AutoReconnect(r.Context())
 	writeJSON(w, 200, map[string]any{"ok": true, "status": s.mgr.Status()})
+}
+
+func (s *Server) handleCloudRestart(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Port    string `json:"port"`
+		Confirm bool   `json:"confirm"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if !body.Confirm {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "konfirmasi diperlukan untuk restart cloud"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	if err := s.mgr.RequestCloudRestart(ctx, strings.TrimSpace(body.Port)); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "message": "Perintah restart cloud dikirim"})
 }
 
 func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
