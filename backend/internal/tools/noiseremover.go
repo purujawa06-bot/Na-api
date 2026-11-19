@@ -11,6 +11,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -257,26 +258,32 @@ func (c *pdfleaderClient) pollFull(ctx context.Context, fileID string) (map[stri
 
 //book_tools_noiseRemover
 func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
-	body, ok := decodeBody(w, r)
-	if !ok {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		failJSON(w, http.StatusBadRequest, "Form multipart tidak valid, gunakan field file")
 		return
 	}
-	rawURL, ok := requireURLField(w, body, "file",
-		`Parameter "file" (URL audio/video) wajib diisi`, "URL file tidak valid")
-	if !ok {
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		failJSON(w, http.StatusBadRequest, `Parameter "file" (audio/video) wajib diisi`)
 		return
 	}
-	mode := "demo"
-	if m, ok := stringValue(body, "mode"); ok && m != "" {
-		mode = strings.ToLower(m)
+	defer file.Close()
+
+	mode := strings.ToLower(strings.TrimSpace(r.FormValue("mode")))
+	if mode == "" {
+		mode = "demo"
 	}
 	if mode != "demo" && mode != "full" {
 		failJSON(w, http.StatusBadRequest, `Parameter "mode" harus "demo" atau "full"`)
 		return
 	}
 	durationSeconds := 30
-	if raw, exists := body["duration_seconds"]; exists && isTruthy(raw) {
-		if v, ok := parseIntLike(raw); ok {
+	if raw := strings.TrimSpace(r.FormValue("duration_seconds")); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
 			durationSeconds = v
 		}
 	}
@@ -297,12 +304,43 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunduh file sumber..."})
-	data, filename, contentType, err := downloadNoiseSource(ctx, rawURL, body)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Membaca file..."})
+	data, err := io.ReadAll(io.LimitReader(file, noiseMaxSourceBytes+1))
 	if err != nil {
 		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 400})
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal membaca file", "httpStatus": 400})
 		return
+	}
+	if len(data) == 0 {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "File kosong", "httpStatus": 400})
+		return
+	}
+	if len(data) > noiseMaxSourceBytes {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": fmt.Sprintf("File melebihi batas %d MB", noiseMaxSourceBytes/(1<<20)), "httpStatus": 400})
+		return
+	}
+	filename := strings.TrimSpace(header.Filename)
+	if filename == "" {
+		filename = "audio.wav"
+	}
+	contentType := strings.TrimSpace(header.Header.Get("Content-Type"))
+	if i := strings.Index(contentType, ";"); i >= 0 {
+		contentType = strings.TrimSpace(contentType[:i])
+	}
+	if contentType == "" || contentType == "application/octet-stream" {
+		if ext := path.Ext(filename); ext != "" {
+			if mt := mime.TypeByExtension(ext); mt != "" {
+				if i := strings.Index(mt, ";"); i >= 0 {
+					mt = strings.TrimSpace(mt[:i])
+				}
+				contentType = mt
+			}
+		}
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
 	}
 
 	client, err := newPdfleaderClient()
@@ -420,64 +458,6 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		out["container"] = v
 	}
 	emitter.emit(out)
-}
-
-func downloadNoiseSource(ctx context.Context, rawURL string, body map[string]any) ([]byte, string, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, "", "", fmt.Errorf("gagal mengunduh file: %w", err)
-	}
-	req.Header.Set("User-Agent", pdfleaderUA)
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
-	if err != nil {
-		return nil, "", "", fmt.Errorf("gagal mengunduh file: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, "", "", fmt.Errorf("gagal mengunduh file (HTTP %d)", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, noiseMaxSourceBytes+1))
-	if err != nil {
-		return nil, "", "", fmt.Errorf("gagal membaca file: %w", err)
-	}
-	if len(data) == 0 {
-		return nil, "", "", fmt.Errorf("file sumber kosong")
-	}
-	if len(data) > noiseMaxSourceBytes {
-		return nil, "", "", fmt.Errorf("file sumber melebihi batas %d MB", noiseMaxSourceBytes/(1<<20))
-	}
-	filename := ""
-	if v, ok := stringValue(body, "filename"); ok && v != "" {
-		filename = v
-	} else {
-		filename = filenameFromSourceURL(rawURL)
-	}
-	if filename == "" {
-		filename = "audio.wav"
-	}
-	ct := resp.Header.Get("Content-Type")
-	if ct == "" {
-		ct = mime.TypeByExtension(path.Ext(filename))
-	}
-	if ct == "" {
-		ct = "application/octet-stream"
-	}
-	if i := strings.Index(ct, ";"); i >= 0 {
-		ct = strings.TrimSpace(ct[:i])
-	}
-	return data, filename, ct, nil
-}
-
-func filenameFromSourceURL(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	base := path.Base(strings.TrimRight(parsed.Path, "/"))
-	if base == "" || base == "." || base == "/" {
-		return ""
-	}
-	return base
 }
 
 func fileKeyFromAWSLink(rawURL string) string {
