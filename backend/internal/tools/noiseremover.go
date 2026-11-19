@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"path"
 	"strings"
@@ -27,43 +28,16 @@ const (
 )
 
 type pdfleaderClient struct {
-	http    *http.Client
-	cookies map[string]string
+	http *http.Client
 }
 
 //book_pdfleader_newClient
 func newPdfleaderClient() (*pdfleaderClient, error) {
-	return &pdfleaderClient{
-		http:    &http.Client{Timeout: 60 * time.Second},
-		cookies: map[string]string{},
-	}, nil
-}
-
-func (c *pdfleaderClient) setCookies(resp *http.Response) {
-	for _, sc := range resp.Header.Values("Set-Cookie") {
-		part := sc
-		if i := strings.Index(part, ";"); i >= 0 {
-			part = part[:i]
-		}
-		if j := strings.Index(part, "="); j > 0 {
-			name := strings.TrimSpace(part[:j])
-			value := part[j+1:]
-			if name != "" {
-				c.cookies[name] = value
-			}
-		}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (c *pdfleaderClient) cookieHeader() string {
-	if len(c.cookies) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(c.cookies))
-	for k, v := range c.cookies {
-		parts = append(parts, k+"="+v)
-	}
-	return strings.Join(parts, "; ")
+	return &pdfleaderClient{http: &http.Client{Jar: jar, Timeout: 60 * time.Second}}, nil
 }
 
 func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, body any) (*http.Response, []byte, error) {
@@ -91,14 +65,10 @@ func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, b
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if ch := c.cookieHeader(); ch != "" {
-		req.Header.Set("Cookie", ch)
-	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
-	c.setCookies(resp)
 	data, err := io.ReadAll(io.LimitReader(resp.Body, webclient.MaxBodyBytes))
 	resp.Body.Close()
 	if err != nil {
@@ -171,10 +141,10 @@ func (c *pdfleaderClient) uploadToStorage(ctx context.Context, uploadURL string,
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("upload storage gagal (HTTP %d): %s", resp.StatusCode, snippet(b))
+		return fmt.Errorf("upload storage gagal (HTTP %d): %s", resp.StatusCode, snippet(bodyBytes))
 	}
 	return nil
 }
@@ -383,35 +353,20 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 		return
 	}
-	_ = sleepContext(ctx, 2*time.Second)
-	uploadVerify := ""
-	if vr, ve := (&http.Client{Timeout: 30 * time.Second}).Get(link.URL); ve == nil {
-		vb, _ := io.ReadAll(vr.Body)
-		vr.Body.Close()
-		head := vb
-		if len(head) > 8 {
-			head = head[:8]
-		}
-		uploadVerify = fmt.Sprintf("status=%d ct=%s len=%d head=%x", vr.StatusCode, vr.Header.Get("Content-Type"), len(vb), head)
-	} else {
-		uploadVerify = "err=" + ve.Error()
-	}
-	debugInfo := map[string]any{"filename": filename, "key": key, "size": len(data), "contentType": contentType, "link": link, "uploadVerify": uploadVerify}
 
 	if mode == "demo" {
 		emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengirim permintaan noise remover (demo)..."})
 		demoID, err := client.submitDemo(ctx, filename, key, len(data), durationSeconds)
 		if err != nil {
 			emitter.stopHeartbeat()
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502, "debug": debugInfo})
+			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 			return
 		}
-		debugInfo["demoId"] = demoID
 		emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Menunggu hasil demo..."})
 		res, err := client.pollDemo(ctx, demoID)
 		emitter.stopHeartbeat()
 		if err != nil {
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502, "debug": debugInfo})
+			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 			return
 		}
 		emitter.emit(map[string]any{
@@ -426,7 +381,6 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 			"size":            res.Size,
 			"durationSeconds": res.DurationSeconds,
 			"container":       res.Container,
-			"debug":           debugInfo,
 		})
 		return
 	}
