@@ -526,7 +526,9 @@ async function autoUpdateRuntime(manifest) {
 function spawnBinary(bin) {
   if (restarting) return;
   log('Menjalankan: ' + bin.path + ' (' + bin.source + ')');
-  log('UI/API: http://' + (process.env.PURULOCAL_ADDR || '0.0.0.0:8787'));
+  if (process.env.PURULOCAL_CLOUD !== '1') {
+    log('UI/API: http://' + (process.env.PURULOCAL_ADDR || '0.0.0.0:8787'));
+  }
   const child = spawn(bin.path, process.argv.slice(2), { stdio: 'inherit', env: process.env, cwd: BASE });
   childProc = child;
   const forward = (sig) => { try { child.kill(sig); } catch (e) {} };
@@ -588,13 +590,13 @@ function addrFromConfig(cfgPath) {
 async function main() {
   if (!process.env.PURULOCAL_CONFIG) process.env.PURULOCAL_CONFIG = path.join(BASE, 'config.json');
   if (!process.env.PURULOCAL_DATA) process.env.PURULOCAL_DATA = path.join(BASE, 'data');
-  if (!process.env.PURULOCAL_ADDR) {
-    const fromCfg = addrFromConfig(process.env.PURULOCAL_CONFIG);
-    process.env.PURULOCAL_ADDR = fromCfg || '0.0.0.0:8787';
-  }
-  // instance hasil export berjalan sebagai cloud (heartbeat cloud-first)
+  // instance hasil export berjalan sebagai cloud (heartbeat cloud-first, tanpa listen port/UI)
   if (process.env.PURULOCAL_CLOUD === undefined || process.env.PURULOCAL_CLOUD === '') {
     process.env.PURULOCAL_CLOUD = '1';
+  }
+  if (process.env.PURULOCAL_CLOUD !== '1' && !process.env.PURULOCAL_ADDR) {
+    const fromCfg = addrFromConfig(process.env.PURULOCAL_CONFIG);
+    process.env.PURULOCAL_ADDR = fromCfg || '0.0.0.0:8787';
   }
 
   let manifest = null;

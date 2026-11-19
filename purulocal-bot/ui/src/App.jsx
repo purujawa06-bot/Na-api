@@ -72,8 +72,6 @@ export default function App() {
     ai_system_prompt: '', sticker_pack: '', sticker_author: '', rtdb_url: ''
   })
   const [settingsMsg, setSettingsMsg] = useState({ text: '', err: false })
-  const [cloudPort, setCloudPort] = useState('')
-  const [cloudCtlMsg, setCloudCtlMsg] = useState({ text: '', err: false })
   const [aiMsg, setAiMsg] = useState({ text: '', err: false })
   const [stickerMsg, setStickerMsg] = useState({ text: '', err: false })
   const [formTouched, setFormTouched] = useState(false)
@@ -133,7 +131,6 @@ export default function App() {
         rtdb_url: c.rtdb_url || '',
       }
     })
-    if (force) setCloudPort(c.port != null ? String(c.port) : '')
     if (force) setFormTouchedFlag(false)
     setLoginOwner(v => v || c.owner_number || '')
     setLoginBot(v => v || c.bot_number || c.owner_number || '')
@@ -286,22 +283,6 @@ export default function App() {
     setShowQr(false); setShowPair(false); setQrData(''); setConnMsg({ text: '', err: false })
     setFormTouchedFlag(false); setIsLogged(false); setPage('dashboard')
     refresh(true)
-  }
-
-  const requestCloudRestart = async () => {
-    const port = (cloudPort || '').trim()
-    const msg = port
-      ? 'Ubah port cloud ke "' + port + '" dan kirim perintah restart ke cloud?'
-      : 'Kirim perintah restart ke cloud sekarang?'
-    if (!window.confirm(msg)) return
-    setCloudCtlMsg({ text: 'Mengirim perintah restart cloud...', err: false })
-    const d = await api('/api/cloud/restart', { method: 'POST', body: JSON.stringify({ port, confirm: true }) })
-    if (d && d.ok) {
-      flash(setCloudCtlMsg, d.message || 'Perintah restart cloud dikirim.', false, 4000)
-      refresh(true)
-    } else {
-      setCloudCtlMsg({ text: (d && d.error) || 'Gagal mengirim perintah restart cloud', err: true })
-    }
   }
 
   // plugins
@@ -579,15 +560,6 @@ export default function App() {
             </div>
             {status && status.device_code ? <div className="muted mt8">Device code: <b>{status.device_code}</b></div> : <div className="muted mt8">Device code: - (set RTDB URL di Settings)</div>}
             {status && status.sync_last_error ? <div className="msg err mt8">Sync: {status.sync_last_error}</div> : null}
-            {status && status.role !== 'cloud' && status.rtdb_configured ? (
-              <div className="mt10">
-                <label>Port Cloud (opsional)</label>
-                <input type="text" value={cloudPort} onChange={e => setCloudPort(e.target.value)} placeholder="contoh: 8080 atau 0.0.0.0:8080" />
-                <div className="hint mt8">Ubah port cloud dari lokal, lalu konfirmasi untuk menyimpan config (local→cloud) dan mengirim perintah restart ke cloud.</div>
-                <button className="btn warn mt8" onClick={requestCloudRestart}>Simpan & Restart Cloud</button>
-                <div className={'msg' + (cloudCtlMsg.err ? ' err' : '')}>{cloudCtlMsg.text}</div>
-              </div>
-            ) : null}
           </div>
         </div>
       )}

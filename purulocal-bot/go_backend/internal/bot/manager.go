@@ -1645,13 +1645,7 @@ func (m *Manager) RequestRestart(reason string) {
 // RestartRequested mengembalikan channel yang menerima sinyal saat restart diminta.
 func (m *Manager) RestartRequested() <-chan string { return m.restartCh }
 
-// RequestCloudRestart mengubah port config (opsional) dan mengirim perintah restart ke cloud via RTDB.
-func (m *Manager) RequestCloudRestart(ctx context.Context, port string) error {
-	if m.cloudSync == nil {
-		return fmt.Errorf("cloud sync tidak tersedia")
-	}
-	return m.cloudSync.RequestCloudRestart(ctx, port)
-}
+
 
 // SelfJID helper (opsional) untuk cek nomor sendiri.
 func (m *Manager) SelfJID() *types.JID {

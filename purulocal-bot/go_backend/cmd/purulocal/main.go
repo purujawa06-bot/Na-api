@@ -33,15 +33,6 @@ func main() {
 		log.Fatalf("init bot manager: %v", err)
 	}
 
-	addr := os.Getenv("PURULOCAL_ADDR")
-	if addr == "" {
-		if a := manager.Config().ListenAddr(); a != "" {
-			addr = a
-		} else {
-			addr = "127.0.0.1:8787" // local phone / localhost
-		}
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -50,6 +41,30 @@ func main() {
 			log.Printf("autoreconnect: %v", err)
 		}
 	}()
+
+	// Mode cloud: tidak listen port/UI
+	if os.Getenv("PURULOCAL_CLOUD") == "1" {
+		log.Printf("puruLocal Bot berjalan dalam mode cloud (tanpa listen port/UI)")
+		select {
+		case <-ctx.Done():
+		case reason := <-manager.RestartRequested():
+			log.Printf("restart requested: %s", reason)
+			stop()
+			_ = manager.Close()
+			os.Exit(42)
+		}
+		_ = manager.Close()
+		return
+	}
+
+	addr := os.Getenv("PURULOCAL_ADDR")
+	if addr == "" {
+		if a := manager.Config().ListenAddr(); a != "" {
+			addr = a
+		} else {
+			addr = "127.0.0.1:8787" // local phone / localhost
+		}
+	}
 
 	srv := web.NewServer(addr, manager)
 	log.Printf("puruLocal Bot UI/API berjalan di http://%s (sesi lokal di perangkat)", addr)
