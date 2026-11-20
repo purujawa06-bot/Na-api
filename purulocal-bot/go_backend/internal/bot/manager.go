@@ -665,14 +665,18 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 	}
 
-	// resolve command (builtin) - react hanya jika dikenali
-	// cek cepat apakah command mungkin dikenal sebelum react?
+	// resolve command (builtin) - react/typing dikirim sebelum eksekusi agar jam pasir tidak telat (mis. .ai)
+	if f, okf := botcmd.Find(cmd); okf && f.Trigger == botcmd.TriggerDefault {
+		maybeReact()
+		doTyping()
+	}
 	res, ok := m.resolveCommand(ctx, evt, cmd, args, userKey, cfg, senderIDs...)
 	if !ok {
+		if reacted {
+			stopReact()
+		}
 		return
 	}
-	maybeReact()
-	doTyping()
 	defer stopReact()
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
