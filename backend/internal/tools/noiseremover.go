@@ -1,40 +1,29 @@
 package tools
 
 import (
+	"bufio"
+	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/purujawa06-bot/na-api/backend/internal/cdp"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
 const (
-	vocalRemoverPage    = "https://vocalremover.org/"
+	nirkyyBase          = "https://nirkyy-a.hf.space"
+	nirkyyUploadURL     = nirkyyBase + "/gradio_api/upload"
+	nirkyyCallURL       = nirkyyBase + "/gradio_api/call/denoise"
 	noiseMaxSourceBytes = 32 << 20 // 32 MiB
-	vocalPollInterval   = 5 * time.Second
-	vocalPollTimeout    = 5 * time.Minute
-	vocalChunkSize      = 256 * 1024 // 256 KiB chunks for base64 injection over CDP
+	nirkyyTimeout       = 5 * time.Minute
 )
-
-// vocalRemoverTracks holds the separated tracks extracted from the page.
-type vocalRemoverTracks struct {
-	InstrumentalB64  string `json:"instrumentalB64"`
-	InstrumentalMime string `json:"instrumentalMime"`
-	InstrumentalName string `json:"instrumentalName"`
-	VocalsB64        string `json:"vocalsB64"`
-	VocalsMime       string `json:"vocalsMime"`
-	VocalsName       string `json:"vocalsName"`
-	Error            string `json:"error"`
-	Ready            bool   `json:"ready"`
-}
 
 //book_tools_noiseRemover
 func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
@@ -48,12 +37,12 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		failJSON(w, http.StatusBadRequest, `Parameter "file" (audio/video) wajib diisi`)
+		failJSON(w, http.StatusBadRequest, `Parameter "file" (audio) wajib diisi`)
 		return
 	}
 	defer file.Close()
 
-	// mode/duration_seconds diterima untuk kompatibilitas (dulu pdfleader) tapi tidak digunakan.
+	// kompatibilitas param lama (tidak digunakan)
 	_ = r.FormValue("mode")
 	_ = r.FormValue("duration_seconds")
 
@@ -64,7 +53,7 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	emitter := newNDJSONEmitter(w, flusher)
 	defer emitter.close()
 
-	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), nirkyyTimeout)
 	defer cancel()
 
 	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Membaca file..."})
@@ -84,6 +73,7 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": fmt.Sprintf("File melebihi batas %d MB", noiseMaxSourceBytes/(1<<20)), "httpStatus": 400})
 		return
 	}
+
 	filename := strings.TrimSpace(header.Filename)
 	if filename == "" {
 		filename = "audio.wav"
@@ -103,300 +93,226 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if contentType == "" {
-		contentType = "audio/mpeg"
+		contentType = "audio/wav"
 	}
 
-	client, err := cdp.Dial(ctx, cdp.DefaultEndpoint)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah audio ke nirkyy-a.hf.space..."})
+	uploadedPath, err := nirkyyUpload(ctx, data, filename, contentType)
 	if err != nil {
 		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal terhubung ke browser CDP: " + err.Error(), "httpStatus": 502})
-		return
-	}
-	defer client.Close()
-
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Membuka vocalremover.org..."})
-
-	raw, err := client.Call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
-	if err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal membuat target: " + err.Error(), "httpStatus": 502})
-		return
-	}
-	var ct struct {
-		TargetID string `json:"targetId"`
-	}
-	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "targetId tidak ditemukan", "httpStatus": 502})
-		return
-	}
-	defer func() { _, _ = client.Call("Target.closeTarget", map[string]any{"targetId": ct.TargetID}, "") }()
-
-	raw, err = client.Call("Target.attachToTarget", map[string]any{"targetId": ct.TargetID, "flatten": true}, "")
-	if err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal attach target: " + err.Error(), "httpStatus": 502})
-		return
-	}
-	var att struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "sessionId tidak ditemukan", "httpStatus": 502})
-		return
-	}
-	sid := att.SessionID
-
-	_, _ = client.Call("Page.enable", map[string]any{}, sid)
-	_, _ = client.Call("Runtime.enable", map[string]any{}, sid)
-	if _, err := client.Call("Page.navigate", map[string]any{"url": vocalRemoverPage}, sid); err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal navigasi: " + err.Error(), "httpStatus": 502})
-		return
-	}
-	if err := client.WaitFor(ctx, sid, `document.readyState === 'complete' || document.readyState === 'interactive'`, 30*time.Second); err != nil {
-		// lanjutkan, sebagian browser remote bisa lambat melapor
-		_ = cdp.SleepCtx(ctx, 3*time.Second)
-	} else {
-		_ = cdp.SleepCtx(ctx, 3*time.Second)
-	}
-
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memuat file ke pemroses..."})
-	if err := injectFileToVocalRemover(client, sid, filename, contentType, data); err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal memuat file: " + err.Error(), "httpStatus": 502})
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal unggah ke layanan: " + err.Error(), "httpStatus": 502})
 		return
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memproses pemisahan vokal & musik..."})
-	tracks, err := waitVocalRemoverResult(ctx, client, sid, vocalPollTimeout)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memproses penghapusan noise..."})
+	resultURL, resultName, err := nirkyyDenoise(ctx, uploadedPath, filename)
 	if err != nil {
 		emitter.stopHeartbeat()
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 		return
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah hasil..."})
-	out := map[string]any{
-		"event":   "done",
-		"success": true,
-		"status":  "success",
-		"source":  "vocalremover.org",
-	}
-
-	if tracks.InstrumentalB64 != "" {
-		raw, decErr := base64.StdEncoding.DecodeString(tracks.InstrumentalB64)
-		if decErr != nil {
-			emitter.stopHeartbeat()
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal mendekode hasil instrumental", "httpStatus": 502})
-			return
-		}
-		name := tracks.InstrumentalName
-		if name == "" {
-			name = "instrumental.wav"
-		}
-		mime := tracks.InstrumentalMime
-		if mime == "" {
-			mime = "audio/wav"
-		}
-		url, upErr := uploadToTmpfiles(ctx, raw, name, mime)
-		if upErr != nil {
-			emitter.stopHeartbeat()
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal unggah instrumental: " + upErr.Error(), "httpStatus": 502})
-			return
-		}
-		out["url"] = url
-		out["instrumental_url"] = url
-		out["instrumental_size"] = len(raw)
-	}
-	if tracks.VocalsB64 != "" {
-		raw, decErr := base64.StdEncoding.DecodeString(tracks.VocalsB64)
-		if decErr == nil && len(raw) > 0 {
-			name := tracks.VocalsName
-			if name == "" {
-				name = "vocals.wav"
-			}
-			mime := tracks.VocalsMime
-			if mime == "" {
-				mime = "audio/wav"
-			}
-			if url, upErr := uploadToTmpfiles(ctx, raw, name, mime); upErr == nil {
-				out["vocals_url"] = url
-				out["vocals_size"] = len(raw)
-			}
-		}
-	}
-
-	if _, ok := out["url"]; !ok {
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunduh hasil..."})
+	outData, outMime, err := nirkyyDownload(ctx, resultURL)
+	if err != nil {
 		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Tidak ada hasil audio yang berhasil diekstrak", "httpStatus": 502})
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal mengunduh hasil: " + err.Error(), "httpStatus": 502})
 		return
 	}
 
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah hasil..."})
+	if resultName == "" {
+		resultName = "cleaned.wav"
+	}
+	if outMime == "" {
+		outMime = "audio/wav"
+	}
+	hostedURL, err := uploadToTmpfiles(ctx, outData, resultName, outMime)
 	emitter.stopHeartbeat()
-	emitter.emit(out)
-}
-
-// injectFileToVocalRemover mengirim file ke halaman vocalremover.org via CDP.
-func injectFileToVocalRemover(client *cdp.Client, sid, filename, contentType string, data []byte) error {
-	b64 := base64.StdEncoding.EncodeToString(data)
-	// init buffer
-	if _, err := client.Eval(sid, `window.__naFile = {name:"",type:"",b64:""};`); err != nil {
-		return err
-	}
-	// chunked append to avoid huge single evaluate expression issues
-	for i := 0; i < len(b64); i += vocalChunkSize {
-		end := i + vocalChunkSize
-		if end > len(b64) {
-			end = len(b64)
-		}
-		chunk, _ := json.Marshal(b64[i:end])
-		if _, err := client.Eval(sid, `window.__naFile.b64 += `+string(chunk)+`;`); err != nil {
-			return fmt.Errorf("gagal kirim chunk data: %w", err)
-		}
-	}
-	nameJSON, _ := json.Marshal(filename)
-	typeJSON, _ := json.Marshal(contentType)
-	script := `(async()=>{
-  try{
-    const meta = window.__naFile || {};
-    const b64 = meta.b64 || "";
-    const name = ` + string(nameJSON) + `;
-    const type = ` + string(typeJSON) + `;
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    const file = new File([bytes], name, {type: type || 'audio/mpeg'});
-    const input = document.querySelector('input[type=file]');
-    if(!input) return JSON.stringify({ok:false,err:'input file tidak ditemukan'});
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    input.files = dt.files;
-    input.dispatchEvent(new Event('change',{bubbles:true}));
-    input.dispatchEvent(new Event('input',{bubbles:true}));
-    try{ window.__naFile.b64 = ""; }catch(e){}
-    return JSON.stringify({ok:true,size:file.size});
-  }catch(e){ return JSON.stringify({ok:false,err:String(e&&e.message||e)}); }
-})()`
-	res, err := client.EvalAwait(sid, script)
 	if err != nil {
-		return err
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal unggah hasil: " + err.Error(), "httpStatus": 502})
+		return
 	}
-	var out struct {
-		OK  bool   `json:"ok"`
-		Err string `json:"err"`
-	}
-	if err := json.Unmarshal([]byte(res), &out); err != nil {
-		return fmt.Errorf("respons inject tidak valid: %w", err)
-	}
-	if !out.OK {
-		if out.Err == "" {
-			out.Err = "gagal menyuntikkan file"
-		}
-		return fmt.Errorf("%s", out.Err)
-	}
-	return nil
+
+	emitter.emit(map[string]any{
+		"event":   "done",
+		"success": true,
+		"status":  "success",
+		"source":  "nirkyy-a.hf.space",
+		"url":     hostedURL,
+		"size":    len(outData),
+	})
 }
 
-// waitVocalRemoverResult mem-poll halaman hingga hasil pemisahan siap lalu mengekstraknya.
-func waitVocalRemoverResult(ctx context.Context, client *cdp.Client, sid string, timeout time.Duration) (vocalRemoverTracks, error) {
-	deadline := time.Now().Add(timeout)
-	// beri waktu awal untuk app memulai proses
-	if err := sleepContext(ctx, 8*time.Second); err != nil {
-		return vocalRemoverTracks{}, err
+func nirkyyUpload(ctx context.Context, data []byte, filename, contentType string) (string, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("files", filename)
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", err
+	}
+	if err := w.Close(); err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyUploadURL, &buf)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", fmt.Errorf("upload gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var arr []string
+	if err := json.Unmarshal(body, &arr); err == nil && len(arr) > 0 && strings.TrimSpace(arr[0]) != "" {
+		return strings.TrimSpace(arr[0]), nil
+	}
+	var obj struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(body, &obj); err == nil && strings.TrimSpace(obj.Path) != "" {
+		return strings.TrimSpace(obj.Path), nil
+	}
+	return "", fmt.Errorf("respons upload tidak valid: %s", strings.TrimSpace(string(body)))
+}
+
+func nirkyyDenoise(ctx context.Context, uploadedPath, origName string) (string, string, error) {
+	payload := map[string]any{
+		"data": []any{
+			map[string]any{
+				"path":      uploadedPath,
+				"meta":      map[string]any{"_type": "gradio.FileData"},
+				"orig_name": origName,
+			},
+		},
+	}
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyCallURL, bytes.NewReader(b))
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", "", fmt.Errorf("gagal memulai proses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var call struct {
+		EventID string `json:"event_id"`
+	}
+	if err := json.Unmarshal(body, &call); err != nil || strings.TrimSpace(call.EventID) == "" {
+		return "", "", fmt.Errorf("event_id tidak ditemukan: %s", strings.TrimSpace(string(body)))
 	}
 
-	checkScript := `(async()=>{
-  try{
-    const text = (document.body && (document.body.innerText||document.body.textContent)||'').toLowerCase();
-    const anchors = Array.from(document.querySelectorAll('a'));
-    const audios = Array.from(document.querySelectorAll('audio'));
-    const blobLinks = anchors.filter(a => (a.href||'').startsWith('blob:'));
-    const blobAudios = audios.filter(a => ((a.currentSrc||a.src)||'').startsWith('blob:'));
-    const hasError = /error|gagal|failed|could not|unsupported|too (short|long)|sorry/i.test(text);
-    const hasProgress = !!document.querySelector('progress,[role="progressbar"],[class*="progress"],[class*="loading"],[class*="spinner"]');
-    // heuristik siap: ada blob audio/link (hasil unduhan) atau tombol/link save/download muncul setelah halaman berganti
-    const saveLike = anchors.filter(a => /save|download|simpan|unduh/i.test((a.innerText||a.textContent||'') + ' ' + (a.download||'') + ' ' + (a.className||'')));
-    const ready = (blobLinks.length + blobAudios.length) >= 1 || (saveLike.length >= 1 && blobAudios.length >= 1) || (blobAudios.length >= 2) || (blobLinks.length >= 2);
-    if (ready) {
-      async function toB64(url){
-        try{
-          const r = await fetch(url);
-          const b = await r.blob();
-          return await new Promise((res,rej)=>{
-            const fr = new FileReader();
-            fr.onload = () => { const s = String(fr.result||''); const i = s.indexOf(','); res({b64: i>=0?s.slice(i+1):s, mime: b.type||'audio/wav'}); };
-            fr.onerror = () => rej(fr.error||new Error('read fail'));
-            fr.readAsDataURL(b);
-          });
-        }catch(e){ return null; }
-      }
-      // kumpulkan kandidat (url,label,prefer music/instrumental)
-      const candidates = [];
-      for (const a of anchors) {
-        const href = a.href||'';
-        if (!href.startsWith('blob:') && !a.download) continue;
-        const label = ((a.innerText||a.textContent||'') + ' ' + (a.download||'') + ' ' + (a.getAttribute('aria-label')||'')).toLowerCase();
-        candidates.push({url: href, label, dl: a.download||''});
-      }
-      for (const au of audios) {
-        const u = au.currentSrc||au.src||'';
-        if (!u.startsWith('blob:')) continue;
-        const ctxText = ((au.closest('section,div,article')||{}).innerText||'').toLowerCase();
-        candidates.push({url: u, label: ctxText, dl: ''});
-      }
-      // dedupe by url
-      const seen = new Set();
-      const uniq = [];
-      for (const c of candidates){ if(!c.url || seen.has(c.url)) continue; seen.add(c.url); uniq.push(c); }
-      function isVocal(lbl){ return /vocal|voice|acapella|vokal|suara/.test(lbl); }
-      function isMusic(lbl){ return /music|instrumental|karaoke|musik|no vocal|without vocal|minus/.test(lbl); }
-      let music = uniq.find(c=>isMusic(c.label) && c.url.startsWith('blob:')) || uniq.find(c=>!isVocal(c.label) && c.url.startsWith('blob:')) || uniq[0];
-      let vocal = uniq.find(c=>isVocal(c.label) && c.url.startsWith('blob:') && (!music || c.url!==music.url)) || uniq.find(c=>c.url.startsWith('blob:') && (!music || c.url!==music.url));
-      const out = {ready:true};
-      if (music && music.url.startsWith('blob:')) {
-        const r = await toB64(music.url);
-        if (r) { out.instrumentalB64=r.b64; out.instrumentalMime=r.mime; out.instrumentalName=music.dl||'instrumental.wav'; }
-      }
-      if (vocal && vocal.url.startsWith('blob:')) {
-        const r = await toB64(vocal.url);
-        if (r) { out.vocalsB64=r.b64; out.vocalsMime=r.mime; out.vocalsName=vocal.dl||'vocals.wav'; }
-      }
-      if (!out.instrumentalB64 && !out.vocalsB64) { return JSON.stringify({ready:false, waiting:true, hasProgress, note:'blob found but extract failed'}); }
-      return JSON.stringify(out);
-    }
-    if (hasError && !hasProgress) return JSON.stringify({ready:false, error:'Situs vocalremover.org melaporkan error atau format tidak didukung'});
-    return JSON.stringify({ready:false, hasProgress});
-  }catch(e){ return JSON.stringify({ready:false, error:String(e&&e.message||e)}); }
-})()`
+	sseURL := nirkyyCallURL + "/" + call.EventID
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	sseResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer sseResp.Body.Close()
+	if sseResp.StatusCode < 200 || sseResp.StatusCode > 299 {
+		sb, _ := io.ReadAll(io.LimitReader(sseResp.Body, 2<<20))
+		return "", "", fmt.Errorf("gagal membaca status proses (HTTP %d): %s", sseResp.StatusCode, strings.TrimSpace(string(sb)))
+	}
 
-	for {
-		if ctx.Err() != nil {
-			return vocalRemoverTracks{}, fmt.Errorf("proses dibatalkan/timeout")
-		}
-		if time.Now().After(deadline) {
-			return vocalRemoverTracks{}, fmt.Errorf("proses vocal remover kehabisan waktu (timeout)")
-		}
-		res, err := client.EvalAwait(sid, checkScript)
-		if err != nil {
-			// satu kali gagal eval bisa transient; coba lanjut selama belum deadline
-			if time.Now().After(deadline) {
-				return vocalRemoverTracks{}, fmt.Errorf("gagal membaca status halaman: %w", err)
-			}
-		} else {
-			var tr vocalRemoverTracks
-			if jerr := json.Unmarshal([]byte(res), &tr); jerr == nil {
-				if tr.Error != "" {
-					return vocalRemoverTracks{}, fmt.Errorf("%s", tr.Error)
+	type fileData struct {
+		Path     string `json:"path"`
+		URL      string `json:"url"`
+		OrigName string `json:"orig_name"`
+	}
+
+	scanner := bufio.NewScanner(sseResp.Body)
+	// allow larger SSE data lines
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 2*1024*1024)
+	var curEvent string
+	var dataLines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if curEvent != "" || len(dataLines) > 0 {
+				dataStr := strings.Join(dataLines, "\n")
+				switch curEvent {
+				case "complete":
+					var arr []fileData
+					if err := json.Unmarshal([]byte(dataStr), &arr); err == nil && len(arr) > 0 {
+						u := strings.TrimSpace(arr[0].URL)
+						if u == "" && strings.TrimSpace(arr[0].Path) != "" {
+							u = nirkyyBase + "/gradio_api/file=" + arr[0].Path
+						}
+						if u == "" {
+							return "", "", fmt.Errorf("URL hasil tidak ditemukan")
+						}
+						return u, arr[0].OrigName, nil
+					}
+					return "", "", fmt.Errorf("respons hasil tidak valid")
+				case "error":
+					msg := strings.TrimSpace(dataStr)
+					if msg == "" {
+						msg = "proses denoise gagal"
+					}
+					return "", "", fmt.Errorf("%s", msg)
 				}
-				if tr.Ready && (tr.InstrumentalB64 != "" || tr.VocalsB64 != "") {
-					return tr, nil
-				}
 			}
+			curEvent = ""
+			dataLines = nil
+			continue
 		}
-		if err := sleepContext(ctx, vocalPollInterval); err != nil {
-			return vocalRemoverTracks{}, err
+		if strings.HasPrefix(line, "event:") {
+			curEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			continue
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return "", "", fmt.Errorf("gagal membaca stream: %w", err)
+	}
+	return "", "", fmt.Errorf("stream selesai tanpa hasil")
+}
+
+func nirkyyDownload(ctx context.Context, rawURL string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, noiseMaxSourceBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, "", fmt.Errorf("unduh hasil gagal (HTTP %d)", resp.StatusCode)
+	}
+	if len(data) > noiseMaxSourceBytes {
+		return nil, "", fmt.Errorf("hasil melebihi batas ukuran")
+	}
+	ct := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if i := strings.Index(ct, ";"); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	return data, ct, nil
 }
