@@ -1,15 +1,13 @@
 package tools
 
 import (
-	"bufio"
-	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
-	"net/textproto"
 	"os"
 	"os/exec"
 	"path"
@@ -17,12 +15,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/purujawa06-bot/na-api/backend/internal/cdp"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
 const (
-	nirkyyBase          = "https://nirkyy-a.hf.space"
-	nirkyyCallURL       = nirkyyBase + "/gradio_api/call/denoise"
+	nirkyyPageURL       = "https://nirkyy-a.hf.space/"
 	noiseMaxSourceBytes = 32 << 20 // 32 MiB
 	nirkyyTimeout       = 5 * time.Minute
 )
@@ -98,47 +96,22 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		contentType = "audio/wav"
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Menyiapkan audio..."})
-	inputURL, err := uploadToTmpfiles(ctx, data, filename, contentType)
-	if err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal menyiapkan audio: " + err.Error(), "httpStatus": 502})
-		return
-	}
-
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memproses penghapusan noise (nirkyy-a.hf.space)..."})
-	resultURL, resultName, err := nirkyyDenoise(ctx, inputURL, filename)
+	emitter.emit(map[string]any{"event": "processing", "status": "running", "message": "Memproses penghapusan noise via browser (nirkyy-a.hf.space)...", "source": "nirkyy-a.hf.space"})
+	outData, err := nirkyyDenoiseCDP(ctx, data, filename, contentType)
 	if err != nil {
 		emitter.stopHeartbeat()
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 		return
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunduh hasil..."})
-	outData, outMime, err := nirkyyDownload(ctx, resultURL)
-	if err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal mengunduh hasil: " + err.Error(), "httpStatus": 502})
-		return
-	}
-
 	// Konversi ke MP3 agar kompatibel sebagai audio WhatsApp (WAV sering tidak tampil/diputar)
 	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengonversi hasil ke MP3..."})
+	outMime := "audio/wav"
+	resultName := "cleaned.wav"
 	if mp3Data, convErr := convertWavToMP3(ctx, outData); convErr == nil && len(mp3Data) > 0 {
 		outData = mp3Data
 		outMime = "audio/mpeg"
 		resultName = "cleaned.mp3"
-	} else {
-		// fallback: tetap kirim hasil asli (wav) bila konversi tidak tersedia/gagal
-		if resultName == "" {
-			resultName = "cleaned.wav"
-		}
-		if outMime == "" {
-			outMime = "audio/wav"
-		}
-		if !strings.HasSuffix(strings.ToLower(resultName), ".wav") && strings.Contains(strings.ToLower(outMime), "wav") {
-			resultName = "cleaned.wav"
-		}
 	}
 
 	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah hasil..."})
@@ -161,169 +134,169 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func nirkyyDenoise(ctx context.Context, inputURL, origName string) (string, string, error) {
-	payload := map[string]any{
-		"data": []any{
-			map[string]any{
-				"path":      inputURL,
-				"url":       inputURL,
-				"meta":      map[string]any{"_type": "gradio.FileData"},
-				"orig_name": origName,
-			},
-		},
+// nirkyyDenoiseCDP menjalankan denoise DeepFilterNet via Gradio API dari konteks browser (CDP)
+// untuk menghindari 502/503 pada pemanggilan HTTP langsung dari server.
+// Alur (reverse-engineered, Gradio 6.32.0, api_prefix /gradio_api, fn denoise):
+//  1. Navigasi ke nirkyy-a.hf.space (origin/session browser)
+//  2. decode base64 audio input -> upload ke /gradio_api/upload (same-origin)
+//  3. POST /gradio_api/call/denoise (FileData) -> event_id
+//  4. GET /gradio_api/call/denoise/<event_id> (SSE, event:complete) -> URL file hasil
+//  5. fetch file hasil -> base64 audio
+func nirkyyDenoiseCDP(ctx context.Context, audio []byte, filename, contentType string) ([]byte, error) {
+	client, err := cdp.Dial(ctx, cdp.DefaultEndpoint)
+	if err != nil {
+		return nil, err
 	}
-	b, _ := json.Marshal(payload)
+	defer client.Close()
 
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			if err := sleepContext(ctx, time.Duration(attempt*attempt)*3*time.Second); err != nil {
-				return "", "", err
+	raw, err := client.Call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+	if err != nil {
+		return nil, fmt.Errorf("create target: %w", err)
+	}
+	var ct struct {
+		TargetID string `json:"targetId"`
+	}
+	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
+		return nil, fmt.Errorf("targetId tidak ditemukan")
+	}
+	targetID := ct.TargetID
+	defer func() { _, _ = client.Call("Target.closeTarget", map[string]any{"targetId": targetID}, "") }()
+
+	raw, err = client.Call("Target.attachToTarget", map[string]any{"targetId": targetID, "flatten": true}, "")
+	if err != nil {
+		return nil, fmt.Errorf("attach: %w", err)
+	}
+	var att struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
+		return nil, fmt.Errorf("sessionId tidak ditemukan")
+	}
+	sid := att.SessionID
+
+	_, _ = client.Call("Page.enable", map[string]any{}, sid)
+	_, _ = client.Call("Runtime.enable", map[string]any{}, sid)
+
+	if _, err := client.Call("Page.navigate", map[string]any{"url": nirkyyPageURL}, sid); err != nil {
+		return nil, fmt.Errorf("navigate: %w", err)
+	}
+	if err := client.WaitFor(ctx, sid, `document.readyState === 'complete' || document.readyState === 'interactive'`, 45*time.Second); err != nil {
+		return nil, fmt.Errorf("halaman nirkyy tidak siap: %w", err)
+	}
+
+	b64Input := base64.StdEncoding.EncodeToString(audio)
+	inB64JSON, _ := json.Marshal(b64Input)
+	nameJSON, _ := json.Marshal(filename)
+	mimeJSON, _ := json.Marshal(contentType)
+	expr := fmt.Sprintf(`(async () => {
+  try {
+    const inputB64 = %s;
+    const filename = %s;
+    const mime = %s || 'audio/wav';
+    // decode audio input (dikirim sebagai base64 agar tidak bergantung fetch cross-origin)
+    const bin = atob(inputB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    // upload ke gradio (same-origin)
+    const fd = new FormData();
+    fd.append('files', new Blob([bytes], { type: mime }), filename);
+    const up = await fetch('/gradio_api/upload', { method: 'POST', body: fd });
+    const upText = await up.text();
+    if (!up.ok) return JSON.stringify({ ok:false, step:'upload', status: up.status, body: (upText||'').slice(0,400) });
+    let files; try { files = JSON.parse(upText); } catch(e) { files = null; }
+    const fpath = Array.isArray(files) ? files[0] : null;
+    if (!fpath) return JSON.stringify({ ok:false, step:'upload', body: (upText||'').slice(0,400) });
+    const fileUrl = location.origin + '/gradio_api/file=' + fpath;
+    // panggil denoise
+    const payload = { data: [{ path: fileUrl, url: fileUrl, meta: { _type: 'gradio.FileData' }, orig_name: filename }] };
+    const callRes = await fetch('/gradio_api/call/denoise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const callText = await callRes.text();
+    if (!callRes.ok) return JSON.stringify({ ok:false, step:'call', status: callRes.status, body: (callText||'').slice(0,400) });
+    let eid = null; try { eid = JSON.parse(callText).event_id; } catch(e) {}
+    if (!eid) return JSON.stringify({ ok:false, step:'call', body: (callText||'').slice(0,400) });
+    // SSE hasil
+    const sse = await fetch('/gradio_api/call/denoise/' + eid);
+    const sseText = await sse.text();
+    if (!sse.ok) return JSON.stringify({ ok:false, step:'sse', status: sse.status, body: (sseText||'').slice(0,400) });
+    const blocks = String(sseText||'').split('\n\n');
+    let outUrl = '';
+    let sseErr = '';
+    for (const b of blocks) {
+      const lines = b.split('\n');
+      let ev = '', data = '';
+      for (const ln of lines) {
+        if (ln.indexOf('event:') === 0) ev = ln.slice(6).trim();
+        else if (ln.indexOf('data:') === 0) data += (data ? '\n' : '') + ln.slice(5).trim();
+      }
+      if (ev === 'complete') {
+        try { const arr = JSON.parse(data); if (Array.isArray(arr) && arr[0]) outUrl = arr[0].url || (arr[0].path ? (location.origin + '/gradio_api/file=' + arr[0].path) : ''); } catch(e) {}
+      } else if (ev === 'error') {
+        sseErr = data || 'proses denoise gagal';
+      }
+    }
+    if (!outUrl) return JSON.stringify({ ok:false, step:'result', error: sseErr || 'URL hasil tidak ditemukan', body: (sseText||'').slice(0,600) });
+    // unduh hasil
+    const outRes = await fetch(outUrl);
+    if (!outRes.ok) return JSON.stringify({ ok:false, step:'download_result', status: outRes.status, url: outUrl });
+    const ab = await outRes.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return JSON.stringify({ ok:true, b64: btoa(bin), size: bytes.length });
+  } catch (e) {
+    return JSON.stringify({ ok:false, step:'exception', error: String(e && e.message ? e.message : e) });
+  }
+})()`, string(inB64JSON), string(nameJSON), string(mimeJSON))
+
+	outStr, err := client.EvalAwait(sid, expr)
+	if err != nil {
+		return nil, fmt.Errorf("gagal memproses via browser: %w", err)
+	}
+
+	var out struct {
+		OK    bool   `json:"ok"`
+		B64   string `json:"b64"`
+		Size  int    `json:"size"`
+		Step  string `json:"step"`
+		Error string `json:"error"`
+		Status int   `json:"status"`
+		Body  string `json:"body"`
+		URL   string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(outStr), &out); err != nil {
+		return nil, fmt.Errorf("respons browser tidak valid: %w", err)
+	}
+	if !out.OK {
+		msg := strings.TrimSpace(out.Error)
+		if msg == "" {
+			msg = strings.TrimSpace(out.Body)
+		}
+		if msg == "" {
+			msg = "gagal memproses audio"
+		}
+		if out.Step != "" {
+			if out.Status > 0 {
+				msg = fmt.Sprintf("%s (%s, HTTP %d)", msg, out.Step, out.Status)
+			} else {
+				msg = fmt.Sprintf("%s (%s)", msg, out.Step)
 			}
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyCallURL, bytes.NewReader(b))
-		if err != nil {
-			return "", "", err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		resp.Body.Close()
-		if resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
-			lastErr = fmt.Errorf("gagal memulai proses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-			continue
-		}
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return "", "", fmt.Errorf("gagal memulai proses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-		}
-		var call struct {
-			EventID string `json:"event_id"`
-		}
-		if err := json.Unmarshal(body, &call); err != nil || strings.TrimSpace(call.EventID) == "" {
-			return "", "", fmt.Errorf("event_id tidak ditemukan: %s", strings.TrimSpace(string(body)))
-		}
-		u, name, err := nirkyyWaitResult(ctx, call.EventID)
-		if err == nil {
-			return u, name, nil
-		}
-		lastErr = err
-		// retry on transient-like failures only
-		if !strings.Contains(err.Error(), "HTTP 503") && !strings.Contains(err.Error(), "HTTP 502") && !strings.Contains(err.Error(), "HTTP 504") {
-			return "", "", err
-		}
+		return nil, fmt.Errorf("%s", msg)
 	}
-	if lastErr != nil {
-		return "", "", lastErr
+	if strings.TrimSpace(out.B64) == "" {
+		return nil, fmt.Errorf("hasil audio kosong")
 	}
-	return "", "", fmt.Errorf("gagal memproses audio")
-}
-
-func nirkyyWaitResult(ctx context.Context, eventID string) (string, string, error) {
-	sseURL := nirkyyCallURL + "/" + eventID
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
+	data, err := base64.StdEncoding.DecodeString(out.B64)
 	if err != nil {
-		return "", "", err
+		return nil, fmt.Errorf("gagal decode hasil: %w", err)
 	}
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	sseResp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", err
+	if len(data) == 0 {
+		return nil, fmt.Errorf("hasil audio kosong")
 	}
-	defer sseResp.Body.Close()
-	if sseResp.StatusCode < 200 || sseResp.StatusCode > 299 {
-		sb, _ := io.ReadAll(io.LimitReader(sseResp.Body, 2<<20))
-		return "", "", fmt.Errorf("gagal membaca status proses (HTTP %d): %s", sseResp.StatusCode, strings.TrimSpace(string(sb)))
-	}
-
-	type fileData struct {
-		Path     string `json:"path"`
-		URL      string `json:"url"`
-		OrigName string `json:"orig_name"`
-	}
-
-	scanner := bufio.NewScanner(sseResp.Body)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 2*1024*1024)
-	var curEvent string
-	var dataLines []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			if curEvent != "" || len(dataLines) > 0 {
-				dataStr := strings.Join(dataLines, "\n")
-				switch curEvent {
-				case "complete":
-					var arr []fileData
-					if err := json.Unmarshal([]byte(dataStr), &arr); err == nil && len(arr) > 0 {
-						u := strings.TrimSpace(arr[0].URL)
-						if u == "" && strings.TrimSpace(arr[0].Path) != "" {
-							u = nirkyyBase + "/gradio_api/file=" + arr[0].Path
-						}
-						if u == "" {
-							return "", "", fmt.Errorf("URL hasil tidak ditemukan")
-						}
-						return u, arr[0].OrigName, nil
-					}
-					return "", "", fmt.Errorf("respons hasil tidak valid")
-				case "error":
-					msg := strings.TrimSpace(dataStr)
-					if msg == "" {
-						msg = "proses denoise gagal"
-					}
-					return "", "", fmt.Errorf("%s", msg)
-				}
-			}
-			curEvent = ""
-			dataLines = nil
-			continue
-		}
-		if strings.HasPrefix(line, "event:") {
-			curEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-			continue
-		}
-		if strings.HasPrefix(line, "data:") {
-			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-			continue
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", "", fmt.Errorf("gagal membaca stream: %w", err)
-	}
-	return "", "", fmt.Errorf("stream selesai tanpa hasil")
-}
-
-func nirkyyDownload(ctx context.Context, rawURL string) ([]byte, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, noiseMaxSourceBytes+1))
-	if err != nil {
-		return nil, "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, "", fmt.Errorf("unduh hasil gagal (HTTP %d)", resp.StatusCode)
-	}
-	if len(data) > noiseMaxSourceBytes {
-		return nil, "", fmt.Errorf("hasil melebihi batas ukuran")
-	}
-	ct := strings.TrimSpace(resp.Header.Get("Content-Type"))
-	if i := strings.Index(ct, ";"); i >= 0 {
-		ct = strings.TrimSpace(ct[:i])
-	}
-	return data, ct, nil
+	return data, nil
 }
 
 func convertWavToMP3(ctx context.Context, wav []byte) ([]byte, error) {
@@ -355,6 +328,3 @@ func convertWavToMP3(ctx context.Context, wav []byte) ([]byte, error) {
 	}
 	return mp3, nil
 }
-
-// keep textproto import referenced if needed by future changes
-var _ = textproto.MIMEHeader{}
