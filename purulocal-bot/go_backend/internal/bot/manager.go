@@ -1053,7 +1053,8 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 	if c == nil {
 		return errors.New("client not ready")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, res.AudioURL, nil)
+	audioURL := normalizeTmpfilesDirectURL(res.AudioURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, audioURL, nil)
 	if err != nil {
 		return err
 	}

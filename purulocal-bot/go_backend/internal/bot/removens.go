@@ -571,6 +571,10 @@ func convertAudioViaAPI(ctx context.Context, data []byte, filename, format strin
 	if resultURL == "" {
 		return nil, fmt.Errorf("URL hasil konversi tidak ditemukan")
 	}
+	// normalisasi URL tmpfiles ke direct /dl/ (hindari halaman HTML tombol unduh)
+	if d := normalizeTmpfilesDirectURL(resultURL); d != "" {
+		resultURL = d
+	}
 	// download hasil (butuh header agar tidak dapat HTML/interstitial dari host)
 	out, err := downloadFileBytes(ctx, client, resultURL, 32<<20)
 	if err != nil {
@@ -619,11 +623,12 @@ func audioFilenameFromMime(mime string) string {
 	}
 }
 
-func downloadFileBytes(ctx context.Context, client *http.Client, url string, limit int64) ([]byte, error) {
+func downloadFileBytes(ctx context.Context, client *http.Client, rawURL string, limit int64) ([]byte, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 90 * time.Second}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	rawURL = normalizeTmpfilesDirectURL(rawURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
