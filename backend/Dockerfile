@@ -24,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server 
 # and Node.js for the EaseMate signing and QuillBot Cloudflare bridges.
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata nodejs \
+RUN apk add --no-cache ca-certificates tzdata nodejs ffmpeg \
     && addgroup -S naapi \
     && adduser -S -G naapi naapi
 

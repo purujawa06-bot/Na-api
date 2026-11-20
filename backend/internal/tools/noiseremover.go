@@ -10,7 +10,10 @@ import (
 	"mime"
 	"net/http"
 	"net/textproto"
+	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -119,13 +122,26 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Konversi ke MP3 agar kompatibel sebagai audio WhatsApp (WAV sering tidak tampil/diputar)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengonversi hasil ke MP3..."})
+	if mp3Data, convErr := convertWavToMP3(ctx, outData); convErr == nil && len(mp3Data) > 0 {
+		outData = mp3Data
+		outMime = "audio/mpeg"
+		resultName = "cleaned.mp3"
+	} else {
+		// fallback: tetap kirim hasil asli (wav) bila konversi tidak tersedia/gagal
+		if resultName == "" {
+			resultName = "cleaned.wav"
+		}
+		if outMime == "" {
+			outMime = "audio/wav"
+		}
+		if !strings.HasSuffix(strings.ToLower(resultName), ".wav") && strings.Contains(strings.ToLower(outMime), "wav") {
+			resultName = "cleaned.wav"
+		}
+	}
+
 	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah hasil..."})
-	if resultName == "" {
-		resultName = "cleaned.wav"
-	}
-	if outMime == "" {
-		outMime = "audio/wav"
-	}
 	hostedURL, err := uploadToTmpfiles(ctx, outData, resultName, outMime)
 	emitter.stopHeartbeat()
 	if err != nil {
@@ -134,12 +150,14 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	emitter.emit(map[string]any{
-		"event":   "done",
-		"success": true,
-		"status":  "success",
-		"source":  "nirkyy-a.hf.space",
-		"url":     hostedURL,
-		"size":    len(outData),
+		"event":    "done",
+		"success":  true,
+		"status":   "success",
+		"source":   "nirkyy-a.hf.space",
+		"url":      hostedURL,
+		"size":     len(outData),
+		"mimetype": outMime,
+		"filename": resultName,
 	})
 }
 
@@ -306,6 +324,36 @@ func nirkyyDownload(ctx context.Context, rawURL string) ([]byte, string, error) 
 		ct = strings.TrimSpace(ct[:i])
 	}
 	return data, ct, nil
+}
+
+func convertWavToMP3(ctx context.Context, wav []byte) ([]byte, error) {
+	dir, err := os.MkdirTemp("", "nr-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	inPath := filepath.Join(dir, "in.wav")
+	outPath := filepath.Join(dir, "out.mp3")
+	if err := os.WriteFile(inPath, wav, 0o600); err != nil {
+		return nil, err
+	}
+	// ffmpeg: konversi ke MP3 (kompatibel audio WhatsApp). -vn buang stream non-audio.
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k", outPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return nil, fmt.Errorf("ffmpeg: %w: %s", err, msg)
+		}
+		return nil, err
+	}
+	mp3, err := os.ReadFile(outPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(mp3) == 0 {
+		return nil, fmt.Errorf("hasil konversi kosong")
+	}
+	return mp3, nil
 }
 
 // keep textproto import referenced if needed by future changes

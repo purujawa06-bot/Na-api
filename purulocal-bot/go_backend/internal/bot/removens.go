@@ -96,7 +96,7 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 
 	res := ExecResult{
 		AudioURL: resultURL,
-		Mimetype: "audio/wav",
+		Mimetype: "audio/mpeg",
 		Caption:  "Hasil penghapusan noise",
 	}
 	if err := m.sendAudioFromURL(ctx, evt, res); err != nil {
