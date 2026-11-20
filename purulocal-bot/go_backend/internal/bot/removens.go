@@ -23,8 +23,8 @@ import (
 const nirkyyBaseURL = "https://nirkyy-a.hf.space"
 
 func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Message) error {
-	// batas waktu keseluruhan agar tidak menggantung
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	// Proses denoise (nirkyy SSE) bisa lama; lepas dari timeout singkat context dispatch command.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
 
 	m.logInfo("removens", "command diterima")
