@@ -1084,6 +1084,10 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 	if mime == "" {
 		mime = "audio/mpeg"
 	}
+	ptt := res.PTT
+	if ptt && mime == "audio/mpeg" {
+		// PTT biasanya ogg/opus; biarkan mime apa adanya jika sudah ogg
+	}
 	audio := &waE2E.AudioMessage{
 		URL:           proto.String(uploaded.URL),
 		DirectPath:    proto.String(uploaded.DirectPath),
@@ -1092,7 +1096,7 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 		FileEncSHA256: uploaded.FileEncSHA256,
 		FileSHA256:    uploaded.FileSHA256,
 		FileLength:    proto.Uint64(uint64(len(data))),
-		PTT:           proto.Bool(false),
+		PTT:           proto.Bool(ptt),
 		ContextInfo:   buildReplyContext(evt),
 	}
 	if res.DurationSec > 0 {

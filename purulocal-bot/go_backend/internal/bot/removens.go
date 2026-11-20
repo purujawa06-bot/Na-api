@@ -90,22 +90,9 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 		_ = m.sendReply(ctx, evt, "Gagal menghapus noise: "+err.Error())
 		return nil
 	}
-	m.logInfo("removens", fmt.Sprintf("hasil denoise %d bytes, konversi ke MP3", len(cleanWav)))
+	m.logInfo("removens", fmt.Sprintf("hasil denoise %d bytes, konversi ke format playable", len(cleanWav)))
 
-	outData := cleanWav
-	outMime := "audio/wav"
-	outName := "cleaned.wav"
-	if mp3, convErr := convertAudioToMP3(ctx, cleanWav); convErr == nil && len(mp3) > 0 {
-		outData = mp3
-		outMime = "audio/mpeg"
-		outName = "cleaned.mp3"
-	} else if mp3, convErr := convertAudioViaAPI(ctx, cleanWav, "cleaned.wav", "mp3"); convErr == nil && len(mp3) > 0 {
-		outData = mp3
-		outMime = "audio/mpeg"
-		outName = "cleaned.mp3"
-	} else {
-		m.logWarn("removens", "konversi MP3 tidak tersedia, kirim WAV")
-	}
+	outData, outMime, outName, outPTT := preparePlayableAudio(ctx, m, cleanWav)
 
 	// unggah hasil ke tmpfiles untuk dikirim sebagai audio URL
 	resultURL, err := uploadToTmpfiles(ctx, outData, outName, outMime)
@@ -114,12 +101,13 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 		_ = m.sendReply(ctx, evt, "Gagal mengunggah hasil: "+err.Error())
 		return nil
 	}
-	m.logInfo("removens", "hasil: "+resultURL)
+	m.logInfo("removens", "hasil: "+resultURL+" mime="+outMime+" ptt="+fmt.Sprint(outPTT))
 
 	res := ExecResult{
 		AudioURL: resultURL,
 		Mimetype: outMime,
 		Caption:  "Hasil penghapusan noise",
+		PTT:      outPTT,
 	}
 	if err := m.sendAudioFromURL(ctx, evt, res); err != nil {
 		m.logError("removens", "kirim audio gagal: "+err.Error())
@@ -415,33 +403,109 @@ func nirkyyDownload(ctx context.Context, client *http.Client, base, url string) 
 	return out, nil
 }
 
-func convertAudioToMP3(ctx context.Context, wav []byte) ([]byte, error) {
+func preparePlayableAudio(ctx context.Context, m *Manager, wav []byte) ([]byte, string, string, bool) {
+	// Prioritas: MP3 (paling kompatibel untuk audio biasa, seperti .play), lalu M4A, lalu OGG/Opus sebagai PTT.
+	type attempt struct {
+		format string
+		mime   string
+		name   string
+		ptt    bool
+	}
+	attempts := []attempt{
+		{format: "mp3", mime: "audio/mpeg", name: "cleaned.mp3", ptt: false},
+		{format: "m4a", mime: "audio/mp4", name: "cleaned.m4a", ptt: false},
+		{format: "opus", mime: "audio/ogg; codecs=opus", name: "cleaned.ogg", ptt: true},
+		{format: "ogg", mime: "audio/ogg", name: "cleaned.ogg", ptt: true},
+	}
+	for _, a := range attempts {
+		if out, err := convertAudioLocal(ctx, wav, a.format); err == nil && len(out) > 0 {
+			if m != nil {
+				m.logInfo("removens", "konversi lokal berhasil: "+a.format)
+			}
+			return out, a.mime, a.name, a.ptt
+		}
+		if out, err := convertAudioViaAPI(ctx, wav, "cleaned.wav", a.format); err == nil && len(out) > 0 {
+			if m != nil {
+				m.logInfo("removens", "konversi via API berhasil: "+a.format)
+			}
+			return out, a.mime, a.name, a.ptt
+		}
+	}
+	if m != nil {
+		m.logWarn("removens", "semua konversi gagal, kirim WAV (mungkin tidak dapat diputar)")
+	}
+	return wav, "audio/wav", "cleaned.wav", false
+}
+
+func convertAudioLocal(ctx context.Context, wav []byte, format string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "nr-*")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
 	inPath := filepath.Join(dir, "in.wav")
-	outPath := filepath.Join(dir, "out.mp3")
+	ext := format
+	if format == "opus" {
+		ext = "ogg"
+	}
+	outPath := filepath.Join(dir, "out."+ext)
 	if err := os.WriteFile(inPath, wav, 0o600); err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k", outPath)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg != "" {
-			return nil, fmt.Errorf("ffmpeg: %w: %s", err, msg)
+
+	var cmds [][]string
+	switch format {
+	case "mp3":
+		cmds = [][]string{
+			{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "128k", outPath},
+			{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k", outPath},
 		}
-		return nil, err
+	case "m4a":
+		cmds = [][]string{
+			{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "128k", outPath},
+		}
+	case "opus":
+		cmds = [][]string{
+			{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "48000", "-ac", "1", "-c:a", "libopus", "-b:a", "64k", outPath},
+		}
+	case "ogg":
+		cmds = [][]string{
+			{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "48000", "-ac", "1", "-c:a", "libopus", "-b:a", "64k", outPath},
+			{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-c:a", "libvorbis", "-q:a", "4", outPath},
+		}
+	default:
+		return nil, fmt.Errorf("format tidak didukung: %s", format)
 	}
-	mp3, err := os.ReadFile(outPath)
-	if err != nil {
-		return nil, err
+
+	var lastErr error
+	for _, args := range cmds {
+		_ = os.Remove(outPath)
+		cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			msg := strings.TrimSpace(string(out))
+			if msg != "" {
+				lastErr = fmt.Errorf("ffmpeg: %w: %s", err, msg)
+			} else {
+				lastErr = err
+			}
+			continue
+		}
+		b, err := os.ReadFile(outPath)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if len(b) == 0 {
+			lastErr = fmt.Errorf("hasil konversi kosong")
+			continue
+		}
+		return b, nil
 	}
-	if len(mp3) == 0 {
-		return nil, fmt.Errorf("hasil konversi kosong")
+	if lastErr == nil {
+		lastErr = fmt.Errorf("konversi gagal")
 	}
-	return mp3, nil
+	return nil, lastErr
 }
 
 // convertAudioViaAPI mencoba konversi via endpoint na-api /api/tools/ffmpeg (NDJSON) sebagai fallback.

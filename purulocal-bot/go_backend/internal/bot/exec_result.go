@@ -14,6 +14,7 @@ type ExecResult struct {
 	PermalinkURL string `json:"permalink_url,omitempty"`
 	Mimetype     string `json:"mimetype,omitempty"`
 	DurationSec  uint32 `json:"duration_sec,omitempty"`
+	PTT          bool   `json:"ptt,omitempty"`
 	ContactName  string `json:"contact_name,omitempty"`
 	ContactVCard string `json:"contact_vcard,omitempty"`
 	// Document (internal, tidak dari plugin JSON)

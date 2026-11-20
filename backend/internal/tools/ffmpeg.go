@@ -135,17 +135,34 @@ func runFFmpegConvert(ctx context.Context, input []byte, inExt, format string) (
 		return nil, "", "", err
 	}
 
-	args := ffmpegArgs(inPath, outPath, format)
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if len(msg) > 500 {
-			msg = msg[len(msg)-500:]
+	argSets := [][]string{ffmpegArgs(inPath, outPath, format)}
+	// fallback mp3 jika libmp3lame tidak tersedia
+	if format == "mp3" {
+		argSets = append(argSets, []string{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k", outPath})
+	}
+	var lastErr error
+	for i, args := range argSets {
+		if i > 0 {
+			_ = os.Remove(outPath)
 		}
-		if msg != "" {
-			return nil, "", "", fmt.Errorf("konversi gagal: %s", msg)
+		cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			msg := strings.TrimSpace(string(out))
+			if len(msg) > 500 {
+				msg = msg[len(msg)-500:]
+			}
+			if msg != "" {
+				lastErr = fmt.Errorf("konversi gagal: %s", msg)
+			} else {
+				lastErr = fmt.Errorf("konversi gagal: %w", err)
+			}
+			continue
 		}
-		return nil, "", "", fmt.Errorf("konversi gagal: %w", err)
+		lastErr = nil
+		break
+	}
+	if lastErr != nil {
+		return nil, "", "", lastErr
 	}
 
 	outData, err := os.ReadFile(outPath)
@@ -188,7 +205,7 @@ func ffmpegArgs(inPath, outPath, format string) []string {
 	args := []string{"-y", "-hide_banner", "-loglevel", "error", "-i", inPath}
 	switch format {
 	case "mp3":
-		args = append(args, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k")
+		args = append(args, "-vn", "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "128k")
 	case "m4a", "aac":
 		args = append(args, "-vn", "-c:a", "aac", "-b:a", "128k")
 	case "ogg":
