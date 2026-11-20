@@ -25,8 +25,8 @@
 - Middleware Go: rate limit 100 req/menit/IP, CORS, cache 7 hari; `no-store` untuk prefix dynamic (`chat/temp/tools/admin/agent-tools/models/user-scripts/dll`, PurTV player/schedule, dll.). Cache GET JSON via `internal/cache` + `cache-control`; jangan cache POST/upload/SSE/NDJSON/endpoint personal.
 - Next export: `output: 'export'`, `images.unoptimized`, `ws` di `serverComponentsExternalPackages`; admin via `/admin.html`.
 - Remote CDP/browser (bukan khusus TikTok):
-  - `wss://light-panda-cdp.onrender.com/` — TikTok downloader Go (ssstik via CDP), `backend/internal/downloader/tiktok.go` + `backend/internal/cdp/cdp.go`.
-  - default `wss://browser-yq20.onrender.com/` (env `CDP_WS_URL`/`BING_CDP_URL`) — Bing/search JS, `lib/cdp-browser.js` + `lib/bing-cdp.js` (stack lama, lihat `lib/ai-search.js`).
+  - `wss://light-panda-cdp.onrender.com/` (default aktif) — TikTok downloader Go (`backend/internal/downloader/tiktok.go` + `backend/internal/cdp/cdp.go`) dan Bing/search JS legacy (`lib/cdp-browser.js` + `lib/bing-cdp.js`, env `CDP_WS_URL`/`BING_CDP_URL`).
+  - `wss://browser-yq20.onrender.com/` — sebelumnya default JS, **tidak aktif** (404), diganti light-panda.
 
 ## puruLocal bot (`purulocal-bot/`)
 - Backend bot: `purulocal-bot/go_backend/` (modul Go terpisah, whatsmeow; sesi lokal di device). Build: `cd purulocal-bot/go_backend && go build ./...`.

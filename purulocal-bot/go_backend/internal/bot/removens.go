@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -25,6 +24,8 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
+	m.logInfo("removens", "command diterima")
+
 	audioMsg := m.findAudioForRemoveNoise(evt)
 	if audioMsg == nil {
 		_ = m.sendReply(ctx, evt, "Reply audio/voice note dengan .removens untuk menghapus noise.")
@@ -35,7 +36,9 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 	c := m.client
 	m.mu.RUnlock()
 	if c == nil {
-		return errors.New("client not ready")
+		m.logError("removens", "client tidak siap")
+		_ = m.sendReply(ctx, evt, "Bot belum siap, coba lagi.")
+		return nil
 	}
 
 	if err := m.sendReply(ctx, evt, "Memproses penghapusan noise, mohon tunggu..."); err != nil {
@@ -43,10 +46,26 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 	}
 
 	m.logInfo("removens", "mulai unduh audio dari WhatsApp")
-	data, err := c.Download(ctx, audioMsg)
-	if err != nil {
-		m.logError("removens", "download audio gagal: "+err.Error())
-		_ = m.sendReply(ctx, evt, "Gagal mengunduh audio: "+err.Error())
+	type dlRes struct {
+		data []byte
+		err  error
+	}
+	dlCh := make(chan dlRes, 1)
+	go func() {
+		d, e := c.Download(ctx, audioMsg)
+		dlCh <- dlRes{data: d, err: e}
+	}()
+	var data []byte
+	var dlErr error
+	select {
+	case r := <-dlCh:
+		data, dlErr = r.data, r.err
+	case <-ctx.Done():
+		dlErr = fmt.Errorf("timeout mengunduh audio: %w", ctx.Err())
+	}
+	if dlErr != nil {
+		m.logError("removens", "download audio gagal: "+dlErr.Error())
+		_ = m.sendReply(ctx, evt, "Gagal mengunduh audio: "+dlErr.Error())
 		return nil
 	}
 	if len(data) == 0 {
@@ -91,6 +110,8 @@ func (m *Manager) handleRemoveNoiseCommand(ctx context.Context, evt *events.Mess
 	m.logInfo("removens", "audio hasil terkirim")
 	return nil
 }
+
+
 
 func (m *Manager) findAudioForRemoveNoise(evt *events.Message) *waE2E.AudioMessage {
 	if evt == nil || evt.Message == nil {
@@ -169,6 +190,7 @@ func callNoiseRemoverAPI(ctx context.Context, data []byte, filename, mime string
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("Accept", "application/x-ndjson")
+	req.Header.Set("User-Agent", "puruLocal-bot/1.0")
 
 	client := &http.Client{} // timeout dikendalikan oleh context
 	resp, err := client.Do(req)

@@ -182,6 +182,92 @@ func init() {
 				b.WriteString("• -\n")
 			}
 
+			// output: (private chat, isFromMe, LID resolved)
+			// *DEBUG INFO*
+			//
+			// *Status*
+			// • isOwner: true
+			// • isGroup: false
+			// • isFromMe: true
+			// • isJID (PN sender): false
+			// • isLID (sender): true
+			// • hasSenderAlt: false
+			// • isAdmin: - (bukan grup/tidak diketahui)
+			// • isSuperAdmin: - (bukan grup/tidak diketahui)
+			// • resolvedPN: true
+			// • resolvedLID: true
+			// • evtAvailable: true
+			//
+			// *Identitas*
+			// • UserKey: 92776125477117:43@lid
+			// • PushName: ‮uuruP uuruP
+			// • Sender: 92776125477117:43@lid
+			// • Sender.Server: lid
+			// • Sender.User: 92776125477117
+			// • ResolvedPN: 6283894391287:43@s.whatsapp.net
+			// • ResolvedLID: 92776125477117:43@lid
+			//
+			// *Chat & Bot*
+			// • Chat: 92776125477117@lid
+			// • Chat.Server: lid
+			// • Chat.IsGroup: false
+			// • BotName: PuruBot
+			// • OwnerNumber(cfg): *********1287
+			//
+			// *Kandidat ID*
+			// • 92776125477117:43@lid
+			// • 6283894391287:43@s.whatsapp.net
+			// • pn:‮uuruP uuruP
+			// • resolved_pn:6283894391287:43@s.whatsapp.net
+			// • resolved_lid:92776125477117:43@lid
+			//
+			// output: (group chat, isFromMe, reply/quoted, LID resolved)
+			// *DEBUG INFO*
+			//
+			// *Status*
+			// • isOwner: true
+			// • isGroup: true
+			// • isFromMe: true
+			// • isJID (PN sender): false
+			// • isLID (sender): true
+			// • hasSenderAlt: false
+			// • isAdmin: true
+			// • isSuperAdmin: true
+			// • resolvedPN: true
+			// • resolvedLID: true
+			// • evtAvailable: true
+			//
+			// *Identitas*
+			// • UserKey: 92776125477117:43@lid
+			// • PushName: ‮uuruP uuruP
+			// • Sender: 92776125477117:43@lid
+			// • Sender.Server: lid
+			// • Sender.User: 92776125477117
+			// • ResolvedPN: 6283894391287:43@s.whatsapp.net
+			// • ResolvedLID: 92776125477117:43@lid
+			//
+			// *Chat & Bot*
+			// • Chat: 120363429971778292@g.us
+			// • Chat.Server: g.us
+			// • Chat.IsGroup: true
+			// • BotName: PuruBot
+			// • OwnerNumber(cfg): *********1287
+			//
+			// *Reply/Quoted*
+			// • Quoted.Participant: 174315945341052@lid
+			// • Quoted.Server: lid
+			// • Quoted.User: 174315945341052
+			// • Quoted.isJID(PN): false
+			// • Quoted.isLID: true
+			// • Quoted.StanzaID: AC2E1F398CEDE65EAC20077D13762FF4
+			// • Quoted.Type: text
+			//
+			// *Kandidat ID*
+			// • 92776125477117:43@lid
+			// • 6283894391287:43@s.whatsapp.net
+			// • pn:‮uuruP uuruP
+			// • resolved_pn:6283894391287:43@s.whatsapp.net
+			// • resolved_lid:92776125477117:43@lid
 			return Result{Reply: strings.TrimSpace(b.String())}, true
 		},
 	})
