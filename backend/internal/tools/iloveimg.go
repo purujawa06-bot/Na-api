@@ -34,7 +34,9 @@ var (
 	iloveTokenRegex     = regexp.MustCompile(`"token":"([^"]+)"`)
 	iloveTaskIDRegex    = regexp.MustCompile(`ilovepdfConfig\.taskId\s*=\s*'([^']+)'`)
 	iloveServersRegex   = regexp.MustCompile(`"servers":(\[[^\]]*\])`)
-	tmpfilesDirectRegex = regexp.MustCompile(`src="(https://tmpfiles\.org/dl/[^"]+)"`)
+	tmpfilesDirectRegex     = regexp.MustCompile(`src="(https://tmpfiles\.org/dl/[^"]+)"`)
+	tmpfilesDirectHrefRegex = regexp.MustCompile(`href="(https://tmpfiles\.org/dl/[^"]+)"`)
+	tmpfilesDirectAnyRegex  = regexp.MustCompile(`https://tmpfiles\.org/dl/[^\s"'<>]+`)
 	imageExtensionRegex = regexp.MustCompile(`(?i)\.(png|jpe?g|webp|gif|bmp)$`)
 )
 
@@ -505,7 +507,7 @@ func uploadToTmpfiles(ctx context.Context, data []byte, filename, mimetype strin
 		return "", err
 	}
 	if payload.Data.URL == "" {
-		return "", fmt.Errorf("Gagal mengambil link gambar langsung dari tmpfiles")
+		return "", fmt.Errorf("Gagal mengambil link dari tmpfiles")
 	}
 
 	page, err := webclient.Get(ctx, payload.Data.URL, map[string]string{"user-agent": "Mozilla/5.0"})
@@ -514,7 +516,7 @@ func uploadToTmpfiles(ctx context.Context, data []byte, filename, mimetype strin
 	}
 	if page.StatusCode < 200 || page.StatusCode > 299 {
 		page.Body.Close()
-		return "", fmt.Errorf("Gagal mengambil link gambar langsung dari tmpfiles")
+		return "", fmt.Errorf("Gagal mengambil link langsung dari tmpfiles")
 	}
 	html, err := webclient.ReadBody(page)
 	if err != nil {
@@ -523,7 +525,13 @@ func uploadToTmpfiles(ctx context.Context, data []byte, filename, mimetype strin
 	if direct := firstMatch(tmpfilesDirectRegex, html); direct != "" {
 		return direct, nil
 	}
-	return "", fmt.Errorf("Gagal mengambil link gambar langsung dari tmpfiles")
+	if direct := firstMatch(tmpfilesDirectHrefRegex, html); direct != "" {
+		return direct, nil
+	}
+	if direct := firstMatch(tmpfilesDirectAnyRegex, html); direct != "" {
+		return direct, nil
+	}
+	return "", fmt.Errorf("Gagal mengambil link langsung dari tmpfiles")
 }
 
 // sleepContext waits for the duration or until the context is cancelled.
