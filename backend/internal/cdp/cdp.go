@@ -142,14 +142,32 @@ func (c *Client) EvalAwait(sessionID, expression string) (string, error) {
 			Value any `json:"value"`
 		} `json:"result"`
 		ExceptionDetails *struct {
-			Text string `json:"text"`
+			Text      string `json:"text"`
+			Exception *struct {
+				Description string `json:"description"`
+				Value       any    `json:"value"`
+			} `json:"exception"`
 		} `json:"exceptionDetails"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return "", err
 	}
-	if out.ExceptionDetails != nil && out.ExceptionDetails.Text != "" {
-		return "", fmt.Errorf("js: %s", out.ExceptionDetails.Text)
+	if out.ExceptionDetails != nil {
+		msg := strings.TrimSpace(out.ExceptionDetails.Text)
+		if out.ExceptionDetails.Exception != nil {
+			if desc := strings.TrimSpace(out.ExceptionDetails.Exception.Description); desc != "" {
+				if msg == "" || msg == "Uncaught" {
+					msg = desc
+				} else {
+					msg = msg + ": " + desc
+				}
+			} else if v := out.ExceptionDetails.Exception.Value; v != nil && (msg == "" || msg == "Uncaught") {
+				msg = fmt.Sprintf("%v", v)
+			}
+		}
+		if msg != "" {
+			return "", fmt.Errorf("js: %s", msg)
+		}
 	}
 	switch v := out.Result.Value.(type) {
 	case string:
