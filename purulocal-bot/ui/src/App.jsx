@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api'
 
-const PLUGIN_SERVER = 'https://na-api-nue-api-e7bfd3f4.koyeb.app'
 const PAGES = [
   { id: 'dashboard', title: 'Dashboard' },
-  { id: 'plugin', title: 'Plugin' },
   { id: 'ai', title: 'AI' },
   { id: 'stickerwm', title: 'Sticker WM' },
   { id: 'customcmd', title: 'Custom Command' },
@@ -78,13 +76,6 @@ export default function App() {
   const formTouchedRef = useRef(false)
   const setFormTouchedFlag = (v) => { formTouchedRef.current = !!v; setFormTouched(!!v) }
 
-  // plugins
-  const [installed, setInstalled] = useState([])
-  const [available, setAvailable] = useState([])
-  const [availCat, setAvailCat] = useState('__all__')
-  const [pluginLoading, setPluginLoading] = useState(false)
-  const [availLoading, setAvailLoading] = useState(false)
-  const [availErr, setAvailErr] = useState('')
 
   // custom commands
   const [customCmds, setCustomCmds] = useState([])
@@ -285,63 +276,6 @@ export default function App() {
     refresh(true)
   }
 
-  // plugins
-  const loadPlugins = useCallback(async () => {
-    setPluginLoading(true)
-    try {
-      const d = await api('/api/plugins')
-      setInstalled(Array.isArray(d.plugins) ? d.plugins : [])
-    } catch { /* ignore */ }
-    setPluginLoading(false)
-  }, [])
-
-  const loadAvailable = useCallback(async (silent = false) => {
-    if (!silent) setAvailLoading(true)
-    setAvailErr('')
-    try {
-      const d = await api('/api/plugins/available?server=' + encodeURIComponent(PLUGIN_SERVER))
-      if (!d.ok) {
-        setAvailable([]); setAvailErr(d.error || 'Gagal memuat plugin server')
-      } else {
-        const instIds = new Set(installed.map(p => String((p && (p.id || p.command)) || '').trim()).filter(Boolean))
-        const instCmds = new Set(installed.map(p => String((p && p.command) || '').trim().toLowerCase()).filter(Boolean))
-        const list = (d.plugins || []).filter(p => {
-          const id = String((p && (p.id || p.command)) || '').trim()
-          const cmd = String((p && p.command) || '').trim().toLowerCase()
-          return !(id && instIds.has(id)) && !(cmd && instCmds.has(cmd))
-        })
-        setAvailable(list)
-      }
-    } catch {
-      setAvailable([]); setAvailErr('Gagal memuat plugin server')
-    }
-    if (!silent) setAvailLoading(false)
-  }, [installed])
-
-  useEffect(() => { if (page === 'plugin') { loadPlugins(); } }, [page, loadPlugins])
-  useEffect(() => { if (page === 'plugin') { loadAvailable(true) } }, [page, installed, loadAvailable])
-
-  const installPlugin = async (p) => {
-    const d = await api('/api/plugins/install', { method: 'POST', body: JSON.stringify(p) })
-    if (!d.ok) alert(d.error || 'Gagal install')
-    await loadPlugins()
-  }
-  const removePlugin = async (id) => {
-    const d = await api('/api/plugins/remove', { method: 'POST', body: JSON.stringify({ id }) })
-    if (!d.ok) alert(d.error || 'Gagal hapus')
-    await loadPlugins()
-  }
-
-  const availCategories = useMemo(() => {
-    const cats = Array.from(new Set(available.map(p => String((p && p.category) || '').trim()).filter(Boolean)))
-    cats.sort((a, b) => a.localeCompare(b))
-    return cats
-  }, [available])
-  useEffect(() => { if (availCat !== '__all__' && !availCategories.includes(availCat)) setAvailCat('__all__') }, [availCategories, availCat])
-  const filteredAvailable = useMemo(() => {
-    if (availCat === '__all__') return available
-    return available.filter(p => String((p && p.category) || '').trim() === availCat)
-  }, [available, availCat])
 
   // custom commands
   const loadCustomCmds = async () => {
@@ -560,63 +494,6 @@ export default function App() {
             </div>
             {status && status.device_code ? <div className="muted mt8">Device code: <b>{status.device_code}</b></div> : <div className="muted mt8">Device code: - (set RTDB URL di Settings)</div>}
             {status && status.sync_last_error ? <div className="msg err mt8">Sync: {status.sync_last_error}</div> : null}
-          </div>
-        </div>
-      )}
-
-      {page === 'plugin' && (
-        <div className="page">
-          <div className="page-head">Plugin</div>
-          <div className="card">
-            <div className="card-h"><div className="card-title">Plugin Terpasang</div></div>
-            <div>
-              {pluginLoading && !installed.length ? <span className="muted">Memuat plugin...</span> : null}
-              {!pluginLoading && installed.length === 0 ? <span className="muted">Belum ada plugin terpasang.</span> : null}
-              {installed.map(p => {
-                const cmd = p.command || p.id || ''
-                return (
-                  <div className="plugin-item" key={p.id || cmd}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>
-                        {p.category ? <span className={catClass(p.category)}>{p.category}</span> : null}
-                        {p.name || cmd} <span className="muted">( .{cmd} )</span>
-                      </div>
-                      <div className="muted">{p.description || ''}</div>
-                    </div>
-                    <button className="small-btn danger" onClick={() => removePlugin(p.id || cmd)}>Hapus</button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-          <div className="card">
-            <div className="card-h"><div className="card-title">Plugin dari Server</div></div>
-            <label>Category</label>
-            <select value={availCat} onChange={e => setAvailCat(e.target.value)}>
-              <option value="__all__">Semua Kategori</option>
-              {availCategories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <div className="mt10">
-              {availLoading ? <span className="muted">Memuat...</span> : null}
-              {!availLoading && availErr ? <span className="msg err">{availErr}</span> : null}
-              {!availLoading && !availErr && available.length === 0 ? <span className="muted">Semua plugin dari server sudah terpasang.</span> : null}
-              {!availLoading && !availErr && available.length > 0 && filteredAvailable.length === 0 ? <span className="muted">Tidak ada plugin di kategori ini.</span> : null}
-              {filteredAvailable.map(p => {
-                const cmd = p.command || ''
-                return (
-                  <div className="plugin-item" key={(p.id || cmd) + ':' + cmd}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>
-                        {p.category ? <span className={catClass(p.category)}>{p.category}</span> : null}
-                        {p.name || cmd} <span className="muted">( .{cmd} )</span>
-                      </div>
-                      <div className="muted">{p.description || ''}</div>
-                    </div>
-                    <button className="small-btn primary" onClick={() => installPlugin(p)}>Install</button>
-                  </div>
-                )
-              })}
-            </div>
           </div>
         </div>
       )}

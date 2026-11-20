@@ -6,8 +6,8 @@ import (
 	botcmd "purulocal-bot/internal/bot/cmd"
 )
 
-// BuildMenuText membangun teks menu otomatis dari metadata fitur terdaftar,
-// custom command, dan plugin terpasang. Diimplementasikan untuk cmd.BotAPI.
+// BuildMenuText membangun teks menu otomatis dari metadata fitur terdaftar
+// dan custom command. Diimplementasikan untuk cmd.BotAPI.
 func (m *Manager) BuildMenuText() string {
 	cfg := m.Config()
 	botName := strings.TrimSpace(cfg.BotName)
@@ -73,43 +73,6 @@ func (m *Manager) BuildMenuText() string {
 			cc := catMap[key]
 			b.WriteString("├─ " + cc.label + "\n")
 			for _, line := range cc.items {
-				b.WriteString(line + "\n")
-			}
-			b.WriteString("│\n")
-		}
-	}
-
-	// Plugin terpasang per kategori
-	if m.plugins != nil {
-		type pcat struct {
-			label string
-			items []string
-		}
-		catMap := map[string]*pcat{}
-		order := []string{}
-		for _, p := range m.plugins.ListInstalled() {
-			if !p.Enabled || p.Command == "" {
-				continue
-			}
-			cmdName := strings.ToLower(strings.TrimSpace(p.Command))
-			cat := strings.TrimSpace(p.Category)
-			if cat == "" {
-				cat = "Plugin"
-			}
-			if cmdName == "play" {
-				cat = "Downloader"
-			}
-			key := strings.ToUpper(cat)
-			if _, ok := catMap[key]; !ok {
-				order = append(order, key)
-				catMap[key] = &pcat{label: menuSmallCaps(cat)}
-			}
-			catMap[key].items = append(catMap[key].items, "│  • ."+cmdName)
-		}
-		for _, key := range order {
-			pc := catMap[key]
-			b.WriteString("├─ " + pc.label + "\n")
-			for _, line := range pc.items {
 				b.WriteString(line + "\n")
 			}
 			b.WriteString("│\n")

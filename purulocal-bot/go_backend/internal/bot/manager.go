@@ -73,7 +73,6 @@ type Manager struct {
 	status         Status
 	paused         bool // user/manual pause
 	pausedByCloud  bool // forced pause (cloud-first, local side)
-	plugins        *PluginStore
 	aiHist         *AIHistoryStore
 	customCmds     *CustomCommandStore
 	vip            *VIPStore
@@ -101,10 +100,6 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	pstore, err := NewPluginStore(filepath.Join(dataDir, "plugins.json"))
-	if err != nil {
-		return nil, err
-	}
 	ahist, err := NewAIHistoryStore(filepath.Join(dataDir, "ai_history.json"))
 	if err != nil {
 		return nil, err
@@ -124,7 +119,6 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 	m := &Manager{
 		cfgStore:    cfgStore,
 		dataDir:     dataDir,
-		plugins:     pstore,
 		aiHist:      ahist,
 		customCmds:  ccstore,
 		vip:         vstore,
@@ -274,7 +268,6 @@ func (m *Manager) OnSyncedStoreDB() {
 	}
 }
 
-func (m *Manager) Plugins() *PluginStore { return m.plugins }
 
 func (m *Manager) CustomCmds() *CustomCommandStore { return m.customCmds }
 
@@ -354,16 +347,6 @@ func (m *Manager) ListAllFeatures() []FeatureItem {
 				name = c.Command
 			}
 			items = append(items, FeatureItem{ID: id, Name: name, Command: c.Command, Type: "custom", VIP: isVIP(id)})
-		}
-	}
-	if m.plugins != nil {
-		for _, p := range m.plugins.ListInstalled() {
-			id := "plugin:" + p.ID
-			name := strings.TrimSpace(p.Name)
-			if name == "" {
-				name = p.Command
-			}
-			items = append(items, FeatureItem{ID: id, Name: name, Command: p.Command, Type: "plugin", VIP: isVIP(id)})
 		}
 	}
 	return items
@@ -682,7 +665,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 	}
 
-	// resolve command (builtin/plugin) - react hanya jika dikenali
+	// resolve command (builtin) - react hanya jika dikenali
 	// cek cepat apakah command mungkin dikenal sebelum react?
 	res, ok := m.resolveCommand(ctx, evt, cmd, args, userKey, cfg, senderIDs...)
 	if !ok {
@@ -694,7 +677,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if cfg.TypingBeforeReply {
 		m.sendTyping(ctx, evt.Info.Chat, false)
 	}
-	// catat indikasi kegagalan dari hasil plugin/command untuk debug (mis. gagal download tiktok)
+	// catat indikasi kegagalan dari hasil command untuk debug (mis. gagal download tiktok)
 	if txt := strings.TrimSpace(res.Reply + " " + res.Caption); txt != "" && strings.Contains(strings.ToLower(txt), "gagal") {
 		m.logWarn("command."+cmd, "reply mengindikasikan kegagalan: "+truncateLog(txt, 300))
 	}
@@ -735,7 +718,7 @@ func (m *Manager) onMessage(evt *events.Message) {
 		}
 		return
 	}
-	// kirim sticker dari URL gambar (mis. plugin .brat)
+	// kirim sticker dari URL gambar (mis. .brat)
 	if strings.TrimSpace(res.StickerURL) != "" {
 		if err := m.sendStickerFromURL(ctx, evt, res, cfg); err != nil {
 			m.logError("send.sticker", "cmd="+cmd+" err="+err.Error())
@@ -1319,43 +1302,6 @@ func (m *Manager) resolveCommand(ctx context.Context, evt *events.Message, cmd, 
 		}, m)
 		if handled {
 			return cmdResultToExec(res), true
-		}
-	}
-	if m.plugins != nil {
-		if p, okp := m.plugins.Find(cmd); okp {
-			if !m.isFeatureAllowed("plugin:"+p.ID, userKey) {
-				return m.vipDeniedReply(), true
-			}
-		}
-		// .ai: ingat percakapan masing-masing user + auto-compact di ambang 6k token
-		// hanya jika plugin .ai terpasang & aktif; jika dihapus tidak boleh membalas
-		if normalizeCmd(cmd) == "ai" && m.aiHist != nil && m.plugins.HasCommand("ai") {
-			prompt := strings.TrimSpace(args)
-			if prompt == "" {
-				return ExecResult{Reply: "Gunakan: .ai <pertanyaan>"}, true
-			}
-			hist := m.aiHist.Get(userKey)
-			hist = append(hist, ChatMessage{Role: "user", Content: prompt})
-			hist = CompactIfNeeded(hist, 6000)
-			res, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, hist)
-			if err != nil {
-				m.logError("plugin."+cmd, err.Error())
-				return ExecResult{Reply: "Plugin error: " + err.Error()}, true
-			}
-			if ok {
-				if strings.TrimSpace(res.Reply) != "" {
-					hist = append(hist, ChatMessage{Role: "assistant", Content: res.Reply})
-					hist = CompactIfNeeded(hist, 6000)
-					_ = m.aiHist.Set(userKey, hist)
-				}
-				return res, true
-			}
-		}
-		if res, ok, err := m.plugins.Handle(ctx, cmd, args, userKey, cfg, nil); err == nil && ok {
-			return res, true
-		} else if err != nil {
-			m.logError("plugin."+cmd, err.Error())
-			return ExecResult{Reply: "Plugin error: " + err.Error()}, true
 		}
 	}
 	return ExecResult{}, false

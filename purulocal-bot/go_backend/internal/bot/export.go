@@ -139,7 +139,7 @@ func exportReadme(format, runner string) string {
 		"====================\r\n\r\n" +
 		"Isi:\r\n" +
 		"- config.json : konfigurasi bot\r\n" +
-		"- data/       : seluruh data lokal (termasuk sesi store.db, plugin, riwayat, dsb)\r\n" +
+		"- data/       : seluruh data lokal (termasuk sesi store.db, riwayat, dsb)\r\n" +
 		"- bin/        : binary bot yang dibundel (jika tersedia)\r\n" +
 		"- " + runner + " : skrip runner (spawn binary + auto-update saat startup)\r\n\r\n" +
 		"Menjalankan (lokal/cloud):\r\n" +

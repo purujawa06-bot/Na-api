@@ -28,7 +28,7 @@ type FeatureItem struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Command string `json:"command,omitempty"`
-	Type    string `json:"type"` // builtin, custom, plugin
+	Type    string `json:"type"` // builtin, custom
 	VIP     bool   `json:"vip"`
 }
 

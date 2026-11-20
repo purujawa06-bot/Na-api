@@ -95,6 +95,8 @@ type BotAPI interface {
 	// group management dispatch
 	HandleGroupMgmt(req Request) (Result, bool)
 	SendReply(ctx context.Context, evt *events.Message, text string) error
+	// AI chat (builtin .ai) dengan riwayat & auto-compact
+	RunAICommand(ctx context.Context, args, userKey string) (Result, error)
 	// export bot (zip data+runner)
 	ExportBotZip(format string) ([]byte, string, error)
 }
