@@ -16,13 +16,14 @@ import (
 )
 
 var (
-	reTmpfilesHref = regexp.MustCompile(`href=["'](https?://tmpfiles\.org/dl/[^"'\s>]+)`)
-	reTmpfilesAbs  = regexp.MustCompile(`https?://tmpfiles\.org/dl/[^\s"'<>)]+`)
+	reTmpfilesHref = regexp.MustCompile(`href=["'](https?://(?:www\.)?tmpfiles\.org/dl/[^"'\s>]+)`)
+	reTmpfilesAbs  = regexp.MustCompile(`https?://(?:www\.)?tmpfiles\.org/dl/[^\s"'<>)]+`)
 	reTmpfilesAny  = regexp.MustCompile(`https?://(?:www\.)?tmpfiles\.org/[^\s"'<>)]+`)
 )
 
-// normalizeTmpfilesDirectURL memastikan URL tmpfiles adalah direct download (/dl/...),
-// bukan halaman HTML dengan tombol unduh.
+// normalizeTmpfilesDirectURL mengubah URL halaman tmpfiles ke bentuk /dl/.
+// Catatan: bentuk /dl/<id>/<file> sederhana bisa redirect ke halaman HTML;
+// direct URL nyata sering bertoken (/dl/<token>/<id>/<file>) yang harus diambil dari halaman.
 func normalizeTmpfilesDirectURL(raw string) string {
 	raw = strings.TrimSpace(strings.Trim(raw, `"'`))
 	if raw == "" {
@@ -39,12 +40,54 @@ func normalizeTmpfilesDirectURL(raw string) string {
 	if strings.HasPrefix(u.Path, "/dl/") {
 		return u.String()
 	}
-	// /12345/file.ext -> /dl/12345/file.ext
+	// /12345/file.ext -> /dl/12345/file.ext (mungkin perlu resolusi token dari halaman)
 	if strings.Count(strings.Trim(u.Path, "/"), "/") >= 1 {
 		u.Path = "/dl/" + strings.TrimPrefix(u.Path, "/")
 		return u.String()
 	}
 	return raw
+}
+
+func isTmpfilesURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Host)
+	return host == "tmpfiles.org" || host == "www.tmpfiles.org"
+}
+
+// isTokenizedTmpfilesDirectURL mendeteksi direct URL bertoken, mis:
+// /dl/<timestamp>.<hash>/<id>/<filename> (lebih andal daripada /dl/<id>/<filename>).
+func isTokenizedTmpfilesDirectURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	if !strings.HasPrefix(u.Path, "/dl/") {
+		return false
+	}
+	segs := strings.Split(strings.Trim(strings.TrimPrefix(u.Path, "/dl/"), "/"), "/")
+	// token + id + filename => >= 3 segmen
+	return len(segs) >= 3
+}
+
+func pickBestTmpfilesDirectLink(links []string) string {
+	var first string
+	for _, l := range links {
+		l = normalizeTmpfilesDirectURL(l)
+		u, err := url.Parse(l)
+		if err != nil || !strings.HasPrefix(u.Path, "/dl/") {
+			continue
+		}
+		if first == "" {
+			first = l
+		}
+		if isTokenizedTmpfilesDirectURL(l) {
+			return l
+		}
+	}
+	return first
 }
 
 // uploadToTmpfiles mengunggah data ke tmpfiles.org dan mengembalikan direct download URL (/dl/...).
@@ -88,43 +131,47 @@ func uploadToTmpfiles(ctx context.Context, data []byte, filename, contentType st
 	}
 	text := string(rb)
 
-	// 1) coba JSON API: {"data":{"url":"https://tmpfiles.org/123/file"}}
+	// 1) coba JSON API: {"data":{"url":"https://tmpfiles.org/123/file"}} (URL halaman)
 	var payload struct {
 		Data struct {
 			URL string `json:"url"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rb, &payload); err == nil && strings.TrimSpace(payload.Data.URL) != "" {
-		if direct := normalizeTmpfilesDirectURL(payload.Data.URL); strings.Contains(direct, "/dl/") {
+		pageURL := strings.TrimSpace(payload.Data.URL)
+		// Ambil direct link bertoken dari halaman (paling andal). Bentuk /dl/<id>/<file>
+		// sederhana saat ini bisa redirect ke HTML, jadi jangan langsung dipercaya.
+		if direct, err := fetchTmpfilesDirectLink(ctx, client, pageURL); err == nil && direct != "" {
 			return direct, nil
 		}
-		// fallback: ambil direct link dari halaman HTML
-		if direct, err := fetchTmpfilesDirectLink(ctx, client, payload.Data.URL); err == nil && direct != "" {
-			return direct, nil
-		}
-	}
-
-	// 2) cari pola direct URL di body
-	if m := reTmpfilesHref.FindStringSubmatch(text); len(m) > 1 {
-		if direct := normalizeTmpfilesDirectURL(m[1]); strings.Contains(direct, "/dl/") {
-			return direct, nil
-		}
-	}
-	if m := reTmpfilesAbs.FindString(text); m != "" {
-		if direct := normalizeTmpfilesDirectURL(m); strings.Contains(direct, "/dl/") {
+		if direct := normalizeTmpfilesDirectURL(pageURL); isTokenizedTmpfilesDirectURL(direct) {
 			return direct, nil
 		}
 	}
 
-	// 3) cari URL tmpfiles apa pun lalu normalisasi ke /dl/ (atau scrape halaman)
+	// 2) cari direct URL bertoken di body (jika ada)
+	var links []string
+	for _, m := range reTmpfilesHref.FindAllStringSubmatch(text, -1) {
+		if len(m) > 1 {
+			links = append(links, m[1])
+		}
+	}
+	links = append(links, reTmpfilesAbs.FindAllString(text, -1)...)
+	if best := pickBestTmpfilesDirectLink(links); isTokenizedTmpfilesDirectURL(best) {
+		return best, nil
+	}
+
+	// 3) cari URL tmpfiles apa pun (page/dl) lalu resolve ke direct link bertoken via halaman
 	if m := reTmpfilesAny.FindString(text); m != "" {
-		direct := normalizeTmpfilesDirectURL(m)
-		if strings.Contains(direct, "/dl/") {
-			return direct, nil
-		}
 		if scraped, err := fetchTmpfilesDirectLink(ctx, client, m); err == nil && scraped != "" {
 			return scraped, nil
 		}
+		if best := pickBestTmpfilesDirectLink(links); best != "" {
+			return best, nil
+		}
+	}
+	if best := pickBestTmpfilesDirectLink(links); best != "" {
+		return best, nil
 	}
 	return "", fmt.Errorf("gagal mendapatkan direct link tmpfiles")
 }
@@ -152,13 +199,17 @@ func fetchTmpfilesDirectLink(ctx context.Context, client *http.Client, pageURL s
 		return "", fmt.Errorf("gagal mengambil halaman tmpfiles (HTTP %d)", resp.StatusCode)
 	}
 	text := string(rb)
-	if m := reTmpfilesHref.FindStringSubmatch(text); len(m) > 1 {
-		return normalizeTmpfilesDirectURL(m[1]), nil
+	var links []string
+	for _, m := range reTmpfilesHref.FindAllStringSubmatch(text, -1) {
+		if len(m) > 1 {
+			links = append(links, m[1])
+		}
 	}
-	if m := reTmpfilesAbs.FindString(text); m != "" {
-		return normalizeTmpfilesDirectURL(m), nil
+	links = append(links, reTmpfilesAbs.FindAllString(text, -1)...)
+	if best := pickBestTmpfilesDirectLink(links); best != "" {
+		return best, nil
 	}
-	// fallback: normalisasi URL halaman ke /dl/
+	// fallback terakhir: normalisasi URL halaman ke /dl/ (bisa saja masih redirect)
 	if direct := normalizeTmpfilesDirectURL(pageURL); strings.Contains(direct, "/dl/") {
 		return direct, nil
 	}

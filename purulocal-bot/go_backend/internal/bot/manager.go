@@ -1053,38 +1053,56 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 	if c == nil {
 		return errors.New("client not ready")
 	}
-	audioURL := normalizeTmpfilesDirectURL(res.AudioURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, audioURL, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
 	hc := &http.Client{Timeout: 90 * time.Second}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("download audio: HTTP %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 25<<20)) // batas ~25MB
-	if err != nil {
-		return err
+	audioURL := normalizeTmpfilesDirectURL(res.AudioURL)
+	var data []byte
+	for attempt := 0; attempt < 2; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, audioURL, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "*/*")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+		resp, err := hc.Do(req)
+		if err != nil {
+			return err
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 25<<20)) // batas ~25MB
+		resp.Body.Close()
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("download audio: HTTP %d", resp.StatusCode)
+		}
+		if len(body) == 0 {
+			return fmt.Errorf("audio kosong (HTTP %d)", resp.StatusCode)
+		}
+		ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+		snip := body
+		if len(snip) > 256 {
+			snip = snip[:256]
+		}
+		snips := strings.ToLower(strings.TrimSpace(string(snip)))
+		if strings.Contains(ct, "text/html") || strings.HasPrefix(snips, "<!doctype html") || strings.HasPrefix(snips, "<html") {
+			if attempt == 0 && isTmpfilesURL(res.AudioURL) {
+				if direct, err := fetchTmpfilesDirectLink(ctx, hc, resp.Request.URL.String()); err == nil && direct != "" && direct != audioURL {
+					audioURL = direct
+					continue
+				}
+				if direct, err := fetchTmpfilesDirectLink(ctx, hc, audioURL); err == nil && direct != "" && direct != audioURL {
+					audioURL = direct
+					continue
+				}
+			}
+			return fmt.Errorf("unduhan audio mengembalikan HTML/interstitial, bukan file audio")
+		}
+		data = body
+		break
 	}
 	if len(data) == 0 {
-		return fmt.Errorf("audio kosong (HTTP %d)", resp.StatusCode)
-	}
-	ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
-	snip := data
-	if len(snip) > 256 {
-		snip = snip[:256]
-	}
-	snips := strings.ToLower(strings.TrimSpace(string(snip)))
-	if strings.Contains(ct, "text/html") || strings.HasPrefix(snips, "<!doctype html") || strings.HasPrefix(snips, "<html") {
-		return fmt.Errorf("unduhan audio mengembalikan HTML/interstitial, bukan file audio")
+		return fmt.Errorf("audio kosong")
 	}
 	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaAudio)
 	if err != nil {

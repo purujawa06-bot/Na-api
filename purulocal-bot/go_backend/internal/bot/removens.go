@@ -627,34 +627,48 @@ func downloadFileBytes(ctx context.Context, client *http.Client, rawURL string, 
 	if client == nil {
 		client = &http.Client{Timeout: 90 * time.Second}
 	}
-	rawURL = normalizeTmpfilesDirectURL(rawURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
+	tryURL := normalizeTmpfilesDirectURL(rawURL)
+	for attempt := 0; attempt < 2; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tryURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "*/*")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return nil, fmt.Errorf("gagal unduh file (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(bodySnippet(body, 200))))
+		}
+		if len(body) == 0 {
+			return nil, fmt.Errorf("file kosong")
+		}
+		ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+		if strings.Contains(ct, "text/html") || looksLikeHTML(body) {
+			// tmpfiles /dl/ sederhana bisa redirect ke halaman HTML; ambil direct link bertoken dari halaman
+			if attempt == 0 && isTmpfilesURL(rawURL) {
+				if direct, err := fetchTmpfilesDirectLink(ctx, client, resp.Request.URL.String()); err == nil && direct != "" && direct != tryURL {
+					tryURL = direct
+					continue
+				}
+				if direct, err := fetchTmpfilesDirectLink(ctx, client, tryURL); err == nil && direct != "" && direct != tryURL {
+					tryURL = direct
+					continue
+				}
+			}
+			return nil, fmt.Errorf("unduhan mengembalikan HTML, bukan file audio")
+		}
+		return body, nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, limit))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("gagal unduh file (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(bodySnippet(body, 200))))
-	}
-	if len(body) == 0 {
-		return nil, fmt.Errorf("file kosong")
-	}
-	ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
-	if strings.Contains(ct, "text/html") || looksLikeHTML(body) {
-		return nil, fmt.Errorf("unduhan mengembalikan HTML, bukan file audio")
-	}
-	return body, nil
+	return nil, fmt.Errorf("gagal mengunduh file audio")
 }
 
 func bodySnippet(b []byte, n int) []byte {
