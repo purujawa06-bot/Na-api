@@ -4,7 +4,7 @@ import Image from 'next/image';
 import MethodBadge from './MethodBadge';
 import CopyButton from './CopyButton';
 import InfoModal from './InfoModal';
-import { extractJsonBodies, parseBodyBlock, buildCurl } from './docsPayload';
+import { extractJsonBodies, parseBodyBlock, extractFormDataFields, buildCurl } from './docsPayload';
 
 const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighlighted, onExpand, selectionMode, isSelected, onToggleSelect }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -62,6 +62,12 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                     }
                 });
                 setFormValues(prev => ({ ...prev, ...processedValues }));
+            }
+
+            // Ekstrak nilai literal dari contoh multipart FormData (fd.append('key', 'value'))
+            const fdFields = extractFormDataFields(endpoint.example);
+            if (Object.keys(fdFields).length > 0) {
+                setFormValues(prev => ({ ...prev, ...fdFields }));
             }
             
             // Ekstrak URL dari fetch untuk query params
@@ -456,7 +462,7 @@ const EndpointCard = memo(function EndpointCard({ endpoint, baseUrl, id, isHighl
                                                                             : 'border-default focus:border-accent focus:ring-accent'
                                                                     } ${param.type === 'file' ? 'file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-gray-800 file:text-gray-300 hover:file:bg-gray-700' : ''}`}
                                                                     required={param.required}
-                                                                    accept={param.type === 'file' ? 'image/*' : undefined}
+                                                                    accept={param.type === 'file' ? (param.accept || undefined) : undefined}
                                                                 />
                                                                 </>
                                                                 )}

@@ -46,6 +46,22 @@ export function parseBodyBlock(bodyStr) {
     }
 }
 
+/**
+ * Ambil pasangan kunci-nilai literal dari contoh multipart FormData:
+ * fd.append('key', 'value') / formData.append("key", "123").
+ * Nilai non-string (file object, variable) diabaikan.
+ */
+export function extractFormDataFields(example) {
+    const fields = {};
+    if (!example) return fields;
+    const re = /\.append\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]\s*\)/g;
+    let m;
+    while ((m = re.exec(example)) !== null) {
+        fields[m[1]] = m[2];
+    }
+    return fields;
+}
+
 /** Gabungkan semua field dari semua contoh menjadi satu objek default lengkap. */
 export function collectExampleFields(example) {
     const merged = {};
@@ -59,6 +75,7 @@ export function collectExampleFields(example) {
             Object.assign(merged, parseBodyBlock(b) || {});
         } catch { /* abaikan blok rusak */ }
     }
+    Object.assign(merged, extractFormDataFields(example));
     return merged;
 }
 
@@ -66,7 +83,7 @@ export function collectExampleFields(example) {
  * Bangun contoh request cURL untuk sebuah endpoint.
  * Dipakai bersama oleh tab "cURL" di EndpointCard dan generate "to context" di DocsClient.
  * `providedValues` = nilai yang sudah diisi user/form; nilai kosong di-fallback ke
- * nilai default yang diekstrak dari blok @example (JSON.stringify / query fetch / curl -d).
+ * nilai default yang diekstrak dari blok @example (JSON.stringify / query fetch / curl -d / FormData append).
  */
 export function buildCurl(endpoint, baseUrl, providedValues = {}) {
     let path = endpoint.path;
@@ -79,6 +96,7 @@ export function buildCurl(endpoint, baseUrl, providedValues = {}) {
         for (const block of extractJsonBodies(endpoint.example)) {
             try { Object.assign(defaultValues, parseBodyBlock(block) || {}); } catch(e) {}
         }
+        Object.assign(defaultValues, extractFormDataFields(endpoint.example));
         const urlMatch = endpoint.example.match(/fetch\(['"`](.*?)['"`]/);
         if (urlMatch) {
             const urlParts = urlMatch[1].split('?');

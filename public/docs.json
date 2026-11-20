@@ -1612,7 +1612,8 @@
           "in": "formData",
           "type": "file",
           "description": "File audio/video (maks 32 MB) (wajib).",
-          "required": true
+          "required": true,
+          "accept": "audio/*,video/*"
         },
         {
           "name": "mode",
@@ -1646,7 +1647,8 @@
           "in": "formData",
           "type": "file",
           "description": "File gambar (jpeg/png/gif/webp/bmp/tiff/heic, maks 32 MB) (wajib).",
-          "required": true
+          "required": true,
+          "accept": "image/*"
         }
       ]
     }
