@@ -1,259 +1,39 @@
 package tools
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/purujawa06-bot/na-api/backend/internal/cdp"
 	"github.com/purujawa06-bot/na-api/backend/internal/httpx"
 )
 
 const (
-	pdfleaderBase = "https://api.pdfleader.com"
-	pdfleaderUA   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-
+	vocalRemoverPage    = "https://vocalremover.org/"
 	noiseMaxSourceBytes = 32 << 20 // 32 MiB
-	noisePollInterval   = 5 * time.Second
-	noisePollTimeout    = 4 * time.Minute
+	vocalPollInterval   = 5 * time.Second
+	vocalPollTimeout    = 5 * time.Minute
+	vocalChunkSize      = 256 * 1024 // 256 KiB chunks for base64 injection over CDP
 )
 
-type pdfleaderClient struct {
-	http *http.Client
-}
-
-//book_pdfleader_newClient
-func newPdfleaderClient() (*pdfleaderClient, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
-	return &pdfleaderClient{http: &http.Client{Jar: jar, Timeout: 60 * time.Second}}, nil
-}
-
-func (c *pdfleaderClient) doJSON(ctx context.Context, method, endpoint string, body any) (*http.Response, []byte, error) {
-	fullURL := endpoint
-	if !strings.HasPrefix(endpoint, "http") {
-		fullURL = pdfleaderBase + "/" + strings.TrimPrefix(endpoint, "/")
-	}
-	var reader io.Reader
-	if body != nil {
-		b, _ := json.Marshal(body)
-		reader = bytes.NewReader(b)
-	}
-	req, _ := http.NewRequestWithContext(ctx, method, fullURL, reader)
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("x-pdf-app", "PDFLEADER")
-	req.Header.Set("Origin", "https://pdfleader.com")
-	req.Header.Set("Referer", "https://pdfleader.com/")
-	req.Header.Set("User-Agent", pdfleaderUA)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
-	resp.Body.Close()
-	return resp, data, nil
-}
-
-//book_pdfleader_ensureSession
-func (c *pdfleaderClient) ensureSession(ctx context.Context) error {
-	resp, data, err := c.doJSON(ctx, http.MethodGet, "/api/v1/user/me", nil)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode == http.StatusOK {
-		return nil
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		return fmt.Errorf("user/me gagal (HTTP %d): %s", resp.StatusCode, snippet(data))
-	}
-	resp, data, err = c.doJSON(ctx, http.MethodPost, "/api/v1/user/create", map[string]any{})
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("user/create gagal (HTTP %d): %s", resp.StatusCode, snippet(data))
-	}
-	return nil
-}
-
-type uploadLinkItem struct {
-	Filename string `json:"filename"`
-	URL      string `json:"url"`
-	Key      string `json:"key"`
-}
-
-//book_pdfleader_getUploadLink
-func (c *pdfleaderClient) getUploadLink(ctx context.Context, filename string) (uploadLinkItem, error) {
-	resp, data, err := c.doJSON(ctx, http.MethodPost, "/api/v1/files/upload-link", map[string]any{
-		"filenames": []string{filename},
-	})
-	if err != nil {
-		return uploadLinkItem{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return uploadLinkItem{}, fmt.Errorf("upload-link gagal (HTTP %d): %s", resp.StatusCode, snippet(data))
-	}
-	var items []uploadLinkItem
-	if err := json.Unmarshal(data, &items); err != nil {
-		return uploadLinkItem{}, fmt.Errorf("upload-link respons tidak valid: %w", err)
-	}
-	if len(items) == 0 || strings.TrimSpace(items[0].URL) == "" {
-		return uploadLinkItem{}, fmt.Errorf("upload-link tidak mengembalikan URL")
-	}
-	return items[0], nil
-}
-
-//book_pdfleader_uploadToStorage
-func (c *pdfleaderClient) uploadToStorage(ctx context.Context, uploadURL string, body []byte, contentType string) error {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(body))
-	req.Header.Set("Content-Type", contentType)
-	req.ContentLength = int64(len(body))
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
-	if err != nil {
-		return err
-	}
-	io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("upload storage gagal (HTTP %d)", resp.StatusCode)
-	}
-	return nil
-}
-
-//book_pdfleader_submitDemo
-func (c *pdfleaderClient) submitDemo(ctx context.Context, filename, key string, size int, durationSeconds int) (string, error) {
-	resp, data, err := c.doJSON(ctx, http.MethodPost, "/api/v1/noise-remover/demo", map[string]any{
-		"filename":         filename,
-		"key":              key,
-		"size":             size,
-		"durationSeconds":  durationSeconds,
-		"outputFormat":     "preserve",
-		"audioStreamIndex": 0,
-	})
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", fmt.Errorf("submit demo gagal (HTTP %d): %s", resp.StatusCode, snippet(data))
-	}
-	var out struct {
-		Success bool   `json:"success"`
-		DemoID  string `json:"demoId"`
-	}
-	if err := json.Unmarshal(data, &out); err != nil {
-		return "", fmt.Errorf("respons demo tidak valid: %w", err)
-	}
-	if out.DemoID == "" {
-		return "", fmt.Errorf("demoId tidak ditemukan pada respons submit")
-	}
-	return out.DemoID, nil
-}
-
-type demoResult struct {
-	Success         bool   `json:"success"`
-	OriginalURL     string `json:"originalUrl"`
-	URL             string `json:"url"`
-	Size            int64  `json:"size"`
-	DurationSeconds int    `json:"durationSeconds"`
-	Container       string `json:"container"`
-	Status          string `json:"status"`
-	Error           any    `json:"error"`
-}
-
-//book_pdfleader_pollDemo
-func (c *pdfleaderClient) pollDemo(ctx context.Context, demoID string) (demoResult, error) {
-	deadline := time.Now().Add(noisePollTimeout)
-	for {
-		if err := sleepContext(ctx, noisePollInterval); err != nil {
-			return demoResult{}, err
-		}
-		resp, data, err := c.doJSON(ctx, http.MethodGet, "/api/v1/noise-remover/demo/"+url.PathEscape(demoID), nil)
-		if err != nil {
-			return demoResult{}, err
-		}
-		if resp.StatusCode >= 400 {
-			return demoResult{}, fmt.Errorf("poll demo gagal (HTTP %d): %s", resp.StatusCode, snippet(data))
-		}
-		var out demoResult
-		_ = json.Unmarshal(data, &out)
-		if strings.TrimSpace(out.URL) != "" {
-			return out, nil
-		}
-		status := strings.ToUpper(strings.TrimSpace(out.Status))
-		if status == "FAILED" || status == "ERROR" || out.Error != nil {
-			return demoResult{}, fmt.Errorf("demo gagal: %s", snippet(data))
-		}
-		if time.Now().After(deadline) {
-			return demoResult{}, fmt.Errorf("demo kehabisan waktu (timeout polling)")
-		}
-	}
-}
-
-//book_pdfleader_submitFull
-func (c *pdfleaderClient) submitFull(ctx context.Context, filename, key string, size int) (map[string]any, int, error) {
-	resp, data, err := c.doJSON(ctx, http.MethodPost, "/api/v1/noise-remover/file-uploaded", map[string]any{
-		"filename":         filename,
-		"key":              key,
-		"size":             size,
-		"outputFormat":     "preserve",
-		"audioStreamIndex": 0,
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-	var out map[string]any
-	_ = json.Unmarshal(data, &out)
-	return out, resp.StatusCode, nil
-}
-
-//book_pdfleader_pollFull
-func (c *pdfleaderClient) pollFull(ctx context.Context, fileID string) (map[string]any, error) {
-	deadline := time.Now().Add(noisePollTimeout)
-	for {
-		if err := sleepContext(ctx, noisePollInterval); err != nil {
-			return nil, err
-		}
-		// status/progress endpoint
-		_, statusData, _ := c.doJSON(ctx, http.MethodPost, "/api/v1/files/"+url.PathEscape(fileID)+"/noise-removed", map[string]any{})
-		var statusMap map[string]any
-		_ = json.Unmarshal(statusData, &statusMap)
-		if ps := strings.ToUpper(toString(statusMap["processing_status"])); ps == "FAILED" {
-			return nil, fmt.Errorf("proses noise remover gagal: %s", snippet(statusData))
-		}
-
-		// fetch document/result
-		resp, data, err := c.doJSON(ctx, http.MethodGet, "/api/v1/files/download/"+url.PathEscape(fileID), nil)
-		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			var doc map[string]any
-			if json.Unmarshal(data, &doc) == nil {
-				if u := firstNonEmpty(toString(doc["url"]), toString(doc["downloadUrl"]), toString(doc["outputUrl"])); u != "" {
-					return doc, nil
-				}
-				ps := strings.ToUpper(toString(doc["processing_status"]))
-				st := strings.ToUpper(toString(doc["status"]))
-				if ps == "FAILED" || st == "FAILED" {
-					return nil, fmt.Errorf("proses noise remover gagal: %s", snippet(data))
-				}
-			}
-		}
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("proses full kehabisan waktu (timeout polling)")
-		}
-	}
+// vocalRemoverTracks holds the separated tracks extracted from the page.
+type vocalRemoverTracks struct {
+	InstrumentalB64  string `json:"instrumentalB64"`
+	InstrumentalMime string `json:"instrumentalMime"`
+	InstrumentalName string `json:"instrumentalName"`
+	VocalsB64        string `json:"vocalsB64"`
+	VocalsMime       string `json:"vocalsMime"`
+	VocalsName       string `json:"vocalsName"`
+	Error            string `json:"error"`
+	Ready            bool   `json:"ready"`
 }
 
 //book_tools_noiseRemover
@@ -273,26 +53,9 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	mode := strings.ToLower(strings.TrimSpace(r.FormValue("mode")))
-	if mode == "" {
-		mode = "demo"
-	}
-	if mode != "demo" && mode != "full" {
-		failJSON(w, http.StatusBadRequest, `Parameter "mode" harus "demo" atau "full"`)
-		return
-	}
-	durationSeconds := 30
-	if raw := strings.TrimSpace(r.FormValue("duration_seconds")); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil {
-			durationSeconds = v
-		}
-	}
-	if durationSeconds < 1 {
-		durationSeconds = 1
-	}
-	if durationSeconds > 30 {
-		durationSeconds = 30
-	}
+	// mode/duration_seconds diterima untuk kompatibilitas (dulu pdfleader) tapi tidak digunakan.
+	_ = r.FormValue("mode")
+	_ = r.FormValue("duration_seconds")
 
 	flusher, ok := httpx.StartNDJSON(w)
 	if !ok {
@@ -301,7 +64,7 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	emitter := newNDJSONEmitter(w, flusher)
 	defer emitter.close()
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
 	defer cancel()
 
 	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Membaca file..."})
@@ -340,180 +103,300 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if contentType == "" {
-		contentType = "application/octet-stream"
+		contentType = "audio/mpeg"
 	}
 
-	client, err := newPdfleaderClient()
+	client, err := cdp.Dial(ctx, cdp.DefaultEndpoint)
 	if err != nil {
 		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 500})
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal terhubung ke browser CDP: " + err.Error(), "httpStatus": 502})
 		return
 	}
+	defer client.Close()
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Membuat sesi pdfleader..."})
-	if err := client.ensureSession(ctx); err != nil {
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Membuka vocalremover.org..."})
+
+	raw, err := client.Call("Target.createTarget", map[string]any{"url": "about:blank"}, "")
+	if err != nil {
 		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal membuat sesi: " + err.Error(), "httpStatus": 502})
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal membuat target: " + err.Error(), "httpStatus": 502})
+		return
+	}
+	var ct struct {
+		TargetID string `json:"targetId"`
+	}
+	if err := json.Unmarshal(raw, &ct); err != nil || ct.TargetID == "" {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "targetId tidak ditemukan", "httpStatus": 502})
+		return
+	}
+	defer func() { _, _ = client.Call("Target.closeTarget", map[string]any{"targetId": ct.TargetID}, "") }()
+
+	raw, err = client.Call("Target.attachToTarget", map[string]any{"targetId": ct.TargetID, "flatten": true}, "")
+	if err != nil {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal attach target: " + err.Error(), "httpStatus": 502})
+		return
+	}
+	var att struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(raw, &att); err != nil || att.SessionID == "" {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "sessionId tidak ditemukan", "httpStatus": 502})
+		return
+	}
+	sid := att.SessionID
+
+	_, _ = client.Call("Page.enable", map[string]any{}, sid)
+	_, _ = client.Call("Runtime.enable", map[string]any{}, sid)
+	if _, err := client.Call("Page.navigate", map[string]any{"url": vocalRemoverPage}, sid); err != nil {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal navigasi: " + err.Error(), "httpStatus": 502})
+		return
+	}
+	if err := client.WaitFor(ctx, sid, `document.readyState === 'complete' || document.readyState === 'interactive'`, 30*time.Second); err != nil {
+		// lanjutkan, sebagian browser remote bisa lambat melapor
+		_ = cdp.SleepCtx(ctx, 3*time.Second)
+	} else {
+		_ = cdp.SleepCtx(ctx, 3*time.Second)
+	}
+
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memuat file ke pemroses..."})
+	if err := injectFileToVocalRemover(client, sid, filename, contentType, data); err != nil {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal memuat file: " + err.Error(), "httpStatus": 502})
 		return
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Meminta tautan unggah..."})
-	link, err := client.getUploadLink(ctx, filename)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memproses pemisahan vokal & musik..."})
+	tracks, err := waitVocalRemoverResult(ctx, client, sid, vocalPollTimeout)
 	if err != nil {
 		emitter.stopHeartbeat()
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
 		return
 	}
-	key := strings.TrimSpace(link.Key)
-	if key == "" {
-		key = fileKeyFromAWSLink(link.URL)
-	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah file ke storage..."})
-	if err := client.uploadToStorage(ctx, link.URL, data, contentType); err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
-		return
-	}
-
-	if mode == "demo" {
-		emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengirim permintaan noise remover (demo)..."})
-		demoID, err := client.submitDemo(ctx, filename, key, len(data), durationSeconds)
-		if err != nil {
-			emitter.stopHeartbeat()
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
-			return
-		}
-		emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Menunggu hasil demo..."})
-		res, err := client.pollDemo(ctx, demoID)
-		emitter.stopHeartbeat()
-		if err != nil {
-			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
-			return
-		}
-		emitter.emit(map[string]any{
-			"event":           "done",
-			"success":         true,
-			"status":          "success",
-			"source":          "pdfleader",
-			"mode":            "demo",
-			"demoId":          demoID,
-			"url":             res.URL,
-			"originalUrl":     res.OriginalURL,
-			"size":            res.Size,
-			"durationSeconds": res.DurationSeconds,
-			"container":       res.Container,
-		})
-		return
-	}
-
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengirim permintaan noise remover (full)..."})
-	sub, code, err := client.submitFull(ctx, filename, key, len(data))
-	if err != nil {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
-		return
-	}
-	fileID := firstNonEmpty(toString(sub["fileId"]), toString(sub["id"]))
-	if code == http.StatusPaymentRequired || code >= 400 {
-		emitter.stopHeartbeat()
-		msg := snippetFromAny(sub)
-		if msg == "" {
-			msg = fmt.Sprintf("submit full gagal (HTTP %d)", code)
-		}
-		out := map[string]any{"event": "done", "success": false, "status": "error", "error": msg, "httpStatus": code}
-		if fileID != "" {
-			out["fileId"] = fileID
-		}
-		emitter.emit(out)
-		return
-	}
-	if fileID == "" {
-		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "fileId tidak ditemukan dari respons submit", "httpStatus": 502})
-		return
-	}
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Menunggu hasil pemrosesan..."})
-	doc, err := client.pollFull(ctx, fileID)
-	emitter.stopHeartbeat()
-	if err != nil {
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
-		return
-	}
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah hasil..."})
 	out := map[string]any{
 		"event":   "done",
 		"success": true,
 		"status":  "success",
-		"source":  "pdfleader",
-		"mode":    "full",
-		"fileId":  fileID,
+		"source":  "vocalremover.org",
 	}
-	if u := firstNonEmpty(toString(doc["url"]), toString(doc["downloadUrl"]), toString(doc["outputUrl"])); u != "" {
-		out["url"] = u
+
+	if tracks.InstrumentalB64 != "" {
+		raw, decErr := base64.StdEncoding.DecodeString(tracks.InstrumentalB64)
+		if decErr != nil {
+			emitter.stopHeartbeat()
+			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal mendekode hasil instrumental", "httpStatus": 502})
+			return
+		}
+		name := tracks.InstrumentalName
+		if name == "" {
+			name = "instrumental.wav"
+		}
+		mime := tracks.InstrumentalMime
+		if mime == "" {
+			mime = "audio/wav"
+		}
+		url, upErr := uploadToTmpfiles(ctx, raw, name, mime)
+		if upErr != nil {
+			emitter.stopHeartbeat()
+			emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal unggah instrumental: " + upErr.Error(), "httpStatus": 502})
+			return
+		}
+		out["url"] = url
+		out["instrumental_url"] = url
+		out["instrumental_size"] = len(raw)
 	}
-	if v, ok := doc["size"]; ok {
-		out["size"] = v
+	if tracks.VocalsB64 != "" {
+		raw, decErr := base64.StdEncoding.DecodeString(tracks.VocalsB64)
+		if decErr == nil && len(raw) > 0 {
+			name := tracks.VocalsName
+			if name == "" {
+				name = "vocals.wav"
+			}
+			mime := tracks.VocalsMime
+			if mime == "" {
+				mime = "audio/wav"
+			}
+			if url, upErr := uploadToTmpfiles(ctx, raw, name, mime); upErr == nil {
+				out["vocals_url"] = url
+				out["vocals_size"] = len(raw)
+			}
+		}
 	}
-	if v, ok := doc["container"]; ok {
-		out["container"] = v
+
+	if _, ok := out["url"]; !ok {
+		emitter.stopHeartbeat()
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Tidak ada hasil audio yang berhasil diekstrak", "httpStatus": 502})
+		return
 	}
+
+	emitter.stopHeartbeat()
 	emitter.emit(out)
 }
 
-func fileKeyFromAWSLink(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
+// injectFileToVocalRemover mengirim file ke halaman vocalremover.org via CDP.
+func injectFileToVocalRemover(client *cdp.Client, sid, filename, contentType string, data []byte) error {
+	b64 := base64.StdEncoding.EncodeToString(data)
+	// init buffer
+	if _, err := client.Eval(sid, `window.__naFile = {name:"",type:"",b64:""};`); err != nil {
+		return err
 	}
-	p := strings.TrimPrefix(parsed.Path, "/")
-	return p
-}
-
-func snippet(data []byte) string {
-	s := strings.TrimSpace(string(data))
-	if s == "" {
-		return ""
-	}
-	if len(s) > 400 {
-		return s[:400]
-	}
-	return s
-}
-
-func snippetFromAny(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return ""
-	}
-	return snippet(b)
-}
-
-func toString(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case fmt.Stringer:
-		return t.String()
-	case float64:
-		// avoid scientific for ints
-		if t == float64(int64(t)) {
-			return fmt.Sprintf("%d", int64(t))
+	// chunked append to avoid huge single evaluate expression issues
+	for i := 0; i < len(b64); i += vocalChunkSize {
+		end := i + vocalChunkSize
+		if end > len(b64) {
+			end = len(b64)
 		}
-		return fmt.Sprintf("%v", t)
-	case int:
-		return fmt.Sprintf("%d", t)
-	case int64:
-		return fmt.Sprintf("%d", t)
-	default:
-		return ""
-	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
+		chunk, _ := json.Marshal(b64[i:end])
+		if _, err := client.Eval(sid, `window.__naFile.b64 += `+string(chunk)+`;`); err != nil {
+			return fmt.Errorf("gagal kirim chunk data: %w", err)
 		}
 	}
-	return ""
+	nameJSON, _ := json.Marshal(filename)
+	typeJSON, _ := json.Marshal(contentType)
+	script := `(async()=>{
+  try{
+    const meta = window.__naFile || {};
+    const b64 = meta.b64 || "";
+    const name = ` + string(nameJSON) + `;
+    const type = ` + string(typeJSON) + `;
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const file = new File([bytes], name, {type: type || 'audio/mpeg'});
+    const input = document.querySelector('input[type=file]');
+    if(!input) return JSON.stringify({ok:false,err:'input file tidak ditemukan'});
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    try{ window.__naFile.b64 = ""; }catch(e){}
+    return JSON.stringify({ok:true,size:file.size});
+  }catch(e){ return JSON.stringify({ok:false,err:String(e&&e.message||e)}); }
+})()`
+	res, err := client.EvalAwait(sid, script)
+	if err != nil {
+		return err
+	}
+	var out struct {
+		OK  bool   `json:"ok"`
+		Err string `json:"err"`
+	}
+	if err := json.Unmarshal([]byte(res), &out); err != nil {
+		return fmt.Errorf("respons inject tidak valid: %w", err)
+	}
+	if !out.OK {
+		if out.Err == "" {
+			out.Err = "gagal menyuntikkan file"
+		}
+		return fmt.Errorf("%s", out.Err)
+	}
+	return nil
+}
+
+// waitVocalRemoverResult mem-poll halaman hingga hasil pemisahan siap lalu mengekstraknya.
+func waitVocalRemoverResult(ctx context.Context, client *cdp.Client, sid string, timeout time.Duration) (vocalRemoverTracks, error) {
+	deadline := time.Now().Add(timeout)
+	// beri waktu awal untuk app memulai proses
+	if err := sleepContext(ctx, 8*time.Second); err != nil {
+		return vocalRemoverTracks{}, err
+	}
+
+	checkScript := `(async()=>{
+  try{
+    const text = (document.body && (document.body.innerText||document.body.textContent)||'').toLowerCase();
+    const anchors = Array.from(document.querySelectorAll('a'));
+    const audios = Array.from(document.querySelectorAll('audio'));
+    const blobLinks = anchors.filter(a => (a.href||'').startsWith('blob:'));
+    const blobAudios = audios.filter(a => ((a.currentSrc||a.src)||'').startsWith('blob:'));
+    const hasError = /error|gagal|failed|could not|unsupported|too (short|long)|sorry/i.test(text);
+    const hasProgress = !!document.querySelector('progress,[role="progressbar"],[class*="progress"],[class*="loading"],[class*="spinner"]');
+    // heuristik siap: ada blob audio/link (hasil unduhan) atau tombol/link save/download muncul setelah halaman berganti
+    const saveLike = anchors.filter(a => /save|download|simpan|unduh/i.test((a.innerText||a.textContent||'') + ' ' + (a.download||'') + ' ' + (a.className||'')));
+    const ready = (blobLinks.length + blobAudios.length) >= 1 || (saveLike.length >= 1 && blobAudios.length >= 1) || (blobAudios.length >= 2) || (blobLinks.length >= 2);
+    if (ready) {
+      async function toB64(url){
+        try{
+          const r = await fetch(url);
+          const b = await r.blob();
+          return await new Promise((res,rej)=>{
+            const fr = new FileReader();
+            fr.onload = () => { const s = String(fr.result||''); const i = s.indexOf(','); res({b64: i>=0?s.slice(i+1):s, mime: b.type||'audio/wav'}); };
+            fr.onerror = () => rej(fr.error||new Error('read fail'));
+            fr.readAsDataURL(b);
+          });
+        }catch(e){ return null; }
+      }
+      // kumpulkan kandidat (url,label,prefer music/instrumental)
+      const candidates = [];
+      for (const a of anchors) {
+        const href = a.href||'';
+        if (!href.startsWith('blob:') && !a.download) continue;
+        const label = ((a.innerText||a.textContent||'') + ' ' + (a.download||'') + ' ' + (a.getAttribute('aria-label')||'')).toLowerCase();
+        candidates.push({url: href, label, dl: a.download||''});
+      }
+      for (const au of audios) {
+        const u = au.currentSrc||au.src||'';
+        if (!u.startsWith('blob:')) continue;
+        const ctxText = ((au.closest('section,div,article')||{}).innerText||'').toLowerCase();
+        candidates.push({url: u, label: ctxText, dl: ''});
+      }
+      // dedupe by url
+      const seen = new Set();
+      const uniq = [];
+      for (const c of candidates){ if(!c.url || seen.has(c.url)) continue; seen.add(c.url); uniq.push(c); }
+      function isVocal(lbl){ return /vocal|voice|acapella|vokal|suara/.test(lbl); }
+      function isMusic(lbl){ return /music|instrumental|karaoke|musik|no vocal|without vocal|minus/.test(lbl); }
+      let music = uniq.find(c=>isMusic(c.label) && c.url.startsWith('blob:')) || uniq.find(c=>!isVocal(c.label) && c.url.startsWith('blob:')) || uniq[0];
+      let vocal = uniq.find(c=>isVocal(c.label) && c.url.startsWith('blob:') && (!music || c.url!==music.url)) || uniq.find(c=>c.url.startsWith('blob:') && (!music || c.url!==music.url));
+      const out = {ready:true};
+      if (music && music.url.startsWith('blob:')) {
+        const r = await toB64(music.url);
+        if (r) { out.instrumentalB64=r.b64; out.instrumentalMime=r.mime; out.instrumentalName=music.dl||'instrumental.wav'; }
+      }
+      if (vocal && vocal.url.startsWith('blob:')) {
+        const r = await toB64(vocal.url);
+        if (r) { out.vocalsB64=r.b64; out.vocalsMime=r.mime; out.vocalsName=vocal.dl||'vocals.wav'; }
+      }
+      if (!out.instrumentalB64 && !out.vocalsB64) { return JSON.stringify({ready:false, waiting:true, hasProgress, note:'blob found but extract failed'}); }
+      return JSON.stringify(out);
+    }
+    if (hasError && !hasProgress) return JSON.stringify({ready:false, error:'Situs vocalremover.org melaporkan error atau format tidak didukung'});
+    return JSON.stringify({ready:false, hasProgress});
+  }catch(e){ return JSON.stringify({ready:false, error:String(e&&e.message||e)}); }
+})()`
+
+	for {
+		if ctx.Err() != nil {
+			return vocalRemoverTracks{}, fmt.Errorf("proses dibatalkan/timeout")
+		}
+		if time.Now().After(deadline) {
+			return vocalRemoverTracks{}, fmt.Errorf("proses vocal remover kehabisan waktu (timeout)")
+		}
+		res, err := client.EvalAwait(sid, checkScript)
+		if err != nil {
+			// satu kali gagal eval bisa transient; coba lanjut selama belum deadline
+			if time.Now().After(deadline) {
+				return vocalRemoverTracks{}, fmt.Errorf("gagal membaca status halaman: %w", err)
+			}
+		} else {
+			var tr vocalRemoverTracks
+			if jerr := json.Unmarshal([]byte(res), &tr); jerr == nil {
+				if tr.Error != "" {
+					return vocalRemoverTracks{}, fmt.Errorf("%s", tr.Error)
+				}
+				if tr.Ready && (tr.InstrumentalB64 != "" || tr.VocalsB64 != "") {
+					return tr, nil
+				}
+			}
+		}
+		if err := sleepContext(ctx, vocalPollInterval); err != nil {
+			return vocalRemoverTracks{}, err
+		}
+	}
 }
