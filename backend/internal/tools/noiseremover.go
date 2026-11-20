@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"path"
@@ -20,7 +19,6 @@ import (
 
 const (
 	nirkyyBase          = "https://nirkyy-a.hf.space"
-	nirkyyUploadURL     = nirkyyBase + "/gradio_api/upload"
 	nirkyyCallURL       = nirkyyBase + "/gradio_api/call/denoise"
 	noiseMaxSourceBytes = 32 << 20 // 32 MiB
 	nirkyyTimeout       = 5 * time.Minute
@@ -97,16 +95,16 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 		contentType = "audio/wav"
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Mengunggah audio ke nirkyy-a.hf.space..."})
-	uploadedPath, err := nirkyyUpload(ctx, data, filename, contentType)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Menyiapkan audio..."})
+	inputURL, err := uploadToTmpfiles(ctx, data, filename, contentType)
 	if err != nil {
 		emitter.stopHeartbeat()
-		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal unggah ke layanan: " + err.Error(), "httpStatus": 502})
+		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": "Gagal menyiapkan audio: " + err.Error(), "httpStatus": 502})
 		return
 	}
 
-	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memproses penghapusan noise..."})
-	resultURL, resultName, err := nirkyyDenoise(ctx, uploadedPath, filename)
+	emitter.emit(streamEvent{Event: "processing", Status: "running", Message: "Memproses penghapusan noise (nirkyy-a.hf.space)..."})
+	resultURL, resultName, err := nirkyyDenoise(ctx, inputURL, filename)
 	if err != nil {
 		emitter.stopHeartbeat()
 		emitter.emit(map[string]any{"event": "done", "success": false, "status": "error", "error": err.Error(), "httpStatus": 502})
@@ -145,42 +143,32 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func nirkyyUpload(ctx context.Context, data []byte, filename, contentType string) (string, error) {
+func nirkyyDenoise(ctx context.Context, inputURL, origName string) (string, string, error) {
+	payload := map[string]any{
+		"data": []any{
+			map[string]any{
+				"path":      inputURL,
+				"url":       inputURL,
+				"meta":      map[string]any{"_type": "gradio.FileData"},
+				"orig_name": origName,
+			},
+		},
+	}
+	b, _ := json.Marshal(payload)
+
 	var lastErr error
-	for attempt := 0; attempt < 4; attempt++ {
+	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
-			wait := time.Duration(attempt*attempt) * 3 * time.Second
-			if err := sleepContext(ctx, wait); err != nil {
-				return "", err
+			if err := sleepContext(ctx, time.Duration(attempt*attempt)*3*time.Second); err != nil {
+				return "", "", err
 			}
 		}
-		var buf bytes.Buffer
-		w := multipart.NewWriter(&buf)
-		h := make(textproto.MIMEHeader)
-				escapedName := strings.ReplaceAll(strings.ReplaceAll(filename, "\\", "_"), "\"", "_")
-		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="files"; filename="%s"`, escapedName))
-		ct := strings.TrimSpace(contentType)
-		if ct == "" {
-			ct = "application/octet-stream"
-		}
-		h.Set("Content-Type", ct)
-		part, err := w.CreatePart(h)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyCallURL, bytes.NewReader(b))
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		if _, err := part.Write(data); err != nil {
-			return "", err
-		}
-		if err := w.Close(); err != nil {
-			return "", err
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyUploadURL, &buf)
-		if err != nil {
-			return "", err
-		}
-		req.Header.Set("Content-Type", w.FormDataContentType())
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-		req.Header.Set("Accept", "*/*")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "Mozilla/5.0")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			lastErr = err
@@ -189,68 +177,42 @@ func nirkyyUpload(ctx context.Context, data []byte, filename, contentType string
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		resp.Body.Close()
 		if resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
-			lastErr = fmt.Errorf("upload gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			lastErr = fmt.Errorf("gagal memulai proses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return "", fmt.Errorf("upload gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			return "", "", fmt.Errorf("gagal memulai proses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		}
-		var arr []string
-		if err := json.Unmarshal(body, &arr); err == nil && len(arr) > 0 && strings.TrimSpace(arr[0]) != "" {
-			return strings.TrimSpace(arr[0]), nil
+		var call struct {
+			EventID string `json:"event_id"`
 		}
-		var obj struct {
-			Path string `json:"path"`
+		if err := json.Unmarshal(body, &call); err != nil || strings.TrimSpace(call.EventID) == "" {
+			return "", "", fmt.Errorf("event_id tidak ditemukan: %s", strings.TrimSpace(string(body)))
 		}
-		if err := json.Unmarshal(body, &obj); err == nil && strings.TrimSpace(obj.Path) != "" {
-			return strings.TrimSpace(obj.Path), nil
+		u, name, err := nirkyyWaitResult(ctx, call.EventID)
+		if err == nil {
+			return u, name, nil
 		}
-		return "", fmt.Errorf("respons upload tidak valid: %s", strings.TrimSpace(string(body)))
+		lastErr = err
+		// retry on transient-like failures only
+		if !strings.Contains(err.Error(), "HTTP 503") && !strings.Contains(err.Error(), "HTTP 502") && !strings.Contains(err.Error(), "HTTP 504") {
+			return "", "", err
+		}
 	}
 	if lastErr != nil {
-		return "", lastErr
+		return "", "", lastErr
 	}
-	return "", fmt.Errorf("upload gagal")
+	return "", "", fmt.Errorf("gagal memproses audio")
 }
 
-func nirkyyDenoise(ctx context.Context, uploadedPath, origName string) (string, string, error) {
-	payload := map[string]any{
-		"data": []any{
-			map[string]any{
-				"path":      uploadedPath,
-				"meta":      map[string]any{"_type": "gradio.FileData"},
-				"orig_name": origName,
-			},
-		},
-	}
-	b, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyCallURL, bytes.NewReader(b))
-	if err != nil {
-		return "", "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", "", fmt.Errorf("gagal memulai proses (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var call struct {
-		EventID string `json:"event_id"`
-	}
-	if err := json.Unmarshal(body, &call); err != nil || strings.TrimSpace(call.EventID) == "" {
-		return "", "", fmt.Errorf("event_id tidak ditemukan: %s", strings.TrimSpace(string(body)))
-	}
-
-	sseURL := nirkyyCallURL + "/" + call.EventID
-	req, err = http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
+func nirkyyWaitResult(ctx context.Context, eventID string) (string, string, error) {
+	sseURL := nirkyyCallURL + "/" + eventID
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
 	if err != nil {
 		return "", "", err
 	}
 	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	sseResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", "", err
@@ -268,7 +230,6 @@ func nirkyyDenoise(ctx context.Context, uploadedPath, origName string) (string, 
 	}
 
 	scanner := bufio.NewScanner(sseResp.Body)
-	// allow larger SSE data lines
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 2*1024*1024)
 	var curEvent string
@@ -324,6 +285,7 @@ func nirkyyDownload(ctx context.Context, rawURL string) ([]byte, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, "", err
@@ -345,3 +307,6 @@ func nirkyyDownload(ctx context.Context, rawURL string) ([]byte, string, error) 
 	}
 	return data, ct, nil
 }
+
+// keep textproto import referenced if needed by future changes
+var _ = textproto.MIMEHeader{}
