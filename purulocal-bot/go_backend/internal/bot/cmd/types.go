@@ -11,10 +11,11 @@ import (
 type TriggerType string
 
 const (
-	TriggerDefault   TriggerType = ""          // command teks biasa via resolve
-	TriggerSticker   TriggerType = "sticker"   // butuh media gambar + caption command
-	TriggerUpsw      TriggerType = "upsw"      // upload status (owner, butuh media)
-	TriggerGroupMgmt TriggerType = "group_mgmt" // command manajemen grup (butuh konteks grup/admin)
+	TriggerDefault     TriggerType = ""            // command teks biasa via resolve
+	TriggerSticker     TriggerType = "sticker"     // butuh media gambar + caption command
+	TriggerUpsw        TriggerType = "upsw"        // upload status (owner, butuh media)
+	TriggerGroupMgmt   TriggerType = "group_mgmt"  // command manajemen grup (butuh konteks grup/admin)
+	TriggerRemoveNoise TriggerType = "remove_noise" // hapus noise audio/vn (reply audio dengan command)
 )
 
 // Meta berisi metadata fitur/command. Setiap fitur didefinisikan dalam 1 file.
@@ -87,9 +88,10 @@ type BotAPI interface {
 	GroupSetGoodbyeText(chatID, text string) (GroupSettingsView, error)
 	GetGroupParticipants(ctx context.Context, chat types.JID) ([]types.JID, error)
 	SendTextWithMentions(ctx context.Context, chat types.JID, text string, mentions []types.JID) error
-	// sticker/upsw (special handlers implemented in bot package)
+	// sticker/upsw/removens (special handlers implemented in bot package)
 	HandleSticker(ctx context.Context, evt *events.Message) error
 	HandleUpsw(ctx context.Context, evt *events.Message, caption string) error
+	HandleRemoveNoise(ctx context.Context, evt *events.Message) error
 	// group management dispatch
 	HandleGroupMgmt(req Request) (Result, bool)
 	SendReply(ctx context.Context, evt *events.Message, text string) error

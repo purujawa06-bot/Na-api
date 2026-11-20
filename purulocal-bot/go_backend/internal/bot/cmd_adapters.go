@@ -202,6 +202,10 @@ func (m *Manager) HandleUpsw(ctx context.Context, evt *events.Message, caption s
 	return m.handleUpswCommand(ctx, evt, caption)
 }
 
+func (m *Manager) HandleRemoveNoise(ctx context.Context, evt *events.Message) error {
+	return m.handleRemoveNoiseCommand(ctx, evt)
+}
+
 func (m *Manager) SendReply(ctx context.Context, evt *events.Message, text string) error {
 	return m.sendReply(ctx, evt, text)
 }

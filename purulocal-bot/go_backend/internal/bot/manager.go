@@ -615,6 +615,23 @@ func (m *Manager) onMessage(evt *events.Message) {
 			}
 			_ = m.HandleUpsw(ctx, evt, strings.TrimSpace(args))
 			return
+		case botcmd.TriggerRemoveNoise:
+			maybeReact()
+			doTyping()
+			defer stopReact()
+			if cfg.TypingBeforeReply {
+				m.sendTyping(ctx, evt.Info.Chat, false)
+			}
+			featID := feat.ID
+			if featID == "" {
+				featID = "builtin:" + feat.Command
+			}
+			if !m.isFeatureAllowed(featID, userKey) {
+				_ = m.sendReply(ctx, evt, m.vipDeniedReply().Reply)
+				return
+			}
+			_ = m.HandleRemoveNoise(ctx, evt)
+			return
 		}
 	}
 
