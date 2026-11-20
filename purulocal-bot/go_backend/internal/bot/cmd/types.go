@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"sort"
+	"strings"
 
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -179,7 +181,9 @@ func Find(cmd string) (*Feature, bool) {
 	return f, ok
 }
 
-// MenuItems mengembalikan fitur yang ditampilkan di menu, dikelompokkan per kategori (urut kemunculan).
+// MenuItems mengembalikan fitur yang ditampilkan di menu, dikelompokkan per kategori.
+// Urutan kategori: abjad (A-Z, case-insensitive) prioritas utama, jumlah item paling sedikit prioritas kedua.
+// Item di dalam kategori diurutkan abjad berdasarkan command.
 func MenuItems() (order []string, groups map[string][]*Feature) {
 	groups = map[string][]*Feature{}
 	for _, f := range registry {
@@ -194,6 +198,23 @@ func MenuItems() (order []string, groups map[string][]*Feature) {
 			order = append(order, cat)
 		}
 		groups[cat] = append(groups[cat], f)
+	}
+	sort.Slice(order, func(i, j int) bool {
+		ci, cj := strings.ToLower(order[i]), strings.ToLower(order[j])
+		if ci != cj {
+			return ci < cj
+		}
+		return len(groups[order[i]]) < len(groups[order[j]])
+	})
+	for _, cat := range order {
+		sort.Slice(groups[cat], func(i, j int) bool {
+			ai := strings.ToLower(strings.TrimSpace(groups[cat][i].Command))
+			aj := strings.ToLower(strings.TrimSpace(groups[cat][j].Command))
+			if ai != aj {
+				return ai < aj
+			}
+			return strings.ToLower(groups[cat][i].Name) < strings.ToLower(groups[cat][j].Name)
+		})
 	}
 	return
 }

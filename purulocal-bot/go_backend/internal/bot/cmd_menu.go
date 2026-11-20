@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"sort"
 	"strings"
 
 	botcmd "purulocal-bot/internal/bot/cmd"
@@ -45,9 +46,10 @@ func (m *Manager) BuildMenuText() string {
 		b.WriteString("│\n")
 	}
 
-	// Custom commands (aktif) per kategori
+	// Custom commands (aktif) per kategori (urut abjad, lalu jumlah item paling sedikit)
 	if m.customCmds != nil {
 		type ccat struct {
+			name  string
 			label string
 			items []string
 		}
@@ -65,15 +67,23 @@ func (m *Manager) BuildMenuText() string {
 			key := strings.ToUpper(cat)
 			if _, ok := catMap[key]; !ok {
 				order = append(order, key)
-				catMap[key] = &ccat{label: menuSmallCaps(cat)}
+				catMap[key] = &ccat{name: cat, label: menuSmallCaps(cat)}
 			}
-			catMap[key].items = append(catMap[key].items, "│  • ."+cmdName)
+			catMap[key].items = append(catMap[key].items, cmdName)
 		}
+		sort.Slice(order, func(i, j int) bool {
+			ci, cj := strings.ToLower(catMap[order[i]].name), strings.ToLower(catMap[order[j]].name)
+			if ci != cj {
+				return ci < cj
+			}
+			return len(catMap[order[i]].items) < len(catMap[order[j]].items)
+		})
 		for _, key := range order {
 			cc := catMap[key]
+			sort.Slice(cc.items, func(i, j int) bool { return cc.items[i] < cc.items[j] })
 			b.WriteString("├─ " + cc.label + "\n")
-			for _, line := range cc.items {
-				b.WriteString(line + "\n")
+			for _, cmdName := range cc.items {
+				b.WriteString("│  • ." + cmdName + "\n")
 			}
 			b.WriteString("│\n")
 		}
