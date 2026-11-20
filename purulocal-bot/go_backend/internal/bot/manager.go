@@ -1076,6 +1076,15 @@ func (m *Manager) sendAudioFromURL(ctx context.Context, evt *events.Message, res
 	if len(data) == 0 {
 		return fmt.Errorf("audio kosong (HTTP %d)", resp.StatusCode)
 	}
+	ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+	snip := data
+	if len(snip) > 256 {
+		snip = snip[:256]
+	}
+	snips := strings.ToLower(strings.TrimSpace(string(snip)))
+	if strings.Contains(ct, "text/html") || strings.HasPrefix(snips, "<!doctype html") || strings.HasPrefix(snips, "<html") {
+		return fmt.Errorf("unduhan audio mengembalikan HTML/interstitial, bukan file audio")
+	}
 	uploaded, err := c.Upload(ctx, data, whatsmeow.MediaAudio)
 	if err != nil {
 		return err

@@ -418,13 +418,13 @@ func preparePlayableAudio(ctx context.Context, m *Manager, wav []byte) ([]byte, 
 		{format: "ogg", mime: "audio/ogg", name: "cleaned.ogg", ptt: true},
 	}
 	for _, a := range attempts {
-		if out, err := convertAudioLocal(ctx, wav, a.format); err == nil && len(out) > 0 {
+		if out, err := convertAudioLocal(ctx, wav, a.format); err == nil && len(out) > 0 && looksLikeAudio(out, a.format) {
 			if m != nil {
 				m.logInfo("removens", "konversi lokal berhasil: "+a.format)
 			}
 			return out, a.mime, a.name, a.ptt
 		}
-		if out, err := convertAudioViaAPI(ctx, wav, "cleaned.wav", a.format); err == nil && len(out) > 0 {
+		if out, err := convertAudioViaAPI(ctx, wav, "cleaned.wav", a.format); err == nil && len(out) > 0 && looksLikeAudio(out, a.format) {
 			if m != nil {
 				m.logInfo("removens", "konversi via API berhasil: "+a.format)
 			}
@@ -533,7 +533,7 @@ func convertAudioViaAPI(ctx context.Context, data []byte, filename, format strin
 		return nil, err
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	client := &http.Client{}
+	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -571,22 +571,13 @@ func convertAudioViaAPI(ctx context.Context, data []byte, filename, format strin
 	if resultURL == "" {
 		return nil, fmt.Errorf("URL hasil konversi tidak ditemukan")
 	}
-	// download hasil
-	greq, err := http.NewRequestWithContext(ctx, http.MethodGet, resultURL, nil)
+	// download hasil (butuh header agar tidak dapat HTML/interstitial dari host)
+	out, err := downloadFileBytes(ctx, client, resultURL, 32<<20)
 	if err != nil {
 		return nil, err
 	}
-	gresp, err := client.Do(greq)
-	if err != nil {
-		return nil, err
-	}
-	defer gresp.Body.Close()
-	out, err := io.ReadAll(io.LimitReader(gresp.Body, 32<<20))
-	if err != nil {
-		return nil, err
-	}
-	if gresp.StatusCode < 200 || gresp.StatusCode > 299 || len(out) == 0 {
-		return nil, fmt.Errorf("gagal unduh hasil konversi")
+	if !looksLikeAudio(out, format) {
+		return nil, fmt.Errorf("hasil konversi tidak valid (bukan audio %s)", format)
 	}
 	return out, nil
 }
@@ -625,5 +616,69 @@ func audioFilenameFromMime(mime string) string {
 		return "audio.amr"
 	default:
 		return "audio.bin"
+	}
+}
+
+func downloadFileBytes(ctx context.Context, client *http.Client, url string, limit int64) ([]byte, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 90 * time.Second}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("gagal unduh file (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(bodySnippet(body, 200))))
+	}
+	if len(body) == 0 {
+		return nil, fmt.Errorf("file kosong")
+	}
+	ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+	if strings.Contains(ct, "text/html") || looksLikeHTML(body) {
+		return nil, fmt.Errorf("unduhan mengembalikan HTML, bukan file audio")
+	}
+	return body, nil
+}
+
+func bodySnippet(b []byte, n int) []byte {
+	if len(b) <= n {
+		return b
+	}
+	return b[:n]
+}
+
+func looksLikeHTML(b []byte) bool {
+	s := strings.ToLower(strings.TrimSpace(string(bodySnippet(b, 256))))
+	return strings.HasPrefix(s, "<!doctype html") || strings.HasPrefix(s, "<html") || strings.Contains(s, "<html")
+}
+
+func looksLikeAudio(b []byte, format string) bool {
+	if len(b) < 4 || looksLikeHTML(b) {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "mp3":
+		return (len(b) > 3 && string(b[:3]) == "ID3") || (b[0] == 0xFF && (b[1]&0xE0) == 0xE0)
+	case "m4a", "mp4", "aac":
+		return len(b) > 8 && string(b[4:8]) == "ftyp"
+	case "ogg", "opus":
+		return string(b[:4]) == "OggS"
+	case "wav":
+		return len(b) > 12 && string(b[:4]) == "RIFF" && string(b[8:12]) == "WAVE"
+	default:
+		// longgarkan: asalkan bukan HTML/kosong
+		return true
 	}
 }
