@@ -10,6 +10,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"path"
 	"strings"
 	"time"
@@ -145,43 +146,71 @@ func (h *handlers) noiseRemover(w http.ResponseWriter, r *http.Request) {
 }
 
 func nirkyyUpload(ctx context.Context, data []byte, filename, contentType string) (string, error) {
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	part, err := w.CreateFormFile("files", filename)
-	if err != nil {
-		return "", err
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
+		if attempt > 0 {
+			wait := time.Duration(attempt*attempt) * 3 * time.Second
+			if err := sleepContext(ctx, wait); err != nil {
+				return "", err
+			}
+		}
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		h := make(textproto.MIMEHeader)
+				escapedName := strings.ReplaceAll(strings.ReplaceAll(filename, "\\", "_"), "\"", "_")
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="files"; filename="%s"`, escapedName))
+		ct := strings.TrimSpace(contentType)
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		h.Set("Content-Type", ct)
+		part, err := w.CreatePart(h)
+		if err != nil {
+			return "", err
+		}
+		if _, err := part.Write(data); err != nil {
+			return "", err
+		}
+		if err := w.Close(); err != nil {
+			return "", err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyUploadURL, &buf)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "*/*")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		resp.Body.Close()
+		if resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			lastErr = fmt.Errorf("upload gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return "", fmt.Errorf("upload gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var arr []string
+		if err := json.Unmarshal(body, &arr); err == nil && len(arr) > 0 && strings.TrimSpace(arr[0]) != "" {
+			return strings.TrimSpace(arr[0]), nil
+		}
+		var obj struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(body, &obj); err == nil && strings.TrimSpace(obj.Path) != "" {
+			return strings.TrimSpace(obj.Path), nil
+		}
+		return "", fmt.Errorf("respons upload tidak valid: %s", strings.TrimSpace(string(body)))
 	}
-	if _, err := part.Write(data); err != nil {
-		return "", err
+	if lastErr != nil {
+		return "", lastErr
 	}
-	if err := w.Close(); err != nil {
-		return "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, nirkyyUploadURL, &buf)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", fmt.Errorf("upload gagal (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var arr []string
-	if err := json.Unmarshal(body, &arr); err == nil && len(arr) > 0 && strings.TrimSpace(arr[0]) != "" {
-		return strings.TrimSpace(arr[0]), nil
-	}
-	var obj struct {
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(body, &obj); err == nil && strings.TrimSpace(obj.Path) != "" {
-		return strings.TrimSpace(obj.Path), nil
-	}
-	return "", fmt.Errorf("respons upload tidak valid: %s", strings.TrimSpace(string(body)))
+	return "", fmt.Errorf("upload gagal")
 }
 
 func nirkyyDenoise(ctx context.Context, uploadedPath, origName string) (string, string, error) {
