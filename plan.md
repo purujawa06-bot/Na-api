@@ -2,7 +2,7 @@
 
 ## Scope (dari permintaan)
 - [ ] Hapus semua plugin puruLocal, pindahkan ke built-in, hapus page Plugin (UI+API bot) karena semua built-in.
-- [ ] `.removens`: reverse engineering nirkyy langsung di dalam puruLocal (CDP), bukan via endpoint na-api.
+- [x] `.removens`: reverse engineering nirkyy langsung di dalam puruLocal (HTTP langsung, tanpa CDP), bukan via endpoint na-api.
 - [ ] Hapus endpoint na-api: `/api/tools/noise-remover` (+docs/JSDoc) dan endpoint plugin purulocal (`/api/purulocal/plugins`, `/api/purulocal/plugins/exec`).
 - [ ] Endpoint baru na-api `/tools/ffmpeg` (konversi via ffmpeg) + sediakan docs (JSDoc + rebuild docs).
 - [ ] Commit, push, monitoring hingga hijau.
@@ -40,14 +40,14 @@
 - [x] Rebuild docs: `node scripts/rebuild-docs.js` â†’ `public/docs.json` valid & memuat `/tools/ffmpeg`, tanpa noise-remover.
 
 ### 5) Verifikasi, commit, push, monitoring
-- [ ] Build/vet/test backend: `cd backend && go build ./... && go vet ./... && go test ./...` (env dummy PG/admin).
-- [ ] Build bot: `cd purulocal-bot/go_backend && go build ./... && go vet ./...`.
-- [ ] `node scripts/rebuild-docs.js` sukses.
+- [x] Build/vet/test backend: `cd backend && go build ./... && go vet ./... && go test ./...` (env dummy PG/admin).
+- [x] Build bot: `cd purulocal-bot/go_backend && go build ./... && go vet ./...`.
+- [x] `node scripts/rebuild-docs.js` sukses.
 - [ ] Commit semua perubahan relevan (tidak commit secret/>5MB/unrelated bila tidak diminta), push.
 - [ ] Monitoring CI/deploy (gh run) hingga hijau; catat bukti.
 
 ## Catatan keputusan
 - "Plugin semuanya" (na-api) diartikan endpoint plugin purulocal (list/exec); update-manifest dipertahankan jika terpisah dari fungsi plugin (akan diputuskan saat implementasi & dicatat).
 - `.ai/.play/.tt/.brat` sebagai builtin bot tetap memanggil endpoint publik na-api yang relevan (bukan endpoint plugin purulocal).
-- `.removens` diimplementasikan native di bot (CDP nirkyy + konversi ffmpeg jika ada), tanpa endpoint noise-remover na-api.
+- `.removens` diimplementasikan native di bot (HTTP langsung nirkyy + konversi ffmpeg jika ada, tanpa CDP), tanpa endpoint noise-remover na-api.
 - Perbaikan `bytes` redeclare (CDP JS) di noiseremover.go menjadi moot jika endpoint dihapus; perubahan tak terkait lain tidak diganggu kecuali perlu.
