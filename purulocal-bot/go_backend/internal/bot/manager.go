@@ -296,6 +296,12 @@ func (m *Manager) logWarn(source, msg string) {
 	}
 }
 
+func (m *Manager) logInfo(source, msg string) {
+	if m != nil && m.logger != nil {
+		m.logger.Info(source, msg)
+	}
+}
+
 func truncateLog(s string, max int) string {
 	s = strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
 	r := []rune(s)

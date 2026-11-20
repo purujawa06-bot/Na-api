@@ -94,6 +94,17 @@ func (h *handlers) listPlugins(w http.ResponseWriter, r *http.Request) {
 			Version:     "1.0.0",
 			Enabled:     true,
 		},
+		{
+			ID:          "noise-remover",
+			Name:        "Anti Noise",
+			Command:     "removens",
+			Category:    "Audio",
+			Description: "Hapus noise audio/voice note (reply audio/vn dengan .removens)",
+			ExecURL:     exec,
+			Server:      base,
+			Version:     "1.0.0",
+			Enabled:     true,
+		},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "plugins": plugins})
@@ -147,6 +158,11 @@ func (h *handlers) execPlugin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(res)
+	case "removens", "noise-remover":
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":    true,
+			"reply": "Reply audio/voice note dengan .removens untuk menghapus noise (proses via API na-api).",
+		})
 	default:
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "plugin command tidak dikenali"})
 	}
