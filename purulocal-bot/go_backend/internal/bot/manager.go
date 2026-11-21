@@ -79,6 +79,7 @@ type Manager struct {
 	logger         *Logger
 	group          *GroupSettingsStore
 	cloudSync      *CloudSyncService
+	startedAt      time.Time
 
 	spamMu      sync.Mutex
 	lastMsgAt   map[string]time.Time
@@ -127,6 +128,7 @@ func NewManager(configPath, dataDir string) (*Manager, error) {
 		lastMsgAt:   map[string]time.Time{},
 		bannedUntil: map[string]time.Time{},
 		restartCh:   make(chan string, 1),
+		startedAt:   time.Now(),
 	}
 	m.cloudSync = newCloudSyncService(m)
 	m.cloudSync.Start()
@@ -684,6 +686,23 @@ func (m *Manager) onMessage(evt *events.Message) {
 	// catat indikasi kegagalan dari hasil command untuk debug (mis. gagal download tiktok)
 	if txt := strings.TrimSpace(res.Reply + " " + res.Caption); txt != "" && strings.Contains(strings.ToLower(txt), "gagal") {
 		m.logWarn("command."+cmd, "reply mengindikasikan kegagalan: "+truncateLog(txt, 300))
+	}
+	// kirim pesan WA mentah (mis. interactive/nativeFlow)
+	if res.RawMessage != nil {
+		if msg, ok := res.RawMessage.(*waE2E.Message); ok {
+			m.mu.RLock()
+			c := m.client
+			m.mu.RUnlock()
+			if c == nil {
+				_ = m.sendReply(ctx, evt, "Bot belum siap, coba lagi.")
+			} else if _, err := c.SendMessage(ctx, evt.Info.Chat, msg); err != nil {
+				m.logError("send.raw", "cmd="+cmd+" err="+err.Error())
+				_ = m.sendReply(ctx, evt, "Gagal mengirim pesan.")
+			}
+		} else {
+			m.logWarn("send.raw", "cmd="+cmd+" tipe RawMessage tidak didukung")
+		}
+		return
 	}
 	// kirim video (mis. .tt/.tiktok): video siap putar + caption info (tanpa link)
 	if strings.TrimSpace(res.VideoURL) != "" {
@@ -1669,7 +1688,7 @@ var antilinkRegex = regexp.MustCompile(`(?i)(https?://\S+|www\.\S+|chat\.whatsap
 
 func isGroupMgmtCommand(cmd string) bool {
 	switch strings.ToLower(strings.TrimSpace(cmd)) {
-	case "antilink", "welcome", "setwelcome", "goodbye", "setgoodbye", "tagall", "hidetag":
+	case "antilink", "welcome", "setwelcome", "goodbye", "setgoodbye", "tagall", "hidetag", "pengumuman", "announce", "hiddentag":
 		return true
 	}
 	return false
@@ -1925,6 +1944,10 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 	if !isGroupMgmtCommand(cmd) {
 		return ExecResult{}, false
 	}
+	switch cmd {
+	case "pengumuman", "announce", "hiddentag":
+		cmd = "hidetag"
+	}
 
 	// VIP/feature gate untuk builtin terkait
 	feat := "builtin:" + cmd
@@ -1994,37 +2017,44 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 	case "tagall":
 		parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
 		if err != nil || len(parts) == 0 {
-			return ExecResult{Reply: "*【 TAGALL 】*\n\nGagal mengambil daftar anggota grup."}, true
+			return ExecResult{Reply: "Gagal mengambil daftar anggota grup."}, true
 		}
 		msgText := strings.TrimSpace(args)
 		if msgText == "" {
-			msgText = "Halo semuanya!"
+			return ExecResult{Reply: "Silahkan masukan pesan anda\nContoh Ketik .tagall Hai"}, true
+		}
+		senderTag := evt.Info.Sender.User
+		if senderTag == "" {
+			senderTag = strings.Split(evt.Info.Sender.String(), "@")[0]
 		}
 		var b strings.Builder
-		b.WriteString("*【 TAGALL 】*\n\n")
-		b.WriteString("*Pesan:* ")
+		b.WriteString("╔══「 *TAG ALL* 」\n")
+		b.WriteString("║ *Dari:* @")
+		b.WriteString(senderTag)
+		b.WriteString("\n║ *Pesan:* ")
 		b.WriteString(msgText)
-		b.WriteString("\n\n")
-		for _, p := range parts {
-			b.WriteString("• @")
+		b.WriteString("\n║ \n")
+		for i, p := range parts {
+			b.WriteString("╟ @")
 			b.WriteString(p.User)
-			b.WriteString("\n")
+			if i < len(parts)-1 {
+				b.WriteString("\n")
+			}
 		}
-		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, strings.TrimSpace(b.String()), parts); err != nil {
-			return ExecResult{Reply: "*【 TAGALL 】*\n\nGagal mengirim pesan: " + err.Error()}, true
+		b.WriteString("\n╚════════════════")
+		mentionParts := append([]types.JID{}, parts...)
+		mentionParts = append(mentionParts, evt.Info.Sender)
+		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, b.String(), mentionParts); err != nil {
+			return ExecResult{Reply: "Gagal mengirim pesan: " + err.Error()}, true
 		}
 		return ExecResult{Reply: ""}, true
 	case "hidetag":
 		parts, err := m.getGroupParticipants(ctx, evt.Info.Chat)
 		if err != nil || len(parts) == 0 {
-			return ExecResult{Reply: "*【 HIDETAG 】*\n\nGagal mengambil daftar anggota grup."}, true
+			return ExecResult{Reply: "Gagal mengambil daftar anggota grup."}, true
 		}
-		msgText := strings.TrimSpace(args)
-		if msgText == "" {
-			msgText = "*【 HIDETAG 】*\n\nPengumuman untuk semua anggota."
-		}
-		if err := m.sendTextWithMentions(ctx, evt.Info.Chat, msgText, parts); err != nil {
-			return ExecResult{Reply: "*【 HIDETAG 】*\n\nGagal mengirim pesan: " + err.Error()}, true
+		if err := m.sendHidetag(ctx, evt, args, parts); err != nil {
+			return ExecResult{Reply: "Gagal mengirim hidetag: " + err.Error()}, true
 		}
 		return ExecResult{Reply: ""}, true
 	}
@@ -2033,6 +2063,175 @@ func (m *Manager) handleGroupMgmtCommand(ctx context.Context, evt *events.Messag
 }
 
 
+
+func (m *Manager) sendHidetag(ctx context.Context, evt *events.Message, args string, parts []types.JID) error {
+	m.mu.RLock()
+	c := m.client
+	m.mu.RUnlock()
+	if c == nil {
+		return errors.New("client not ready")
+	}
+
+	mentions := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, j := range parts {
+		s := j.String()
+		if strings.TrimSpace(s) == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		mentions = append(mentions, s)
+	}
+	ctxInfo := &waE2E.ContextInfo{MentionedJID: mentions}
+
+	text := strings.TrimSpace(args)
+	var quoted *waE2E.Message
+	if ci := extractIncomingContextInfo(evt.Message); ci != nil {
+		quoted = ci.GetQuotedMessage()
+	}
+
+	sendText := func(t string) error {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			t = " "
+		}
+		_, err := c.SendMessage(ctx, evt.Info.Chat, &waE2E.Message{
+			ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+				Text:        proto.String(t),
+				ContextInfo: ctxInfo,
+			},
+		})
+		return err
+	}
+
+	if quoted != nil {
+		if img := quoted.GetImageMessage(); img != nil {
+			caption := text
+			if caption == "" {
+				caption = img.GetCaption()
+			}
+			data, err := c.Download(ctx, img)
+			if err != nil {
+				return err
+			}
+			up, err := c.Upload(ctx, data, whatsmeow.MediaImage)
+			if err != nil {
+				return err
+			}
+			msg := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
+				URL:           proto.String(up.URL),
+				DirectPath:    proto.String(up.DirectPath),
+				MediaKey:      up.MediaKey,
+				Mimetype:      proto.String(img.GetMimetype()),
+				FileEncSHA256: up.FileEncSHA256,
+				FileSHA256:    up.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+				Caption:       proto.String(caption),
+				ContextInfo:   ctxInfo,
+			}}
+			_, err = c.SendMessage(ctx, evt.Info.Chat, msg)
+			return err
+		}
+		if vid := quoted.GetVideoMessage(); vid != nil {
+			caption := text
+			if caption == "" {
+				caption = vid.GetCaption()
+			}
+			data, err := c.Download(ctx, vid)
+			if err != nil {
+				return err
+			}
+			up, err := c.Upload(ctx, data, whatsmeow.MediaVideo)
+			if err != nil {
+				return err
+			}
+			msg := &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
+				URL:           proto.String(up.URL),
+				DirectPath:    proto.String(up.DirectPath),
+				MediaKey:      up.MediaKey,
+				Mimetype:      proto.String(vid.GetMimetype()),
+				FileEncSHA256: up.FileEncSHA256,
+				FileSHA256:    up.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+				Seconds:       proto.Uint32(vid.GetSeconds()),
+				Caption:       proto.String(caption),
+				GifPlayback:   proto.Bool(vid.GetGifPlayback()),
+				ContextInfo:   ctxInfo,
+			}}
+			_, err = c.SendMessage(ctx, evt.Info.Chat, msg)
+			return err
+		}
+		if doc := quoted.GetDocumentMessage(); doc != nil {
+			caption := text
+			if caption == "" {
+				caption = doc.GetCaption()
+			}
+			data, err := c.Download(ctx, doc)
+			if err != nil {
+				return err
+			}
+			up, err := c.Upload(ctx, data, whatsmeow.MediaDocument)
+			if err != nil {
+				return err
+			}
+			fileName := doc.GetFileName()
+			if fileName == "" {
+				fileName = "file"
+			}
+			msg := &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
+				URL:           proto.String(up.URL),
+				DirectPath:    proto.String(up.DirectPath),
+				MediaKey:      up.MediaKey,
+				Mimetype:      proto.String(doc.GetMimetype()),
+				FileEncSHA256: up.FileEncSHA256,
+				FileSHA256:    up.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+				FileName:      proto.String(fileName),
+				Caption:       proto.String(caption),
+				ContextInfo:   ctxInfo,
+			}}
+			_, err = c.SendMessage(ctx, evt.Info.Chat, msg)
+			return err
+		}
+		if aud := quoted.GetAudioMessage(); aud != nil {
+			data, err := c.Download(ctx, aud)
+			if err != nil {
+				return err
+			}
+			up, err := c.Upload(ctx, data, whatsmeow.MediaAudio)
+			if err != nil {
+				return err
+			}
+			msg := &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
+				URL:           proto.String(up.URL),
+				DirectPath:    proto.String(up.DirectPath),
+				MediaKey:      up.MediaKey,
+				Mimetype:      proto.String(aud.GetMimetype()),
+				FileEncSHA256: up.FileEncSHA256,
+				FileSHA256:    up.FileSHA256,
+				FileLength:    proto.Uint64(uint64(len(data))),
+				Seconds:       proto.Uint32(aud.GetSeconds()),
+				PTT:           proto.Bool(aud.GetPTT()),
+				ContextInfo:   ctxInfo,
+			}}
+			_, err = c.SendMessage(ctx, evt.Info.Chat, msg)
+			return err
+		}
+		// quoted text / extended text
+		qText := strings.TrimSpace(quoted.GetConversation())
+		if qText == "" {
+			if ext := quoted.GetExtendedTextMessage(); ext != nil {
+				qText = strings.TrimSpace(ext.GetText())
+			}
+		}
+		if text == "" {
+			text = qText
+		}
+		return sendText(text)
+	}
+
+	return sendText(text)
+}
 
 func (m *Manager) handleUpswCommand(ctx context.Context, evt *events.Message, caption string) error {
 	imgMsg, vidMsg := findMediaForUpsw(evt)

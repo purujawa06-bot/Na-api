@@ -258,5 +258,6 @@ func cmdResultToExec(r botcmd.Result) ExecResult {
 		DocumentName: r.DocumentName,
 		DocumentMIME: r.DocumentMIME,
 		DocumentData: r.DocumentData,
+		RawMessage:   r.RawMessage,
 	}
 }

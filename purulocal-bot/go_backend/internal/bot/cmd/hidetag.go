@@ -6,6 +6,7 @@ func init() {
 			ID:         "builtin:hidetag",
 			Name:       "Hidetag",
 			Command:    "hidetag",
+			Aliases:    []string{"pengumuman", "announce", "hiddentag"},
 			Category:   "Pengaturan Grup",
 			ShowInMenu: true,
 			GroupOnly:  true,

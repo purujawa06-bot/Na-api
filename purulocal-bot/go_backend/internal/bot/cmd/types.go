@@ -52,6 +52,8 @@ type Result struct {
 	DocumentName string
 	DocumentMIME string
 	DocumentData []byte
+	// RawMessage kirim pesan WA mentah (mis. *waE2E.Message). Ditangani manager.
+	RawMessage any
 }
 
 // Request konteks pemanggilan command.
