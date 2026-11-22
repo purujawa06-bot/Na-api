@@ -416,10 +416,6 @@ func (m *Manager) scheduleReconnect10s(reason string) {
 	if intentional {
 		return
 	}
-	// jangan reconnect jika pause efektif (manual/cloud-lock)
-	if m.IsPaused() {
-		return
-	}
 	if m.reconnectTimer != nil {
 		m.reconnectTimer.Stop()
 		m.reconnectTimer = nil
@@ -432,12 +428,13 @@ func (m *Manager) scheduleReconnect10s(reason string) {
 		m.mu.RLock()
 		intentional := m.intentionalDisconnect
 		m.mu.RUnlock()
-		if intentional || m.IsPaused() {
+		if intentional {
 			return
 		}
-		// butuh sesi tersimpan untuk reconnect otomatis
-		if m.client == nil {
-			// coba ensure client; jika tidak ada sesi, AutoReconnect akan no-op
+		if m.IsPaused() {
+			// pause bisa sementara (cloud-lock/manual). Jangan drop reconnect.
+			m.scheduleReconnect10s(reason)
+			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer cancel()
@@ -445,7 +442,6 @@ func (m *Manager) scheduleReconnect10s(reason string) {
 			if m.logger != nil {
 				m.logger.Warn("connection", "Auto-reconnect ("+reason+") gagal: "+err.Error()+", coba lagi 10 detik")
 			}
-			// retry fixed 10s
 			m.scheduleReconnect10s(reason)
 			return
 		}
@@ -1612,9 +1608,21 @@ func (m *Manager) AutoReconnect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if client.Store != nil && client.Store.ID != nil {
-		// sudah pernah login, coba connect ulang (sesi lokal tersimpan di store.db)
-		return client.Connect()
+	if client.Store == nil || client.Store.ID == nil {
+		return nil
+	}
+	// bersihkan koneksi stale sebelum reconnect (mis. setelah stream replaced/bentrok)
+	if client.IsConnected() {
+		client.Disconnect()
+	}
+	if err := client.Connect(); err != nil {
+		// kalau masih dianggap connected oleh client, paksa disconnect lalu coba sekali lagi
+		if strings.Contains(strings.ToLower(err.Error()), "already connected") {
+			client.Disconnect()
+			time.Sleep(500 * time.Millisecond)
+			return client.Connect()
+		}
+		return err
 	}
 	return nil
 }

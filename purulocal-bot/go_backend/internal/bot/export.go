@@ -558,6 +558,59 @@ function spawnBinary(bin) {
   });
 }
 
+function stopChildAndWait(timeoutMs) {
+  return new Promise((resolve) => {
+    if (!childProc) return resolve();
+    const p = childProc;
+    let done = false;
+    const finish = () => { if (done) return; done = true; resolve(); };
+    p.once('exit', finish);
+    p.once('error', finish);
+    try { p.kill('SIGTERM'); } catch (e) {}
+    setTimeout(() => {
+      if (done) return;
+      try { p.kill('SIGKILL'); } catch (e) {}
+      setTimeout(finish, 1000);
+    }, timeoutMs == null ? 8000 : timeoutMs);
+  });
+}
+
+async function applyRuntimeUpdate(manifest) {
+  if (restarting) return false;
+  const pick = pickRuntime(manifest);
+  if (!pick) return false;
+  const target = path.join(BIN_DIR, process.platform === 'win32' ? 'purulocal-bot.exe' : 'purulocal-bot');
+  const state = loadState();
+  const rv = manifest.runtimeVersion != null ? String(manifest.runtimeVersion) : '';
+  const prev = state[pick.key] || {};
+  const upToDate = (rv && prev.runtimeVersion === rv && prev.sha256 && pick.sha256 && prev.sha256 === pick.sha256 && fs.existsSync(target))
+    || (!pick.sha256 && fs.existsSync(target) && prev.url === pick.url && prev.runtimeVersion === rv);
+  if (upToDate) return false;
+
+  log('Update runtime terdeteksi (' + pick.key + (rv ? ' rv=' + rv : '') + '). Menghentikan binary lama sebelum download...');
+  restarting = true;
+  try {
+    await stopChildAndWait(10000);
+    const upd = await autoUpdateRuntime(manifest);
+    const bin = findBinary(upd && upd.downloaded);
+    if (!bin) throw new Error('binary runtime tidak ditemukan setelah update');
+    ensureExec(bin.path);
+    restarting = false;
+    spawnBinary(bin);
+    log('Runtime diperbarui dan binary baru dijalankan.');
+    return true;
+  } catch (e) {
+    restarting = false;
+    warn('Gagal menerapkan update runtime: ' + e.message);
+    // coba jalankan kembali binary yang tersedia agar bot tidak mati
+    try {
+      const bin = findBinary(null);
+      if (bin && !childProc) { ensureExec(bin.path); spawnBinary(bin); }
+    } catch (e2) {}
+    return false;
+  }
+}
+
 function startRunnerAutoUpdateLoop() {
   if (runnerCheckTimer) return;
   runnerCheckTimer = setInterval(async () => {
@@ -566,9 +619,10 @@ function startRunnerAutoUpdateLoop() {
       const manifest = await fetchManifest();
       const res = await maybeUpdateRunner(manifest);
       if (res && res.updated) {
-        // update penting atau ada versi runner baru -> auto restart
         restartSelf(res.important ? 'update penting index.js' : 'update index.js');
+        return;
       }
+      await applyRuntimeUpdate(manifest);
     } catch (e) {
       // diamkan, coba lagi interval berikutnya
     }
