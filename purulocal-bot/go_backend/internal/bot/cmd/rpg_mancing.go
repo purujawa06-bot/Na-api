@@ -25,7 +25,7 @@ func init() {
 			msg := &waE2E.Message{
 				InteractiveMessage: &waE2E.InteractiveMessage{
 					Body: &waE2E.InteractiveMessage_Body{
-						Text: proto.String("🎣 *Mancing RPG*\n\nBuka game dan login pakai *kode 4 digit* yang kamu dapat saat .register.\nProgres akan *auto save* (tanpa tombol simpan, tanpa sesi kadaluarsa)."),
+						Text: proto.String("🎣 *Mancing RPG*\n\nBuka game dan login pakai *kode 4 digit* yang kamu dapat saat .register.\nProgresmu tersimpan otomatis."),
 					},
 					Footer: &waE2E.InteractiveMessage_Footer{
 						Text: proto.String("puruLocal RPG"),
