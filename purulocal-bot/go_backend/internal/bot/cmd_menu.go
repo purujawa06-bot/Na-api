@@ -52,8 +52,6 @@ func (m *Manager) BuildMenuText() string {
 	b.WriteString("│○ Jika menemukan bug atau\n")
 	b.WriteString("│ ingin request fitur, hubungi\n")
 	b.WriteString("│ owner bot.\n")
-	b.WriteString("│○ *Ⓟ* = Premium\n")
-	b.WriteString("│○ *Ⓛ* = Limit\n")
 	b.WriteString("┗––––––––––✦\n\n")
 
 	// Kategori builtin

@@ -687,23 +687,6 @@ func (m *Manager) onMessage(evt *events.Message) {
 	if txt := strings.TrimSpace(res.Reply + " " + res.Caption); txt != "" && strings.Contains(strings.ToLower(txt), "gagal") {
 		m.logWarn("command."+cmd, "reply mengindikasikan kegagalan: "+truncateLog(txt, 300))
 	}
-	// kirim pesan WA mentah (mis. interactive/nativeFlow)
-	if res.RawMessage != nil {
-		if msg, ok := res.RawMessage.(*waE2E.Message); ok {
-			m.mu.RLock()
-			c := m.client
-			m.mu.RUnlock()
-			if c == nil {
-				_ = m.sendReply(ctx, evt, "Bot belum siap, coba lagi.")
-			} else if _, err := c.SendMessage(ctx, evt.Info.Chat, msg); err != nil {
-				m.logError("send.raw", "cmd="+cmd+" err="+err.Error())
-				_ = m.sendReply(ctx, evt, "Gagal mengirim pesan.")
-			}
-		} else {
-			m.logWarn("send.raw", "cmd="+cmd+" tipe RawMessage tidak didukung")
-		}
-		return
-	}
 	// kirim video (mis. .tt/.tiktok): video siap putar + caption info (tanpa link)
 	if strings.TrimSpace(res.VideoURL) != "" {
 		if err := m.sendVideoFromURL(ctx, evt, res); err != nil {
