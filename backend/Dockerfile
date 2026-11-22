@@ -31,7 +31,6 @@ RUN apk add --no-cache ca-certificates tzdata nodejs ffmpeg \
 COPY --from=builder /out/server /usr/local/bin/server
 
 WORKDIR /app
-COPY config.json /app/config.json
 COPY --from=bridge-deps /bridge/node_modules /app/bridge/node_modules
 COPY backend/bridge/package.json backend/bridge/easemate-cli.mjs backend/bridge/quillbot-cli.mjs /app/bridge/
 COPY lib/easemate-web.js lib/easemate-wasm.js lib/quillbot-web.js /app/bridge/
