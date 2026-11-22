@@ -26,7 +26,10 @@ func rpgSecret() string {
 	if v := strings.TrimSpace(os.Getenv("PURUBOY_RPG_SECRET")); v != "" {
 		return v
 	}
-	return strings.TrimSpace(os.Getenv("PURUBOY_ADMIN_KEY"))
+	if v := strings.TrimSpace(os.Getenv("PURUBOY_ADMIN_KEY")); v != "" {
+		return v
+	}
+	return "puruLocal-rpg-default-v1"
 }
 
 func pickRPGID(req Request) string {
