@@ -402,6 +402,21 @@ func (h *handler) mancingState(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
+	// Simple code-based flow (no token, no expiry)
+	if code := normalizeCode(r.URL.Query().Get("code")); code != "" {
+		p, err := h.store.getPlayerByCode(r.Context(), code)
+		if err != nil {
+			if err == errNotFound {
+				httpx.Error(w, http.StatusNotFound, "kode login tidak ditemukan")
+				return
+			}
+			httpx.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		h.store.touchByHash(r.Context(), p.LIDHash)
+		httpx.OK(w, map[string]any{"ok": true, "player": playerResp(p)})
+		return
+	}
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	sid, ok := h.verifySessionToken(token)
 	if !ok {
@@ -436,12 +451,104 @@ func (h *handler) mancingPage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
+type loginReq struct {
+	Code string `json:"code"`
+}
+
+func normalizeCode(s string) string {
+	s = strings.TrimSpace(s)
+	// keep digits only
+	out := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			out = append(out, r)
+		}
+	}
+	return string(out)
+}
+
+func (h *handler) login(w http.ResponseWriter, r *http.Request) {
+	if err := h.ensureInit(r.Context()); err != nil {
+		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	var req loginReq
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		// also allow query param for convenience
+		req.Code = r.URL.Query().Get("code")
+	}
+	code := normalizeCode(req.Code)
+	if code == "" {
+		httpx.Error(w, http.StatusBadRequest, "kode login wajib")
+		return
+	}
+	p, err := h.store.getPlayerByCode(r.Context(), code)
+	if err != nil {
+		if err == errNotFound {
+			httpx.Error(w, http.StatusNotFound, "kode login tidak ditemukan")
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.store.touchByHash(r.Context(), p.LIDHash)
+	httpx.OK(w, map[string]any{"ok": true, "player": playerResp(p)})
+}
+
+type autoSaveReq struct {
+	Code      string      `json:"code"`
+	ActiveSec int         `json:"active_sec"`
+	Catches   []catchItem `json:"catches"`
+}
+
+func (h *handler) mancingAutoSave(w http.ResponseWriter, r *http.Request) {
+	if err := h.ensureInit(r.Context()); err != nil {
+		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	var req autoSaveReq
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	code := normalizeCode(req.Code)
+	if code == "" {
+		httpx.Error(w, http.StatusBadRequest, "kode login wajib")
+		return
+	}
+	p, err := h.store.getPlayerByCode(r.Context(), code)
+	if err != nil {
+		if err == errNotFound {
+			httpx.Error(w, http.StatusNotFound, "kode login tidak ditemukan")
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	activeSec := clampInt(req.ActiveSec, 0, 7200)
+	rpGain, fishCount := computeClaimReward(req.Catches, activeSec)
+	xpGain := xpFromActiveSeconds(activeSec)
+	if rpGain == 0 && xpGain == 0 && fishCount == 0 {
+		// still touch activity
+		h.store.touchByHash(r.Context(), p.LIDHash)
+		httpx.OK(w, map[string]any{"ok": true, "rp_gained": 0, "xp_gained": 0, "fish_count": 0, "active_sec": activeSec, "player": playerResp(p)})
+		return
+	}
+	np, err := h.store.applyClaimByHash(r.Context(), p.LIDHash, rpGain, xpGain, fishCount, activeSec)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httpx.OK(w, map[string]any{"ok": true, "rp_gained": rpGain, "xp_gained": xpGain, "fish_count": fishCount, "active_sec": activeSec, "player": playerResp(np)})
+}
+
 func playerResp(p *player) map[string]any {
 	if p == nil {
 		return nil
 	}
 	return map[string]any{
 		"username":       p.Username,
+		"login_code":     p.LoginCode,
 		"rp":             p.RP,
 		"level":          p.Level,
 		"xp":             p.XP,

@@ -1425,6 +1425,24 @@
   ],
   "rpg": [
     {
+      "title": "RPG Login",
+      "summary": "Login pemain RPG dengan kode 4 digit.",
+      "description": "Login sederhana menggunakan kode login yang diberikan saat register. Keamanan dilonggarkan: tanpa token sesi, tanpa expired.",
+      "method": "POST",
+      "path": "/api/rpg/login",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/login', {\n     method: 'POST',\n     headers: { 'content-type': 'application/json' },\n     body: JSON.stringify({ code: '1234' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "code",
+          "in": "body",
+          "type": "string",
+          "description": "Kode login 4 digit dari .register.",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "RPG Mancing Page",
       "summary": "Webview game mancing RPG.",
       "description": "Menyajikan halaman HTML game mancing pixel untuk webview. Gunakan token sesi dari /api/rpg/mancing/start.",
@@ -1500,6 +1518,38 @@
       ]
     },
     {
+      "title": "RPG Mancing Auto Save",
+      "summary": "Auto-save progres mancing dengan kode login.",
+      "description": "Menyimpan delta progres mancing (active_sec dan catches) langsung ke akun pemain berdasarkan kode login. Tanpa token sesi, tanpa expired. Cocok untuk auto save periodik dari webview. Tiap item catches berisi {id, count, kg}.",
+      "method": "POST",
+      "path": "/api/rpg/mancing/save",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/save', {\n     method: 'POST',\n     headers: { 'content-type': 'application/json' },\n     body: JSON.stringify({ code: '1234', active_sec: 30, catches: [{ id: 'teri', count: 2, kg: 0.2 }] })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "code",
+          "in": "body",
+          "type": "string",
+          "description": "Kode login 4 digit pemain.",
+          "required": true
+        },
+        {
+          "name": "active_sec",
+          "in": "body",
+          "type": "number",
+          "description": "Delta detik aktif sejak save terakhir (0-7200).",
+          "required": true
+        },
+        {
+          "name": "catches",
+          "in": "body",
+          "type": "Array<object>",
+          "description": "Delta tangkapan ikan sejak save terakhir; item: {id, count, kg}.",
+          "required": true
+        }
+      ]
+    },
+    {
       "title": "RPG Mancing Start",
       "summary": "Mulai sesi mancing RPG.",
       "description": "Membuat sesi mancing dan mengembalikan URL webview game.",
@@ -1519,18 +1569,25 @@
     },
     {
       "title": "RPG Mancing State",
-      "summary": "Ambil state sesi mancing dan player.",
-      "description": "Mengembalikan state sesi mancing aktif dan data player untuk webview game.",
+      "summary": "Ambil state player untuk webview mancing.",
+      "description": "Mengembalikan data player. Mendukung flow sederhana dengan `code` (login 4 digit, tanpa token/expired) dan flow lama dengan `token` sesi.",
       "method": "GET",
       "path": "/api/rpg/mancing/state",
       "responseType": "json",
-      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/state?token=<session_token>').then(res => res.json()).then(console.log);",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/state?code=1234').then(res => res.json()).then(console.log);",
       "params": [
+        {
+          "name": "code",
+          "in": "query",
+          "type": "string",
+          "description": "Kode login 4 digit (flow sederhana).",
+          "required": true
+        },
         {
           "name": "token",
           "in": "query",
           "type": "string",
-          "description": "Token sesi mancing.",
+          "description": "Token sesi mancing (flow lama).",
           "required": true
         }
       ]
@@ -1538,7 +1595,7 @@
     {
       "title": "RPG Register",
       "summary": "Daftar atau ubah username pemain RPG.",
-      "description": "Mendaftarkan pemain RPG berdasarkan LID WhatsApp. Jika sudah terdaftar, hanya username yang diperbarui; data RP/XP/level tetap aman.",
+      "description": "Mendaftarkan pemain RPG berdasarkan LID WhatsApp. Jika sudah terdaftar, hanya username yang diperbarui; data RP/XP/level tetap aman. Saat register, server mengembalikan `login_code` 4 digit untuk login game. Di bot, register hanya boleh di chat pribadi (bukan grup).",
       "method": "POST",
       "path": "/api/rpg/register",
       "responseType": "json",

@@ -1,7 +1,7 @@
 /**
  * @title RPG Register
  * @summary Daftar atau ubah username pemain RPG.
- * @description Mendaftarkan pemain RPG berdasarkan LID WhatsApp. Jika sudah terdaftar, hanya username yang diperbarui; data RP/XP/level tetap aman.
+ * @description Mendaftarkan pemain RPG berdasarkan LID WhatsApp. Jika sudah terdaftar, hanya username yang diperbarui; data RP/XP/level tetap aman. Saat register, server mengembalikan `login_code` 4 digit untuk login game. Di bot, register hanya boleh di chat pribadi (bukan grup).
  * @method POST
  * @path /api/rpg/register
  * @param {string} body.lid - LID WhatsApp pemain.

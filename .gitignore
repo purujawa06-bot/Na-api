@@ -113,6 +113,7 @@ cron/
 memory/
 sessions/
 state/
+!legacy/next-api/**/state/
 token.txt
 
 # capture sniffing berisi bearer token

@@ -23,7 +23,7 @@ canvas#cv{display:block;width:100%;height:100%;object-fit:contain;image-renderin
 .act.wait{background:#4a5c94;box-shadow:0 5px 0 #2d3a63;color:#dfe7ff}
 .act.reel{background:var(--good);box-shadow:0 5px 0 #2d8c47;color:#04230f}
 @keyframes blink{50%{filter:brightness(1.25)}}
-.row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sec{font-family:var(--pix);font-size:9px;color:var(--ink);background:var(--panel2);border:2px solid var(--line);padding:13px 4px;cursor:pointer}
 .sec.off{color:var(--muted);text-decoration:line-through}
 .card{position:absolute;inset:0;display:grid;place-items:center;background:rgba(5,9,24,.68);padding:16px}
@@ -38,6 +38,15 @@ canvas#cv{display:block;width:100%;height:100%;object-fit:contain;image-renderin
 .sheetwrap[hidden]{display:none}
 .sheet{width:100%;max-width:520px;max-height:82%;display:flex;flex-direction:column;background:var(--panel);border:3px solid var(--line);border-bottom:0;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px))}
 .sheethead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.login{position:absolute;inset:0;display:grid;place-items:center;background:rgba(5,9,24,.82);padding:16px;z-index:5}
+.login .box{width:min(100%,320px);background:var(--panel);border:3px solid var(--line);padding:18px;text-align:center;display:flex;flex-direction:column;gap:12px}
+.login h2{font-family:var(--pix);font-size:14px;margin:0;color:var(--accent);line-height:1.5}
+.login p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
+.login input{font-family:var(--pix);font-size:20px;text-align:center;letter-spacing:.3em;padding:14px 10px;background:#0f1d46;color:var(--ink);border:2px solid var(--line);width:100%;outline:none}
+.login input:focus{border-color:var(--accent)}
+.login button{font-family:var(--pix);font-size:12px;color:#241800;background:var(--accent);border:0;padding:14px 12px;cursor:pointer;box-shadow:0 4px 0 var(--accent-dk)}
+.login button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--accent-dk)}
+.login .err{color:var(--bad);font-size:12px;min-height:1.2em}
 .tabs{display:flex;gap:8px}.tab{font-family:var(--pix);font-size:9px;background:transparent;color:var(--muted);border:2px solid var(--line);padding:9px 10px;cursor:pointer}
 .tab[aria-selected="true"]{background:var(--accent);color:#241800;border-color:var(--accent)}
 .x{font-family:var(--pix);font-size:11px;background:transparent;color:var(--ink);border:2px solid var(--line);padding:9px 11px;cursor:pointer}
@@ -67,11 +76,19 @@ canvas#cv{display:block;width:100%;height:100%;object-fit:contain;image-renderin
         <div class="gain" id="cardGain"></div>
       </div>
     </div>
+    <div class="login" id="loginOverlay">
+      <div class="box">
+        <h2>LOGIN MANCING</h2>
+        <p>Masukkan kode 4 digit yang kamu dapat saat <b>.register</b> di chat pribadi bot.</p>
+        <input id="codeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="0000" aria-label="Kode login 4 digit">
+        <button id="btnLogin" type="button">MASUK</button>
+        <div class="err" id="loginErr"></div>
+      </div>
+    </div>
   </div>
-  <p id="status" aria-live="polite">Memuat sesi...</p>
+  <p id="status" aria-live="polite">Login dengan kode 4 digit dari .register</p>
   <button class="act" id="act" type="button">LEMPAR</button>
   <div class="row">
-    <button class="sec" id="btnClaim" type="button">SIMPAN</button>
     <button class="sec" id="btnDex" type="button">KOLEKSI</button>
     <button class="sec" id="btnSnd" type="button">SUARA: ON</button>
   </div>
@@ -157,28 +174,18 @@ function rarOf(f){return f.r<0?JUNK:RAR[f.r];}
 function fishById(id){for(var i=0;i<FISH.length;i++)if(FISH[i].id===id)return FISH[i];return null;}
 
 var P={rp:0,level:1,xp:0,xpNext:30,totalFish:0};
-var catches={};          // tangkapan belum disimpan (mode online)
-var dexLocal={};         // total koleksi (mode offline)
-var sessionActiveSec=0,lastHeartbeatAt=Date.now(),localSec=0;
-var token=new URLSearchParams(location.search).get('token')||'';
-var ready=false,offline=false,loading=false;
-var SAVE_KEY='mancing_rpg_v1';
+var catches={};          // delta tangkapan belum auto-save
+var pendingSec=0;        // delta detik aktif belum auto-save
+var lastTickAt=Date.now();
+var loginCode='';
+var ready=false,saving=false;
+var CODE_KEY='mancing_rpg_code_v1';
 
 function hud(){
   $('rp').textContent=P.rp; $('lv').textContent=P.level; $('xp').textContent=P.xp+'/'+P.xpNext; $('total').textContent=P.totalFish;
 }
-
-/* ---------- penyimpanan lokal (mode offline) ---------- */
-function saveLocal(){ try{ localStorage.setItem(SAVE_KEY,JSON.stringify({P:P,dex:dexLocal,localSec:localSec})); }catch(e){} }
-function loadLocal(){
-  try{
-    var s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
-    if(s&&s.P){ P.rp=s.P.rp|0; P.level=Math.max(1,s.P.level|0); P.xp=s.P.xp|0; P.xpNext=s.P.xpNext||xpNeed(P.level); P.totalFish=s.P.totalFish|0; dexLocal=s.dex||{}; localSec=s.localSec||0; }
-  }catch(e){}
-}
 function xpNeed(lv){return 30+(lv-1)*15;}
 function xpFor(f){return 1+Math.max(f.r,0)*2;}
-function addXp(n){ var up=false; P.xp+=n; while(P.xp>=P.xpNext){P.xp-=P.xpNext;P.level++;P.xpNext=xpNeed(P.level);up=true;} return up; }
 
 async function api(path, body){
   var res=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
@@ -187,56 +194,81 @@ async function api(path, body){
   return data;
 }
 
-function startOffline(msg){
-  offline=true; ready=true; loading=false; loadLocal(); hud();
-  say(msg+' Tekan LEMPAR untuk mulai!');
+function setLoggedIn(code, player){
+  loginCode=String(code||'').trim();
+  try{ localStorage.setItem(CODE_KEY, loginCode); }catch(e){}
+  if(player){
+    P.rp=player.rp||0; P.level=player.level||1; P.xp=player.xp||0; P.xpNext=player.xp_to_next||xpNeed(P.level); P.totalFish=player.total_fish||0;
+  }
+  ready=true;
+  $('loginOverlay').hidden=true;
+  hud();
+  say('Login berhasil. Tekan LEMPAR untuk memancing. Progres auto save.');
+}
+
+async function doLogin(code){
+  var err=$('loginErr'); err.textContent='';
+  code=String(code||'').replace(/\D/g,'').trim();
+  if(!code){ err.textContent='Masukkan kode login.'; return; }
+  $('btnLogin').disabled=true;
+  try{
+    var d=await api('/api/rpg/login',{code:code});
+    setLoggedIn(code, d.player);
+  }catch(e){ err.textContent=e.message||'Gagal login'; }
+  finally{ $('btnLogin').disabled=false; }
 }
 
 async function loadState(){
-  if(loading)return; loading=true;
-  if(!token){ startOffline('Mode offline, progres disimpan di perangkat ini.'); return; }
+  var saved=''; try{ saved=localStorage.getItem(CODE_KEY)||''; }catch(e){}
+  saved=String(saved).replace(/\D/g,'').trim();
+  if(saved){
+    $('codeInput').value=saved;
+    await doLogin(saved);
+    return;
+  }
+  ready=false;
+  $('loginOverlay').hidden=false;
+  say('Login dengan kode 4 digit dari .register');
+}
+
+function collectDelta(){
+  var now=Date.now();
+  var delta=Math.floor((now-lastTickAt)/1000);
+  if(delta>0 && delta<120 && document.visibilityState!=='hidden'){ pendingSec+=delta; }
+  lastTickAt=now;
+  if(pendingSec<0) pendingSec=0;
+  if(pendingSec>7200) pendingSec=7200;
+  var arr=[]; for(var k in catches){ if(catches[k]>0) arr.push({id:k,count:catches[k],kg:1}); }
+  return {active_sec:pendingSec, catches:arr};
+}
+
+async function autoSave(force){
+  if(!ready || !loginCode || saving) return;
+  var d=collectDelta();
+  if(!force && d.active_sec<10 && d.catches.length===0) return;
+  saving=true;
   try{
-    var d=await api('/api/rpg/mancing/state?token='+encodeURIComponent(token));
-    if(d && d.player){
-      P.rp=d.player.rp||0; P.level=d.player.level||1; P.xp=d.player.xp||0; P.xpNext=d.player.xp_to_next||30; P.totalFish=d.player.total_fish||0;
-    }
-    if(d && d.session){ sessionActiveSec=d.session.active_sec||0; }
-    offline=false; ready=true; loading=false; hud(); say('Tekan LEMPAR untuk mulai memancing. 10 menit = 1 XP.');
-  }catch(e){ startOffline('Server tidak terhubung, main offline.'); }
+    var r=await api('/api/rpg/mancing/save',{code:loginCode,active_sec:d.active_sec,catches:d.catches});
+    // reset only what we sent
+    pendingSec=Math.max(0,pendingSec-d.active_sec);
+    for(var i=0;i<d.catches.length;i++){ var c=d.catches[i]; catches[c.id]=Math.max(0,(catches[c.id]||0)-c.count); if(!catches[c.id]) delete catches[c.id]; }
+    if(r && r.player){ P.rp=r.player.rp; P.level=r.player.level; P.xp=r.player.xp; P.xpNext=r.player.xp_to_next; P.totalFish=r.player.total_fish; hud(); }
+  }catch(e){ /* keep pending, retry next tick */ }
+  finally{ saving=false; }
 }
 
 async function heartbeat(){
+  // compatibility alias: tick time and autosave
   if(!ready) return;
-  var now=Date.now();
-  var delta=Math.floor((now-lastHeartbeatAt)/1000);
-  if(delta<15) return;
-  lastHeartbeatAt=now;
-  if(document.visibilityState==='hidden'||delta>90) return; // jangan hitung waktu saat tab tidak aktif
-  sessionActiveSec+=delta;
-  if(offline){
-    localSec+=delta;
-    if(localSec>=600){ var n=Math.floor(localSec/600); localSec-=n*600; if(addXp(n))SFX.level(); hud(); }
-    saveLocal(); return;
-  }
-  try{ await api('/api/rpg/mancing/heartbeat',{token:token,active_sec:delta}); }catch(e){}
+  await autoSave(false);
 }
 
 async function claimAll(silent){
-  if(!ready) return;
-  if(offline){ saveLocal(); if(!silent){say('Progres tersimpan di perangkat ini.');SFX.coin();} return; }
-  await heartbeat();
-  var arr=[]; for(var k in catches){ if(catches[k]>0) arr.push({id:k,count:catches[k],kg:1}); }
-  if(!arr.length && !silent){ say('Belum ada ikan untuk disimpan.'); return; }
-  try{
-    var oldLv=P.level;
-    var d=await api('/api/rpg/mancing/claim',{token:token,active_sec:sessionActiveSec,catches:arr});
-    catches={};
-    if(d && d.player){ P.rp=d.player.rp; P.level=d.player.level; P.xp=d.player.xp; P.xpNext=d.player.xp_to_next; P.totalFish=d.player.total_fish; }
-    hud();
-    if(!silent){ say('Tersimpan! +'+(d.rp_gained||0)+' $RP, +'+(d.xp_gained||0)+' XP'); SFX.coin(); if(P.level>oldLv)setTimeout(SFX.level,350); }
-    return d;
-  }catch(e){ if(!silent) say('Gagal simpan: '+e.message); throw e; }
+  // compatibility alias for old code path
+  await autoSave(true);
+  if(!silent) say('Progres auto save.');
 }
+
 
 /* ================= GAME STATE ================= */
 var tm=0,phase=0.2,holding=false,sheetOpen=false;
@@ -268,28 +300,24 @@ function hook(){
 function landFish(){
   var f=fish,kg=Math.max(0.05,f.size*(0.05+rnd()*0.07)); if(f.r<0)kg=0.2+rnd()*0.3;
   var rr=rarOf(f),levelUp=false;
-  if(offline){
-    dexLocal[f.id]=(dexLocal[f.id]||0)+1; P.rp+=f.val; P.totalFish++; levelUp=addXp(xpFor(f)); saveLocal(); hud();
-    $('cardGain').textContent='+'+f.val+' $RP  +'+xpFor(f)+' XP';
-  }else{
-    catches[f.id]=(catches[f.id]||0)+1;
-    $('cardGain').textContent='+'+f.val+' $RP (saat simpan)';
-  }
+  catches[f.id]=(catches[f.id]||0)+1;
+  $('cardGain').textContent='+'+f.val+' $RP (auto save)';
   $('cardBox').style.setProperty('--rc',rr.c); $('cardRar').textContent=rr.n; $('cardName').textContent=f.r<0?'Kok dapat '+f.name+'?':f.name;
   $('cardInfo').textContent=kg.toFixed(2)+' kg';
   var c2=$('cardCv').getContext('2d'); c2.imageSmoothingEnabled=false; c2.clearRect(0,0,36,24); drawFish(c2,12,12,f,1,1);
   $('card').hidden=false; cardT=0; st='card'; stT=0; setAct('LANJUT','');
-  say(levelUp?'LEVEL UP! Sekarang level '+P.level+'!':(f.r>=3?'Tangkapan luar biasa!':(f.r<0?'Lumayan, bisa dijual.':(offline?'Ikan terjual otomatis.':'Ikan akan dikonversi ke $RP saat Simpan.'))));
+  say(f.r>=3?'Tangkapan luar biasa! Auto save...':(f.r<0?'Lumayan, bisa dijual. Auto save...':'Ikan akan di-auto save ke akunmu.'));
   splash(bx,HZ,18,rr.c);
   if(f.r<0)SFX.junk(); else SFX.catchF(f.r);
-  if(levelUp)setTimeout(SFX.level,700);
-  heartbeat();
+  autoSave(true);
 }
 function loseFish(){st='idle';stT=0;setAct('LEMPAR','');say('Ikannya lepas! Coba lagi.'); splash(bx,HZ,8,'#9db4d8'); SFX.lose();}
 function closeCard(){ if(cardT<.4)return; $('card').hidden=true; st='idle'; stT=0; setAct('LEMPAR',''); say('Tekan LEMPAR untuk memancing lagi.'); SFX.click(); }
 
 function press(down){
-  holding=down; if(!down||sheetOpen)return;
+  holding=down; if(!down) return;
+  var lo=$('loginOverlay'); if(lo && !lo.hidden) return;
+  if(sheetOpen) return;
   if(st==='card')closeCard();
   else if(st==='idle')cast();
   else if(st==='waiting'){reelBack('Terlalu cepat! Tunggu tanda seru.');SFX.miss();}
@@ -368,8 +396,8 @@ function drawReel(){var X=130;ctx.fillStyle='#0b1226';ctx.fillRect(X-2,TT-3,20,T
 /* ================= UI ================= */
 function renderSheet(){
   var body=$('sheetBody');
-  var h='<p class="dexinfo">'+(offline?'Total ikan yang pernah kamu tangkap.':'Ikan tertangkap sesi ini akan dikonversi ke $RP saat Simpan.')+'</p><div class="dexgrid">';
-  for(var i=0;i<FISH.length;i++){var f=FISH[i],n=offline?(dexLocal[f.id]||0):(catches[f.id]||0);h+='<div class="dex"><canvas width="24" height="16" data-f="'+i+'"></canvas><div class="n">'+f.name+'</div><div class="c">'+(n?('x'+n+(offline?'':' sesi ini')):'Belum tertangkap')+'</div></div>'; }
+  var h='<p class="dexinfo">Ikan pending auto save di sesi ini. Progres akun disimpan otomatis.</p><div class="dexgrid">';
+  for(var i=0;i<FISH.length;i++){var f=FISH[i],n=(catches[f.id]||0);h+='<div class="dex"><canvas width="24" height="16" data-f="'+i+'"></canvas><div class="n">'+f.name+'</div><div class="c">'+(n?('x'+n+' pending'):'Belum tertangkap')+'</div></div>'; }
   body.innerHTML=h+'</div>';
   var cs=body.querySelectorAll('canvas[data-f]'); for(i=0;i<cs.length;i++){var idx=+cs[i].getAttribute('data-f'),ff=FISH[idx],c2=cs[i].getContext('2d');c2.imageSmoothingEnabled=false;drawFish(c2,5,8,ff,1,1);}
 }
@@ -379,25 +407,26 @@ function updSnd(){var b=$('btnSnd');b.textContent='SUARA: '+(AU.on?'ON':'OFF');b
 $('btnDex').addEventListener('click',function(){audioInit();openSheet();});
 $('sheetClose').addEventListener('click',closeSheet);
 $('sheetWrap').addEventListener('click',function(e){if(e.target===$('sheetWrap'))closeSheet();});
-$('btnClaim').addEventListener('click',function(){ audioInit(); claimAll(false).catch(function(){}); });
 $('btnSnd').addEventListener('click',function(){
   audioInit(); AU.on=!AU.on; try{localStorage.setItem('mancing_snd',AU.on?'1':'0');}catch(e){}
   updSnd(); if(AU.on)SFX.click();
 });
+$('btnLogin').addEventListener('click',function(){ audioInit(); doLogin($('codeInput').value); });
+$('codeInput').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); doLogin($('codeInput').value); } });
 
 // input
 var stage=$('stage'),act=$('act');
-function bindPress(el){el.addEventListener('pointerdown',function(e){e.preventDefault();audioInit();press(true);});el.addEventListener('contextmenu',function(e){e.preventDefault();});}
+function bindPress(el){el.addEventListener('pointerdown',function(e){if(e.target && e.target.closest && e.target.closest('#loginOverlay')) return; e.preventDefault();audioInit();press(true);});el.addEventListener('contextmenu',function(e){e.preventDefault();});}
 bindPress(stage);bindPress(act);
 function release(){holding=false;}
 window.addEventListener('pointerup',release);window.addEventListener('pointercancel',release);window.addEventListener('blur',release);
-window.addEventListener('keydown',function(e){if(e.code==='Space'&&!e.repeat&&!sheetOpen){e.preventDefault();audioInit();press(true);}});
+window.addEventListener('keydown',function(e){var lo=$('loginOverlay'); if(lo && !lo.hidden) return; var tag=(e.target&&e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea') return; if(e.code==='Space'&&!e.repeat&&!sheetOpen){e.preventDefault();audioInit();press(true);}});
 window.addEventListener('keyup',function(e){if(e.code==='Space')release();});
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='hidden'){ release(); heartbeat(); if(offline)saveLocal(); }
+  if(document.visibilityState==='hidden'){ release(); autoSave(true); }
   else{ lastHeartbeatAt=Date.now(); last=0; }
 });
-window.addEventListener('pagehide',function(){ if(offline)saveLocal(); });
+window.addEventListener('pagehide',function(){ autoSave(true); });
 
 // loop
 var last=0; function frame(ts){ if(!last)last=ts; var dt=Math.min(.05,(ts-last)/1000); last=ts; tm+=dt; update(dt); draw(); requestAnimationFrame(frame); }

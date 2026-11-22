@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"strings"
-	"time"
 
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"google.golang.org/protobuf/proto"
@@ -19,32 +17,15 @@ func init() {
 			ShowInMenu: true,
 		},
 		Run: func(req Request, _ BotAPI) (Result, bool) {
-			lid := pickRPGID(req)
-			if lid == "" {
-				return Result{Reply: "Gagal mendeteksi identitas pemain."}, true
+			base := strings.TrimRight(strings.TrimSpace(rpgBackendBase()), "/")
+			if base == "" {
+				return Result{Reply: "Backend RPG belum dikonfigurasi."}, true
 			}
-			ctx := req.Ctx
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			defer cancel()
-			j, _, err := rpgPost(ctx, "/api/rpg/mancing/start", map[string]any{"lid": lid})
-			if err != nil {
-				msg := err.Error()
-				if strings.Contains(strings.ToLower(msg), "belum terdaftar") {
-					return Result{Reply: "Kamu belum terdaftar. Gunakan: .register <username>"}, true
-				}
-				return Result{Reply: "Gagal memulai mancing: " + msg}, true
-			}
-			url, _ := j["url"].(string)
-			if strings.TrimSpace(url) == "" {
-				return Result{Reply: "Gagal memulai mancing: URL sesi tidak tersedia."}, true
-			}
+			url := base + "/api/rpg/mancing"
 			msg := &waE2E.Message{
 				InteractiveMessage: &waE2E.InteractiveMessage{
 					Body: &waE2E.InteractiveMessage_Body{
-						Text: proto.String("🎣 *Mancing RPG*\n\nSesi mancing siap. Buka game, tangkap ikan, lalu tekan *Simpan* di game untuk konversi ikan ke $RP. 10 menit mancing = 1 XP."),
+						Text: proto.String("🎣 *Mancing RPG*\n\nBuka game dan login pakai *kode 4 digit* yang kamu dapat saat .register.\nProgres akan *auto save* (tanpa tombol simpan, tanpa sesi kadaluarsa)."),
 					},
 					Footer: &waE2E.InteractiveMessage_Footer{
 						Text: proto.String("puruLocal RPG"),

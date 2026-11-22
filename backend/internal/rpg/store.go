@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ var errNotFound = errors.New("not found")
 
 type player struct {
 	LIDHash      string    `json:"-"`
+	LoginCode    string    `json:"login_code,omitempty"`
 	Username     string    `json:"username"`
 	RP           int       `json:"rp"`
 	Level        int       `json:"level"`
@@ -41,6 +43,7 @@ type player struct {
 
 type playerBlob struct {
 	Username   string `json:"username"`
+	LoginCode  string `json:"login_code,omitempty"`
 	RP         int    `json:"rp"`
 	TotalXP    int    `json:"total_xp"`
 	TotalFish  int    `json:"total_fish"`
@@ -159,11 +162,14 @@ func (s *store) init(ctx context.Context) error {
 CREATE TABLE IF NOT EXISTS rpg_players (
   lid_hash TEXT PRIMARY KEY,
   enc_blob TEXT NOT NULL,
+  login_code TEXT,
   last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE rpg_players ADD COLUMN IF NOT EXISTS login_code TEXT;
 CREATE INDEX IF NOT EXISTS rpg_players_last_active_idx ON rpg_players(last_active_at);
+CREATE UNIQUE INDEX IF NOT EXISTS rpg_players_login_code_idx ON rpg_players(login_code) WHERE login_code IS NOT NULL AND login_code <> '';
 CREATE TABLE IF NOT EXISTS rpg_mancing_sessions (
   id TEXT PRIMARY KEY,
   lid_hash TEXT NOT NULL,
@@ -205,7 +211,7 @@ func (s *store) getPlayer(ctx context.Context, lid string) (*player, error) {
 	}
 	level, xp, need := levelFromTotalXP(blob.TotalXP)
 	return &player{
-		LIDHash: lh, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need,
+		LIDHash: lh, LoginCode: blob.LoginCode, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need,
 		TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec,
 		LastActiveAt: lastActive, CreatedAt: createdAt, UpdatedAt: updatedAt,
 	}, nil
@@ -245,6 +251,14 @@ func (s *store) upsertPlayer(ctx context.Context, lid string, mutate func(*playe
 	if err := mutate(&blob, exists); err != nil {
 		return nil, err
 	}
+	// ensure login code exists (new player or legacy migration)
+	if strings.TrimSpace(blob.LoginCode) == "" {
+		code, err := s.generateUniqueLoginCode(ctx, tx)
+		if err != nil {
+			return nil, err
+		}
+		blob.LoginCode = code
+	}
 	plain, err := json.Marshal(blob)
 	if err != nil {
 		return nil, err
@@ -255,9 +269,9 @@ func (s *store) upsertPlayer(ctx context.Context, lid string, mutate func(*playe
 	}
 	now := time.Now().UTC()
 	if exists {
-		_, err = tx.Exec(ctx, `UPDATE rpg_players SET enc_blob=$2, last_active_at=$3, updated_at=$3 WHERE lid_hash=$1`, lh, enc, now)
+		_, err = tx.Exec(ctx, `UPDATE rpg_players SET enc_blob=$2, login_code=$3, last_active_at=$4, updated_at=$4 WHERE lid_hash=$1`, lh, enc, blob.LoginCode, now)
 	} else {
-		_, err = tx.Exec(ctx, `INSERT INTO rpg_players(lid_hash,enc_blob,last_active_at,created_at,updated_at) VALUES($1,$2,$3,$4,$3)`, lh, enc, now, createdAt)
+		_, err = tx.Exec(ctx, `INSERT INTO rpg_players(lid_hash,enc_blob,login_code,last_active_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$4)`, lh, enc, blob.LoginCode, now, createdAt)
 	}
 	if err != nil {
 		return nil, err
@@ -266,7 +280,7 @@ func (s *store) upsertPlayer(ctx context.Context, lid string, mutate func(*playe
 		return nil, err
 	}
 	level, xp, need := levelFromTotalXP(blob.TotalXP)
-	return &player{LIDHash: lh, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: now, CreatedAt: createdAt, UpdatedAt: now}, nil
+	return &player{LIDHash: lh, LoginCode: blob.LoginCode, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: now, CreatedAt: createdAt, UpdatedAt: now}, nil
 }
 
 func (s *store) touchLastActive(ctx context.Context, lid string) {
@@ -282,6 +296,75 @@ func (s *store) touchByHash(ctx context.Context, lh string) {
 		return
 	}
 	_, _ = s.pool.Exec(ctx, `UPDATE rpg_players SET last_active_at=NOW(), updated_at=NOW() WHERE lid_hash=$1`, lh)
+}
+
+func randomLoginCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%04d", n.Int64()), nil
+}
+
+func (s *store) generateUniqueLoginCode(ctx context.Context, tx pgx.Tx) (string, error) {
+	for i := 0; i < 40; i++ {
+		code, err := randomLoginCode()
+		if err != nil {
+			return "", err
+		}
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM rpg_players WHERE login_code=$1)`, code).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return code, nil
+		}
+	}
+	// fallback: 6-digit if 4-digit space crowded
+	for i := 0; i < 40; i++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+		if err != nil {
+			return "", err
+		}
+		code := fmt.Sprintf("%06d", n.Int64())
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM rpg_players WHERE login_code=$1)`, code).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return code, nil
+		}
+	}
+	return "", errors.New("gagal membuat kode login unik")
+}
+
+func (s *store) getPlayerByCode(ctx context.Context, code string) (*player, error) {
+	if !s.available() {
+		return nil, errDBUnavailable
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, errNotFound
+	}
+	row := s.pool.QueryRow(ctx, `SELECT lid_hash, enc_blob, last_active_at, created_at, updated_at FROM rpg_players WHERE login_code=$1`, code)
+	var lh, encBlob string
+	var lastActive, createdAt, updatedAt time.Time
+	if err := row.Scan(&lh, &encBlob, &lastActive, &createdAt, &updatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errNotFound
+		}
+		return nil, err
+	}
+	plain, err := s.decrypt(encBlob, lh)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt player: %w", err)
+	}
+	var blob playerBlob
+	if err := json.Unmarshal(plain, &blob); err != nil {
+		return nil, fmt.Errorf("decode player: %w", err)
+	}
+	level, xp, need := levelFromTotalXP(blob.TotalXP)
+	return &player{LIDHash: lh, LoginCode: blob.LoginCode, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: lastActive, CreatedAt: createdAt, UpdatedAt: updatedAt}, nil
 }
 
 func randomID(n int) (string, error) {
@@ -402,7 +485,7 @@ func (s *store) getPlayerByHash(ctx context.Context, lh string) (*player, error)
 		return nil, fmt.Errorf("decode player: %w", err)
 	}
 	level, xp, need := levelFromTotalXP(blob.TotalXP)
-	return &player{LIDHash: lh, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: lastActive, CreatedAt: createdAt, UpdatedAt: updatedAt}, nil
+	return &player{LIDHash: lh, LoginCode: blob.LoginCode, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: lastActive, CreatedAt: createdAt, UpdatedAt: updatedAt}, nil
 }
 
 func (s *store) applyClaimByHash(ctx context.Context, lh string, rpGain, xpGain, fishCount, activeSec int) (*player, error) {
@@ -451,5 +534,5 @@ func (s *store) applyClaimByHash(ctx context.Context, lh string, rpGain, xpGain,
 		return nil, err
 	}
 	level, xp, need := levelFromTotalXP(blob.TotalXP)
-	return &player{LIDHash: lh, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: now, CreatedAt: createdAt, UpdatedAt: now}, nil
+	return &player{LIDHash: lh, LoginCode: blob.LoginCode, Username: blob.Username, RP: blob.RP, Level: level, XP: xp, XPToNext: need, TotalXP: blob.TotalXP, TotalFish: blob.TotalFish, FishingSec: blob.FishingSec, LastActiveAt: now, CreatedAt: createdAt, UpdatedAt: now}, nil
 }
