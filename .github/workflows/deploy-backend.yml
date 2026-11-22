@@ -59,5 +59,6 @@ jobs:
           PURUBOY_ADMIN_KEY: ${{ secrets.PURUBOY_ADMIN_KEY }}
           PURUBOY_RPG_ENC_KEY: ${{ secrets.PURUBOY_RPG_ENC_KEY }}
           PURUBOY_RPG_SECRET: ${{ secrets.PURUBOY_RPG_SECRET }}
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'https://na-api-nue-api-e7bfd3f4.koyeb.app' }}
           GITHUB_TOKEN: ${{ secrets.GH_API_TOKEN }}
           CF_PROXY: ${{ vars.CF_PROXY }}

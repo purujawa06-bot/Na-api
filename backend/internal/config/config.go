@@ -59,6 +59,11 @@ func Load() *Config {
 	if port, err := strconv.Atoi(os.Getenv("PORT")); err == nil && port > 0 {
 		cfg.Port = port
 	}
+	if backendURL := strings.TrimSpace(os.Getenv("BACKEND_URL")); backendURL != "" {
+		cfg.BackendURL = strings.TrimRight(backendURL, "/")
+	} else if backendURL := strings.TrimSpace(os.Getenv("NEXT_PUBLIC_BACKEND_URL")); backendURL != "" {
+		cfg.BackendURL = strings.TrimRight(backendURL, "/")
+	}
 	cfg.PGURL = os.Getenv("PURUBOY_PG_URL")
 	cfg.AdminKey = os.Getenv("PURUBOY_ADMIN_KEY")
 	cfg.GithubToken = os.Getenv("GITHUB_TOKEN")
