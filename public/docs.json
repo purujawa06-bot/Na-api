@@ -1423,6 +1423,162 @@
       ]
     }
   ],
+  "rpg": [
+    {
+      "title": "RPG Mancing Page",
+      "summary": "Webview game mancing RPG.",
+      "description": "Menyajikan halaman HTML game mancing pixel untuk webview. Gunakan token sesi dari /api/rpg/mancing/start.",
+      "method": "GET",
+      "path": "/api/rpg/mancing",
+      "responseType": "json",
+      "example": "// Buka di webview:\n // https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing?token=<session_token>",
+      "params": [
+        {
+          "name": "token",
+          "in": "query",
+          "type": "string",
+          "description": "Token sesi mancing.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "RPG Mancing Claim",
+      "summary": "Klaim hasil sesi mancing.",
+      "description": "Memfinalisasi sesi mancing: konversi ikan ke $RP (server-authoritative, capped) dan memberikan XP berdasarkan waktu aktif server.",
+      "method": "POST",
+      "path": "/api/rpg/mancing/claim",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/claim', {\n     method: 'POST',\n     headers: { 'content-type': 'application/json' },\n     body: JSON.stringify({ token: '<session_token>', active_sec: 600, catches: [{ id: 'teri', count: 2, kg: 0.5 }] })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "token",
+          "in": "body",
+          "type": "string",
+          "description": "Token sesi mancing.",
+          "required": true
+        },
+        {
+          "name": "active_sec",
+          "in": "body",
+          "type": "number",
+          "description": "Total detik aktif.",
+          "required": true
+        },
+        {
+          "name": "catches",
+          "in": "body",
+          "type": "array",
+          "description": "Daftar tangkapan [{id,count,kg}].",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "RPG Mancing Heartbeat",
+      "summary": "Update waktu aktif sesi mancing.",
+      "description": "Menambah waktu aktif sesi mancing (server-authoritative) untuk perhitungan XP.",
+      "method": "POST",
+      "path": "/api/rpg/mancing/heartbeat",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/heartbeat', {\n     method: 'POST',\n     headers: { 'content-type': 'application/json' },\n     body: JSON.stringify({ token: '<session_token>', active_sec: 30 })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "token",
+          "in": "body",
+          "type": "string",
+          "description": "Token sesi mancing.",
+          "required": true
+        },
+        {
+          "name": "active_sec",
+          "in": "body",
+          "type": "number",
+          "description": "Delta detik aktif sejak heartbeat terakhir.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "RPG Mancing Start",
+      "summary": "Mulai sesi mancing RPG.",
+      "description": "Membuat sesi mancing dan mengembalikan URL webview game.",
+      "method": "POST",
+      "path": "/api/rpg/mancing/start",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/start', {\n     method: 'POST',\n     headers: { 'content-type': 'application/json', 'X-RPG-Secret': '<secret>' },\n     body: JSON.stringify({ lid: '123@lid' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "lid",
+          "in": "body",
+          "type": "string",
+          "description": "LID WhatsApp pemain.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "RPG Mancing State",
+      "summary": "Ambil state sesi mancing dan player.",
+      "description": "Mengembalikan state sesi mancing aktif dan data player untuk webview game.",
+      "method": "GET",
+      "path": "/api/rpg/mancing/state",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/mancing/state?token=<session_token>').then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "token",
+          "in": "query",
+          "type": "string",
+          "description": "Token sesi mancing.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "RPG Register",
+      "summary": "Daftar atau ubah username pemain RPG.",
+      "description": "Mendaftarkan pemain RPG berdasarkan LID WhatsApp. Jika sudah terdaftar, hanya username yang diperbarui; data RP/XP/level tetap aman.",
+      "method": "POST",
+      "path": "/api/rpg/register",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/register', {\n     method: 'POST',\n     headers: { 'content-type': 'application/json', 'X-RPG-Secret': '<secret>' },\n     body: JSON.stringify({ lid: '123@lid', username: 'Puru' })\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "lid",
+          "in": "body",
+          "type": "string",
+          "description": "LID WhatsApp pemain.",
+          "required": true
+        },
+        {
+          "name": "username",
+          "in": "body",
+          "type": "string",
+          "description": "Username pemain (3-24 karakter).",
+          "required": true
+        }
+      ]
+    },
+    {
+      "title": "RPG Stats",
+      "summary": "Ambil statistik pemain RPG.",
+      "description": "Mengembalikan username, $RP, level, XP, dan total ikan pemain.",
+      "method": "GET",
+      "path": "/api/rpg/stats",
+      "responseType": "json",
+      "example": "fetch('https://na-api-nue-api-e7bfd3f4.koyeb.app/api/rpg/stats?lid=123@lid', {\n     headers: { 'X-RPG-Secret': '<secret>' }\n }).then(res => res.json()).then(console.log);",
+      "params": [
+        {
+          "name": "lid",
+          "in": "query",
+          "type": "string",
+          "description": "LID WhatsApp pemain.",
+          "required": true
+        }
+      ]
+    }
+  ],
   "search": [
     {
       "title": "SoundCloud Search",
