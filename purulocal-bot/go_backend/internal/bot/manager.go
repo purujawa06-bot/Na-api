@@ -19,6 +19,7 @@ import (
 	botcmd "purulocal-bot/internal/bot/cmd"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/binary"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
@@ -460,6 +461,36 @@ func (m *Manager) cancelReconnect() {
 	}
 }
 
+func nativeFlowBizNodes(msg *waE2E.Message) []binary.Node {
+	im := msg.GetInteractiveMessage()
+	if im == nil {
+		return nil
+	}
+	nfm := im.GetNativeFlowMessage()
+	if nfm == nil {
+		return nil
+	}
+	// biz node membantu render native flow di beberapa klien WA (Android/Desktop)
+	// yang bergantung pada node <biz><interactive><native_flow .../></interactive></biz>.
+	return []binary.Node{{
+		Tag: "biz",
+		Content: []binary.Node{{
+			Tag: "interactive",
+			Attrs: binary.Attrs{
+				"type": "native_flow",
+				"v":    "1",
+			},
+			Content: []binary.Node{{
+				Tag: "native_flow",
+				Attrs: binary.Attrs{
+					"name": "mixed",
+					"v":    "9",
+				},
+			}},
+		}},
+	}}
+}
+
 func (m *Manager) onMessage(evt *events.Message) {
 	if m.IsPaused() {
 		return
@@ -682,6 +713,29 @@ func (m *Manager) onMessage(evt *events.Message) {
 	// catat indikasi kegagalan dari hasil command untuk debug (mis. gagal download tiktok)
 	if txt := strings.TrimSpace(res.Reply + " " + res.Caption); txt != "" && strings.Contains(strings.ToLower(txt), "gagal") {
 		m.logWarn("command."+cmd, "reply mengindikasikan kegagalan: "+truncateLog(txt, 300))
+	}
+	// kirim pesan WA mentah (mis. interactive/nativeFlow)
+	if res.RawMessage != nil {
+		if msg, ok := res.RawMessage.(*waE2E.Message); ok {
+			m.mu.RLock()
+			c := m.client
+			m.mu.RUnlock()
+			if c == nil {
+				_ = m.sendReply(ctx, evt, "Bot belum siap, coba lagi.")
+			} else {
+				var extra []whatsmeow.SendRequestExtra
+				if nodes := nativeFlowBizNodes(msg); len(nodes) > 0 {
+					extra = append(extra, whatsmeow.SendRequestExtra{AdditionalNodes: &nodes})
+				}
+				if _, err := c.SendMessage(ctx, evt.Info.Chat, msg, extra...); err != nil {
+					m.logError("send.raw", "cmd="+cmd+" err="+err.Error())
+					_ = m.sendReply(ctx, evt, "Gagal mengirim pesan.")
+				}
+			}
+		} else {
+			m.logWarn("send.raw", "cmd="+cmd+" tipe RawMessage tidak didukung")
+		}
+		return
 	}
 	// kirim video (mis. .tt/.tiktok): video siap putar + caption info (tanpa link)
 	if strings.TrimSpace(res.VideoURL) != "" {

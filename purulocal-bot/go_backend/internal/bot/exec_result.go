@@ -21,6 +21,8 @@ type ExecResult struct {
 	DocumentName string `json:"-"`
 	DocumentMIME string `json:"-"`
 	DocumentData []byte `json:"-"`
+	// RawMessage untuk kirim pesan WA mentah (mis. *waE2E.Message).
+	RawMessage any `json:"-"`
 }
 
 func normalizeCmd(s string) string {
