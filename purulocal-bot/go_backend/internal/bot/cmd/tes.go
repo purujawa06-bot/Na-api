@@ -27,8 +27,8 @@ func init() {
 						NativeFlowMessage: &waE2E.InteractiveMessage_NativeFlowMessage{
 							Buttons: []*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{
 								{
-									Name:             proto.String("quick_reply"),
-									ButtonParamsJSON: proto.String(`{"display_text":"OK","id":"tes_ok"}`),
+									Name:             proto.String("open_webview"),
+									ButtonParamsJSON: proto.String(`{"title":"Buka","link":{"in_app_webview":true,"url":"https://example.com"}}`),
 								},
 							},
 							MessageVersion: proto.Int32(2),
