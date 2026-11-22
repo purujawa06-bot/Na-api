@@ -326,6 +326,33 @@ function fetchText(url, redirects) {
   });
 }
 
+function fetchRange(url, start, endInclusive, redirects) {
+  redirects = redirects == null ? 5 : redirects;
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https:') ? https : http;
+    const req = mod.get(url, {
+      headers: {
+        'User-Agent': 'puruLocal-runner/1.0',
+        'Range': 'bytes=' + start + '-' + endInclusive,
+      }
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        return resolve(fetchRange(new URL(res.headers.location, url).toString(), start, endInclusive, redirects - 1));
+      }
+      if (res.statusCode !== 206 && res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error('HTTP ' + res.statusCode + ' range ' + url));
+      }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', reject);
+    req.setTimeout(60000, () => { req.destroy(new Error('timeout')); });
+  });
+}
+
 async function fetchManifest() {
   const buf = await fetchText(MANIFEST_URL);
   return JSON.parse(buf.toString('utf8'));
@@ -351,8 +378,15 @@ function pickRuntime(manifest) {
   const keys = platformKeys();
   for (const k of keys) {
     const v = rt[k];
-    if (v && typeof v === 'object' && v.url) return { key: k, url: String(v.url), sha256: String(v.sha256 || '').toLowerCase() };
-    if (v && typeof v === 'string') return { key: k, url: v, sha256: '' };
+    if (v && typeof v === 'object' && v.url) return {
+      key: k,
+      url: String(v.url),
+      sha256: String(v.sha256 || '').toLowerCase(),
+      size: Number(v.size || 0),
+      chunkSize: Number(v.chunkSize || 0),
+      chunkHashes: Array.isArray(v.chunkHashes) ? v.chunkHashes : null,
+    };
+    if (v && typeof v === 'string') return { key: k, url: v, sha256: '', size: 0, chunkSize: 0, chunkHashes: null };
   }
   return null;
 }
@@ -477,6 +511,46 @@ function findBinary(downloadedPath) {
 
 function ensureExec(p) { try { if (process.platform !== 'win32') fs.chmodSync(p, 0o755); } catch (e) {} }
 
+async function tryDeltaRuntimeUpdate(pick, target, tmp) {
+  if (!pick || !pick.chunkHashes || !pick.chunkSize || !pick.size) return null;
+  if (!fs.existsSync(target)) return null;
+  let local;
+  try { local = fs.readFileSync(target); } catch (e) { return null; }
+  const cs = pick.chunkSize;
+  const hashes = pick.chunkHashes;
+  const total = hashes.length;
+  if (total === 0) return null;
+  const out = Buffer.allocUnsafe(pick.size);
+  let changed = 0;
+  let downloadedBytes = 0;
+  for (let i = 0; i < total; i++) {
+    const start = i * cs;
+    const end = Math.min(start + cs, pick.size);
+    const expected = String(hashes[i] || '').toLowerCase();
+    const localEnd = Math.min(start + cs, local.length);
+    const localChunk = local.subarray(start, localEnd);
+    const localHash = sha256Buffer(localChunk).toLowerCase();
+    const localComplete = (localEnd - start) === (end - start);
+    if (localComplete && localHash === expected) {
+      local.copy(out, start, start, end);
+      continue;
+    }
+    const range = await fetchRange(pick.url, start, end - 1);
+    if (range.length !== (end - start)) throw new Error('range size mismatch chunk ' + i);
+    const got = sha256Buffer(range).toLowerCase();
+    if (expected && got !== expected) throw new Error('chunk sha256 mismatch ' + i);
+    range.copy(out, start);
+    changed++;
+    downloadedBytes += range.length;
+  }
+  if (pick.sha256) {
+    const sum = sha256Buffer(out).toLowerCase();
+    if (sum !== pick.sha256) throw new Error('delta sha256 mismatch: ' + sum + ' != ' + pick.sha256);
+  }
+  fs.writeFileSync(tmp, out);
+  return { changed, total, downloadedBytes, size: pick.size };
+}
+
 async function autoUpdateRuntime(manifest) {
   if (!manifest) return { downloaded: null, hasPick: false };
   const pick = pickRuntime(manifest);
@@ -502,20 +576,40 @@ async function autoUpdateRuntime(manifest) {
   try {
     fs.mkdirSync(BIN_DIR, { recursive: true });
     const tmp = target + '.download';
-    const buf = await fetchText(pick.url);
-    fs.writeFileSync(tmp, buf);
-    if (pick.sha256) {
-      const sum = sha256Buffer(buf).toLowerCase();
-      if (sum !== pick.sha256) {
-        try { fs.unlinkSync(tmp); } catch (e) {}
-        throw new Error('sha256 mismatch: ' + sum + ' != ' + pick.sha256);
+    let usedDelta = null;
+    try {
+      usedDelta = await tryDeltaRuntimeUpdate(pick, target, tmp);
+      if (usedDelta) {
+        log('Delta update: ' + usedDelta.changed + '/' + usedDelta.total + ' chunk berubah, unduh ' + Math.round(usedDelta.downloadedBytes/1024) + 'KB dari ' + Math.round(usedDelta.size/1024) + 'KB.');
+      }
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch (e2) {}
+      warn('Delta update gagal, fallback full download: ' + e.message);
+      usedDelta = null;
+    }
+    if (!usedDelta) {
+      const buf = await fetchText(pick.url);
+      fs.writeFileSync(tmp, buf);
+      if (pick.sha256) {
+        const sum = sha256Buffer(buf).toLowerCase();
+        if (sum !== pick.sha256) {
+          try { fs.unlinkSync(tmp); } catch (e) {}
+          throw new Error('sha256 mismatch: ' + sum + ' != ' + pick.sha256);
+        }
       }
     }
     try { fs.renameSync(tmp, target); } catch (e) { fs.copyFileSync(tmp, target); try { fs.unlinkSync(tmp); } catch (e2) {} }
     ensureExec(target);
-    state[pick.key] = { runtimeVersion: rv, sha256: pick.sha256, url: pick.url, updated_at: new Date().toISOString() };
+    state[pick.key] = {
+      runtimeVersion: rv,
+      sha256: pick.sha256,
+      url: pick.url,
+      size: pick.size || 0,
+      chunkSize: pick.chunkSize || 0,
+      updated_at: new Date().toISOString()
+    };
     saveState(state);
-    log('Runtime diperbarui: ' + target);
+    log('Runtime diperbarui: ' + target + (usedDelta ? ' (delta)' : ' (full)'));
     return { downloaded: target, hasPick: true };
   } catch (e) {
     warn('Update runtime gagal, gunakan binary yang ada: ' + e.message);

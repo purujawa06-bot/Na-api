@@ -73,7 +73,23 @@ jobs:
           export HASH_RUNNER=$(awk '$2=="purulocal-runner.js"{print $1}' checksums.sha256)
           curl -fsSL "https://github.com/purujawa06-bot/Na-api/releases/download/purulocal-experiment/update-manifest.json" -o prev-manifest.json || echo '{}' > prev-manifest.json
           python3 - <<'PY'
-          import json, os
+          import hashlib, json, os
+          CHUNK_SIZE = 262144  # 256KB - delta update per chunk
+
+          def chunk_meta(path):
+            h = hashlib.sha256()
+            chunks = []
+            size = 0
+            with open(path, 'rb') as f:
+              while True:
+                b = f.read(CHUNK_SIZE)
+                if not b:
+                  break
+                size += len(b)
+                h.update(b)
+                chunks.append(hashlib.sha256(b).hexdigest())
+            return {"size": size, "sha256": h.hexdigest(), "chunkSize": CHUNK_SIZE, "chunkHashes": chunks}
+
           run = int(os.environ.get('GITHUB_RUN_NUMBER', '0') or '0')
           sha_env = os.environ.get('GITHUB_SHA','')
           hashes = {
@@ -94,15 +110,21 @@ jobs:
               prev = json.load(f) or {}
           except Exception:
             prev = {}
-          # versi runtime harus monoton naik
           prev_rv = int(prev.get('runtimeVersion') or 0)
           runtime_version = max(run, prev_rv + 1)
           m = dict(prev) if isinstance(prev, dict) else {}
           rt = dict(m.get('runtime') or {})
           for k, fn in files.items():
-            rt[k] = {"url": base + fn, "sha256": hashes.get(k, "")}
-          # runner (index.js) untuk auto-update cloud
+            meta = chunk_meta(fn)
+            rt[k] = {
+              "url": base + fn,
+              "sha256": hashes.get(k, "") or meta["sha256"],
+              "size": meta["size"],
+              "chunkSize": meta["chunkSize"],
+              "chunkHashes": meta["chunkHashes"],
+            }
           prev_runner = (m.get('runner') or {}) if isinstance(m.get('runner'), dict) else {}
+          runner_meta = chunk_meta('purulocal-runner.js')
           runner_changed = (runner_hash and runner_hash != (prev_runner.get('sha256') or ''))
           m.update({
             "app": "puruLocalBot",
@@ -110,14 +132,16 @@ jobs:
             "runtime": rt,
             "runner": {
               "url": base + "purulocal-runner.js",
-              "sha256": runner_hash,
+              "sha256": runner_hash or runner_meta["sha256"],
+              "size": runner_meta["size"],
+              "chunkSize": runner_meta["chunkSize"],
+              "chunkHashes": runner_meta["chunkHashes"],
               "version": runtime_version,
               "important": bool(runner_changed)
             },
             "force": False,
             "changelog": f"Runtime update (UI/fitur) #{runtime_version} (commit {sha_env})"
           })
-          # pastikan field APK minimal ada (launcher rilis terpisah)
           m.setdefault("versionName", prev.get("versionName","0.1.0"))
           m.setdefault("buildNumber", int(prev.get("buildNumber") or 1))
           m.setdefault("minBuild", int(prev.get("minBuild") or 1))
